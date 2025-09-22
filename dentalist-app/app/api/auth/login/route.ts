@@ -1,0 +1,60 @@
+import { NextRequest, NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
+import {
+  findUserByDni,
+  storeTwoFactorCode,
+  toPublicUser,
+} from '@/lib/db/data-store';
+
+function generateTwoFactorCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const { dni, password, type } = body ?? {};
+
+    if (!dni || !password || !type) {
+      return NextResponse.json(
+        { error: 'Debe completar DNI, contraseña y tipo de usuario' },
+        { status: 400 },
+      );
+    }
+
+    const user = findUserByDni(dni, type);
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'No encontramos una cuenta con esos datos' },
+        { status: 404 },
+      );
+    }
+
+    const validPassword = await bcrypt.compare(password, user.passwordHash);
+    if (!validPassword) {
+      return NextResponse.json(
+        { error: 'La contraseña ingresada no es correcta' },
+        { status: 401 },
+      );
+    }
+
+    const code = generateTwoFactorCode();
+    storeTwoFactorCode(user.id, code);
+
+    return NextResponse.json({
+      success: true,
+      requiresTwoFactor: true,
+      message:
+        'Enviamos un código de verificación al correo registrado. Ingréselo para continuar.',
+      user: toPublicUser(user),
+      code,
+    });
+  } catch (error) {
+    console.error('Error en login', error);
+    return NextResponse.json(
+      { error: 'No pudimos iniciar sesión, intente nuevamente' },
+      { status: 500 },
+    );
+  }
+}

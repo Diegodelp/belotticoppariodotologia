@@ -35,3 +35,13 @@ export interface Treatment {
   cost: number;
   date: string;
 }
+
+export interface Payment {
+  id: string;
+  patientId: string;
+  amount: number;
+  method: 'cash' | 'card' | 'transfer' | 'other';
+  status: 'pending' | 'completed';
+  date: string;
+  notes?: string;
+}

@@ -1,9 +1,14 @@
-export function signToken(payload: any): string {
-  // TODO: Implement JWT signing
-  return 'token';
+import jwt, { JwtPayload } from 'jsonwebtoken';
+import { User } from '@/types';
+
+const AUTH_SECRET = process.env.AUTH_SECRET ?? 'dentalist-secret';
+
+export interface DentalistJwtPayload extends JwtPayload, User {}
+
+export function signToken(payload: User, expiresIn = '1d') {
+  return jwt.sign(payload, AUTH_SECRET, { expiresIn });
 }
 
-export function verifyToken(token: string): any {
-  // TODO: Implement JWT verification
-  return { valid: true };
+export function verifyToken(token: string) {
+  return jwt.verify(token, AUTH_SECRET) as DentalistJwtPayload;
 }
