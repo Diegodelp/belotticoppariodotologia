@@ -10,8 +10,9 @@ import {
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  context: { params: Promise<{ id: string }> },
 ) {
+  const { params } = await context;
   const patient = getPatients().find((item) => item.id === params.id);
   if (!patient) {
     return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
@@ -26,9 +27,10 @@ export async function GET(
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  context: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { params } = await context;
     const body = await request.json();
     const updated = updatePatient(params.id, body);
 
@@ -51,8 +53,9 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  context: { params: Promise<{ id: string }> },
 ) {
+  const { params } = await context;
   const deleted = removePatient(params.id);
   if (!deleted) {
     return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
