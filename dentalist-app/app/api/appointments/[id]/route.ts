@@ -3,10 +3,11 @@ import { dentalistDb } from '@/lib/db/data-store';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  context: { params: Promise<{ id: string }> },
 ) {
   try {
     const body = await request.json();
+    const params = await context.params;
     const appointment = dentalistDb.appointments.find(
       (item) => item.id === params.id,
     );
@@ -28,8 +29,9 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  context: { params: Promise<{ id: string }> },
 ) {
+  const params = await context.params;
   const index = dentalistDb.appointments.findIndex(
     (item) => item.id === params.id,
   );
