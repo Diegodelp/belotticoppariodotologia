@@ -46,7 +46,11 @@ export default function PatientsPage() {
     });
   }, [patients, search, status]);
 
+
+  const handleDeletePatient = async (patientId: string) => {
+
     const handleDeletePatient = async (patientId: string) => {
+
     const patient = patients.find((item) => item.id === patientId);
     const confirmationMessage = patient
       ? `¿Seguro que querés eliminar a ${patient.name} ${patient.lastName}?`
@@ -161,7 +165,9 @@ export default function PatientsPage() {
               deleting={deletingId === patient.id}
             />
 
+
             <PatientCard key={patient.id} patient={patient} />
+
           ))}
         </div>
       </div>

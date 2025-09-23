@@ -5,6 +5,11 @@ interface PatientCardProps {
   patient: Patient;
   onDelete?: (patient: Patient) => void;
   deleting?: boolean;
+
+}
+
+export default function PatientCard({ patient, onDelete, deleting }: PatientCardProps) {
+
 }
 
 export default function PatientCard({ patient, onDelete, deleting }: PatientCardProps) {
@@ -24,7 +29,11 @@ export default function PatientCard({ patient }: PatientCardProps) {
     >
 
       <div className="flex items-start justify-between gap-3">
+
+
+      <div className="flex items-start justify-between gap-3">
       <div className="flex items-start justify-between">
+
         <div>
           <h3 className="text-lg font-semibold text-white group-hover:text-cyan-200">
             {patient.name} {patient.lastName}
@@ -52,9 +61,11 @@ export default function PatientCard({ patient }: PatientCardProps) {
             </button>
           )}
         </div>
+
         <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusStyle}`}>
           {patient.status === 'active' ? 'Activo' : 'Inactivo'}
         </span>
+
       </div>
 
       <div className="space-y-2 text-sm">
