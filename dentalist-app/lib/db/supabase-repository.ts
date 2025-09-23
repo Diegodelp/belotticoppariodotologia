@@ -6,13 +6,29 @@ const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const PROFESSIONALS_TABLE =
-  process.env.SUPABASE_TABLE_PROFESIONALES ?? 'profesionales';
-const PATIENTS_TABLE = process.env.SUPABASE_TABLE_PACIENTES ?? 'pacientes';
-const APPOINTMENTS_TABLE = process.env.SUPABASE_TABLE_TURNOS ?? 'turnos';
-const TREATMENTS_TABLE = process.env.SUPABASE_TABLE_TRATAMIENTOS ?? 'tratamientos';
-const PAYMENTS_TABLE = process.env.SUPABASE_TABLE_PAGOS ?? 'pagos';
+  process.env.SUPABASE_TABLE_PROFESIONALES ??
+  process.env.SUPABASE_TABLE_PROFESSIONALS ??
+  'professionals';
+const PATIENTS_TABLE =
+  process.env.SUPABASE_TABLE_PACIENTES ??
+  process.env.SUPABASE_TABLE_PATIENTS ??
+  'patients';
+const APPOINTMENTS_TABLE =
+  process.env.SUPABASE_TABLE_TURNOS ??
+  process.env.SUPABASE_TABLE_APPOINTMENTS ??
+  'appointments';
+const TREATMENTS_TABLE =
+  process.env.SUPABASE_TABLE_TRATAMIENTOS ??
+  process.env.SUPABASE_TABLE_TREATMENTS ??
+  'treatments';
+const PAYMENTS_TABLE =
+  process.env.SUPABASE_TABLE_PAGOS ??
+  process.env.SUPABASE_TABLE_PAYMENTS ??
+  'payments';
 const TWO_FACTOR_CODES_TABLE =
-  process.env.SUPABASE_TABLE_CODIGOS_DOBLE_FACTOR ?? 'codigos_doble_factor';
+  process.env.SUPABASE_TABLE_CODIGOS_DOBLE_FACTOR ??
+  process.env.SUPABASE_TABLE_TWO_FACTOR_CODES ??
+  'two_factor_codes';
 
 function getClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
