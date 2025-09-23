@@ -16,6 +16,7 @@ export default function PatientCard({ patient, onDelete, deleting }: PatientCard
 export default function PatientCard({ patient, onDelete, deleting }: PatientCardProps) {
 }
 export default function PatientCard({ patient }: PatientCardProps) {
+
   const statusStyle =
     patient.status === 'active'
       ? 'bg-emerald-500/10 text-emerald-200 border-emerald-500/40'
@@ -31,7 +32,6 @@ export default function PatientCard({ patient }: PatientCardProps) {
       <div className="flex items-start justify-between gap-3">
       <div className="flex items-start justify-between gap-3">
       <div className="flex items-start justify-between">
-
         <div>
           <h3 className="text-lg font-semibold text-white group-hover:text-cyan-200">
             {patient.name} {patient.lastName}

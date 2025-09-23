@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
+import { findUserByDni, storeTwoFactorCode, toPublicUser } from '@/lib/db/supabase-repository';
+import { sendTwoFactorCodeEmail } from '@/lib/email/mailer';
+import { generateTwoFactorCode } from '@/lib/auth/two-factor';
 import {
   findUserByDni,
   storeTwoFactorCode,
@@ -59,7 +62,6 @@ export async function POST(request: NextRequest) {
 
     const code = generateTwoFactorCode();
     await storeTwoFactorCode(user, code);
-
     await sendTwoFactorCodeEmail({
       to: user.email,
       code,

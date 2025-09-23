@@ -42,6 +42,7 @@ const FIELDS: Array<{ key: CephalometricField; label: string }> = [
 const FIELDS: Array<{ key: keyof ClinicalHistoryInput['stages'][ClinicalStage]; label: string } & {
   key: 'biotipo' | 'patronEsqueletal' | 'sna' | 'snb' | 'anb' | 'naMm' | 'naAngle' | 'nbMm' | 'nbAngle' | 'planoMandibular';
 }> = [
+
   { key: 'biotipo', label: 'Biotipo' },
   { key: 'patronEsqueletal', label: 'Patrón esqueletal' },
   { key: 'sna', label: 'SNA' },

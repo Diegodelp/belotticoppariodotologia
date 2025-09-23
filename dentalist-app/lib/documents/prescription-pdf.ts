@@ -1,6 +1,7 @@
 import { getSharp } from '@/lib/utils/sharp';
 import sharp from 'sharp';
 
+
 function escapeXml(value: string): string {
   return value
     .replace(/&/g, '&amp;')

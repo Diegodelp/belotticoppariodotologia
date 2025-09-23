@@ -46,6 +46,8 @@ export default function PatientsPage() {
   }, [patients, search, status]);
 
   const handleDeletePatient = async (patientId: string) => {
+    const patient = patients.find((item) => item.id === patientId);
+    const confirmationMessage = patient
   const patient = patients.find((item) => item.id === patientId);
   const confirmationMessage = patient
   const handleDeletePatient = async (patientId: string) => {
