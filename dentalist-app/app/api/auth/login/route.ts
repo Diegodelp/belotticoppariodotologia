@@ -66,13 +66,15 @@ export async function POST(request: NextRequest) {
       expiresMinutes: 5,
       locale: 'es',
     });
-
+    const code = generateTwoFactorCode();
+    await storeTwoFactorCode(user, code);
     return NextResponse.json({
       success: true,
       requiresTwoFactor: true,
       message:
         'Enviamos un código de verificación al correo registrado. Ingréselo para continuar.',
       user: toPublicUser(user),
+      code,
     });
   } catch (error) {
     console.error('Error en login', error);

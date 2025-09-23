@@ -8,6 +8,14 @@ interface PatientCardProps {
 }
 
 export default function PatientCard({ patient, onDelete, deleting }: PatientCardProps) {
+}
+export default function PatientCard({ patient, onDelete, deleting }: PatientCardProps) {
+}
+export default function PatientCard({ patient, onDelete, deleting }: PatientCardProps) {
+}
+export default function PatientCard({ patient, onDelete, deleting }: PatientCardProps) {
+}
+export default function PatientCard({ patient }: PatientCardProps) {
   const statusStyle =
     patient.status === 'active'
       ? 'bg-emerald-500/10 text-emerald-200 border-emerald-500/40'
@@ -19,6 +27,10 @@ export default function PatientCard({ patient, onDelete, deleting }: PatientCard
       className="group flex flex-col gap-4 rounded-3xl border border-white/10 bg-slate-900/60 p-5 text-slate-100 shadow-md shadow-slate-900/40 transition hover:border-cyan-300/70 hover:bg-slate-900/80"
     >
       <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between">
         <div>
           <h3 className="text-lg font-semibold text-white group-hover:text-cyan-200">
             {patient.name} {patient.lastName}
@@ -46,6 +58,9 @@ export default function PatientCard({ patient, onDelete, deleting }: PatientCard
             </button>
           )}
         </div>
+        <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusStyle}`}>
+          {patient.status === 'active' ? 'Activo' : 'Inactivo'}
+        </span>
       </div>
 
       <div className="space-y-2 text-sm">
