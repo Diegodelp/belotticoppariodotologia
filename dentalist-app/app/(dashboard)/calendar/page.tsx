@@ -1,16 +1,24 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { AppointmentForm } from '@/components/appointments/AppointmentForm';
 import { Appointment, Patient } from '@/types';
+import { PatientService } from '@/services/patient.service';
 
 interface AppointmentWithPatient extends Appointment {
   patient?: Patient;
 }
 
 export default function CalendarPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [appointments, setAppointments] = useState<AppointmentWithPatient[]>([]);
+  const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'all' | 'confirmed' | 'pending' | 'cancelled'>('all');
+  const [showForm, setShowForm] = useState(false);
+  const defaultPatientId = searchParams.get('patientId') ?? undefined;
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -25,6 +33,28 @@ export default function CalendarPage() {
     };
     fetchAppointments();
   }, []);
+
+  useEffect(() => {
+    const loadPatients = async () => {
+      try {
+        const response = await PatientService.getAll();
+        if (Array.isArray(response)) {
+          setPatients(response as Patient[]);
+        } else if (Array.isArray(response?.patients)) {
+          setPatients(response.patients as Patient[]);
+        }
+      } catch (error) {
+        console.error('No pudimos obtener los pacientes', error);
+      }
+    };
+    loadPatients();
+  }, []);
+
+  useEffect(() => {
+    if (defaultPatientId) {
+      setShowForm(true);
+    }
+  }, [defaultPatientId]);
 
   const filteredAppointments = useMemo(() => {
     const filtered =
@@ -51,15 +81,60 @@ export default function CalendarPage() {
             Visualizá turnos confirmados, pendientes y reagendá con un clic.
           </p>
         </div>
-        <Link
-          href="/patients"
-          className="rounded-full border border-white/10 px-5 py-2 text-sm font-semibold text-slate-100 transition hover:border-cyan-300 hover:text-cyan-200"
-        >
-          Ver pacientes
-        </Link>
+        <div className="flex flex-wrap gap-3">
+          <button
+            onClick={() => {
+              setShowForm((previous) => !previous);
+              if (defaultPatientId) {
+                const params = new URLSearchParams(searchParams.toString());
+                params.delete('patientId');
+                router.replace(`/calendar${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false });
+              }
+            }}
+            className="rounded-full bg-cyan-500 px-5 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400"
+          >
+            {showForm ? 'Cerrar formulario' : 'Nuevo turno'}
+          </button>
+          <Link
+            href="/patients"
+            className="rounded-full border border-white/10 px-5 py-2 text-sm font-semibold text-slate-100 transition hover:border-cyan-300 hover:text-cyan-200"
+          >
+            Ver pacientes
+          </Link>
+        </div>
       </div>
 
       <div className="grid gap-4 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
+        {showForm && (
+          <div className="rounded-3xl border border-cyan-300/40 bg-slate-900/60 p-5">
+            <h2 className="text-lg font-semibold text-white">Agendar nuevo turno</h2>
+            <p className="mt-1 text-xs text-slate-300">
+              Sincronizamos automáticamente con Google Calendar del correo del profesional.
+            </p>
+            <div className="mt-4">
+              <AppointmentForm
+                patients={patients}
+                defaultPatientId={defaultPatientId}
+                onCreated={(appointment, patient) => {
+                  setAppointments((previous) => [
+                    ...previous,
+                    {
+                      ...appointment,
+                      patient,
+                    },
+                  ]);
+                  setShowForm(false);
+                  router.replace('/calendar', { scroll: false });
+                }}
+                onCancel={() => {
+                  setShowForm(false);
+                  router.replace('/calendar', { scroll: false });
+                }}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-3 text-xs text-slate-200">
           {(['all', 'confirmed', 'pending', 'cancelled'] as const).map((value) => (
             <button

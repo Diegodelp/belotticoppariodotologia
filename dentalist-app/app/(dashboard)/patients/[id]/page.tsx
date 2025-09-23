@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { AppointmentForm } from '@/components/appointments/AppointmentForm';
 import { PatientService } from '@/services/patient.service';
 import { Appointment, Patient, Payment, Treatment } from '@/types';
 
@@ -17,6 +18,7 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
   const [data, setData] = useState<PatientDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showAppointmentForm, setShowAppointmentForm] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -73,11 +75,17 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
           >
             Editar datos
           </Link>
-          <Link
-            href={`/calendar?patientId=${patient.id}`}
+          <button
+            onClick={() => setShowAppointmentForm((previous) => !previous)}
             className="rounded-full bg-cyan-500 px-5 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400"
           >
-            Agendar turno
+            {showAppointmentForm ? 'Cerrar formulario' : 'Agendar turno'}
+          </button>
+          <Link
+            href={`/calendar?patientId=${patient.id}`}
+            className="rounded-full border border-white/10 px-5 py-2 text-sm font-semibold text-slate-100 transition hover:border-cyan-300 hover:text-cyan-200"
+          >
+            Ver calendario
           </Link>
         </div>
       </div>
@@ -169,6 +177,32 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
         </div>
 
         <aside className="space-y-6">
+          {showAppointmentForm && (
+            <div className="rounded-3xl border border-cyan-300/40 bg-slate-900/60 p-6 shadow-lg shadow-cyan-500/20">
+              <h2 className="text-lg font-semibold text-white">Agendar nuevo turno</h2>
+              <p className="mt-1 text-xs text-slate-300">
+                El turno se sincroniza automáticamente con Google Calendar del profesional.
+              </p>
+              <div className="mt-4">
+                <AppointmentForm
+                  patients={[patient]}
+                  defaultPatientId={patient.id}
+                  onCreated={(appointment) => {
+                    setData((currentData) =>
+                      currentData
+                        ? {
+                            ...currentData,
+                            appointments: [...currentData.appointments, { ...appointment, patient }],
+                          }
+                        : currentData,
+                    );
+                    setShowAppointmentForm(false);
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
             <h2 className="text-lg font-semibold text-white">Próximos turnos</h2>
             <div className="mt-4 space-y-3 text-sm text-slate-200">

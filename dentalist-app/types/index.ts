@@ -25,6 +25,9 @@ export interface Appointment {
   time: string;
   type: string;
   status: 'confirmed' | 'pending' | 'cancelled';
+  startAt?: string;
+  endAt?: string;
+  googleEventId?: string;
 }
 
 export interface Treatment {

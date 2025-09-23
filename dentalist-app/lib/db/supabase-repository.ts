@@ -65,6 +65,7 @@ type AppAppointmentRow = {
   status: string;
   start_at: string;
   end_at: string;
+  google_event_id?: string | null;
 };
 
 type AppTreatmentRow = {
@@ -121,6 +122,9 @@ function mapAppointment(record: AppAppointmentRow): Appointment {
       .padStart(2, '0')}`,
     type: record.title,
     status: (record.status as Appointment['status']) ?? 'confirmed',
+    startAt: new Date(record.start_at).toISOString(),
+    endAt: new Date(record.end_at ?? record.start_at).toISOString(),
+    googleEventId: record.google_event_id ?? undefined,
   };
 }
 
@@ -464,6 +468,19 @@ export async function listAppointments(professionalId: string, patientId?: strin
   return rows.map(mapAppointment);
 }
 
+export async function getAppointmentById(professionalId: string, appointmentId: string) {
+  const client = getClient();
+  const { data, error } = await client
+    .from(APPOINTMENTS_TABLE)
+    .select('*')
+    .eq('professional_id', professionalId)
+    .eq('id', appointmentId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapAppointment(data as AppAppointmentRow) : null;
+}
+
 export async function createAppointment(
   professionalId: string,
   appointment: {
@@ -489,6 +506,24 @@ export async function createAppointment(
     .single();
   if (error) throw error;
   return mapAppointment(data as AppAppointmentRow);
+}
+
+export async function attachAppointmentGoogleEvent(
+  professionalId: string,
+  appointmentId: string,
+  googleEventId: string,
+) {
+  const client = getClient();
+  const { data, error } = await client
+    .from(APPOINTMENTS_TABLE)
+    .update({ google_event_id: googleEventId })
+    .eq('professional_id', professionalId)
+    .eq('id', appointmentId)
+    .select('*')
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapAppointment(data as AppAppointmentRow) : null;
 }
 
 export async function updateAppointment(
@@ -564,10 +599,10 @@ export async function deleteAppointment(
     .delete()
     .eq('professional_id', professionalId)
     .eq('id', appointmentId)
-    .select('id')
+    .select('*')
     .maybeSingle();
   if (error) throw error;
-  return !!data;
+  return data ? mapAppointment(data as AppAppointmentRow) : null;
 }
 
 export async function listTreatments(

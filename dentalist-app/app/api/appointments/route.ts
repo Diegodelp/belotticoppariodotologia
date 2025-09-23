@@ -1,10 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth/get-user';
 import {
+  attachAppointmentGoogleEvent,
   createAppointment,
+  deleteAppointment,
+  getPatientById,
   listAppointments,
   listPatients,
 } from '@/lib/db/supabase-repository';
+import {
+  createCalendarEvent,
+  isCalendarReady,
+} from '@/lib/google/calendar';
 import { Appointment, Patient } from '@/types';
 
 export async function GET(request: NextRequest) {
@@ -76,7 +83,73 @@ export async function POST(request: NextRequest) {
       endAt: endAt.toISOString(),
     });
 
-    return NextResponse.json({ success: true, appointment });
+    if (!isCalendarReady()) {
+      await deleteAppointment(user.id, appointment.id);
+      return NextResponse.json(
+        {
+          error:
+            'Google Calendar no está configurado. Define las credenciales del servicio para poder agendar turnos.',
+        },
+        { status: 500 },
+      );
+    }
+
+    if (!user.email) {
+      await deleteAppointment(user.id, appointment.id);
+      return NextResponse.json(
+        {
+          error:
+            'Tu usuario no tiene un correo asociado. Actualizá el perfil antes de agendar turnos con Google Calendar.',
+        },
+        { status: 400 },
+      );
+    }
+
+    try {
+      const patient = patientId ? await getPatientById(user.id, patientId) : null;
+
+      const event = await createCalendarEvent({
+        calendarId: user.email,
+        summary: `${type} con ${patient ? `${patient.name} ${patient.lastName}` : 'paciente'}`,
+        description: [
+          patient ? `Paciente: ${patient.name} ${patient.lastName}` : null,
+          patient?.dni ? `DNI: ${patient.dni}` : null,
+          patient?.email ? `Email: ${patient.email}` : null,
+          patient?.phone ? `Teléfono: ${patient.phone}` : null,
+        ]
+          .filter(Boolean)
+          .join('\n'),
+        start: startAt,
+        end: endAt,
+        attendees:
+          patient?.email
+            ? [
+                {
+                  email: patient.email,
+                  displayName: `${patient.name} ${patient.lastName}`.trim(),
+                },
+              ]
+            : undefined,
+      });
+
+      if (!event.id) {
+        throw new Error('La API de Google Calendar no devolvió un ID de evento.');
+      }
+
+      const updated = await attachAppointmentGoogleEvent(user.id, appointment.id, event.id);
+
+      return NextResponse.json({ success: true, appointment: updated ?? appointment });
+    } catch (calendarError) {
+      console.error('Error al crear evento en Google Calendar', calendarError);
+      await deleteAppointment(user.id, appointment.id).catch(() => undefined);
+      return NextResponse.json(
+        {
+          error:
+            'No pudimos sincronizar el turno con Google Calendar. Verificá las credenciales y vuelve a intentarlo.',
+        },
+        { status: 502 },
+      );
+    }
   } catch (error) {
     console.error('Error al crear turno', error);
     return NextResponse.json(
