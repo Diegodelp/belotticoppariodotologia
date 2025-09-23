@@ -1,9 +1,34 @@
+import {
+  ClinicalHistory,
+  ClinicalHistoryInput,
+  CreatePrescriptionInput,
+  Patient,
+  Prescription,
+} from '@/types';
+
+function authHeaders(): Record<string, string> {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  const token = localStorage.getItem('token');
+
+  if (!token) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+}
+
 export class PatientService {
   static async getAll() {
     const response = await fetch('/api/patients', {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
+        ...authHeaders(),
+      },
+      credentials: 'include',
     });
     return response.json();
   }
@@ -11,20 +36,106 @@ export class PatientService {
   static async getById(id: string) {
     const response = await fetch(`/api/patients/${id}`, {
       headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      }
+        ...authHeaders(),
+      },
+      credentials: 'include',
     });
     return response.json();
   }
 
-  static async create(data: any) {
+  static async create(data: Partial<Patient>) {
     const response = await fetch('/api/patients', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        ...authHeaders(),
       },
-      body: JSON.stringify(data)
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    return response.json();
+  }
+
+  static async update(id: string, data: Partial<Patient>) {
+    const response = await fetch(`/api/patients/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    return response.json();
+  }
+
+  static async remove(id: string) {
+    const response = await fetch(`/api/patients/${id}`, {
+      method: 'DELETE',
+      headers: {
+        ...authHeaders(),
+      },
+      credentials: 'include',
+    });
+    return response.json();
+  }
+
+  static async getClinicalHistory(id: string): Promise<{ clinicalHistory: ClinicalHistory | null }> {
+    const response = await fetch(`/api/patients/${id}/clinical-history`, {
+      headers: {
+        ...authHeaders(),
+      },
+      credentials: 'include',
+    });
+    return response.json();
+  }
+
+  static async saveClinicalHistory(id: string, data: ClinicalHistoryInput) {
+    const response = await fetch(`/api/patients/${id}/clinical-history`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    return response.json();
+  }
+
+  static async getPrescriptions(id: string): Promise<{ prescriptions: Prescription[] }> {
+    const response = await fetch(`/api/patients/${id}/prescriptions`, {
+      headers: {
+        ...authHeaders(),
+      },
+      credentials: 'include',
+    });
+    return response.json();
+  }
+
+  static async createPrescription(id: string, data: CreatePrescriptionInput) {
+    const response = await fetch(`/api/patients/${id}/prescriptions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    return response.json();
+  }
+
+  static async getProfessionalSignature(): Promise<{
+    hasSignature: boolean;
+    signatureUrl: string | null;
+    updatedAt: string | null;
+  }> {
+    const response = await fetch('/api/professionals/signature', {
+      headers: {
+        ...authHeaders(),
+      },
+      credentials: 'include',
     });
     return response.json();
   }
