@@ -195,7 +195,9 @@ export function CalendarClient() {
                         <p className="text-sm font-semibold text-white">
                           {getPatientDisplayName(appointment.patient) ?? 'Paciente sin asignar'}
                         </p>
-                        <p className="text-xs text-slate-300">{appointment.reason}</p>
+                        <p className="text-xs text-slate-300">
+                          {appointment.type || 'Tipo de turno no especificado'}
+                        </p>
                         {appointment.patient?.id && (
                           <Link
                             href={`/patients/${appointment.patient.id}`}
