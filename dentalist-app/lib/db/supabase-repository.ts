@@ -70,19 +70,27 @@ type AppAppointmentRow = {
 type AppTreatmentRow = {
   id: string;
   patient_id: string;
-  type: string;
+  professional_id?: string;
+  type?: string | null;
+  title?: string | null;
   description: string | null;
-  cost: number | string | null;
-  treatment_date: string;
+  cost?: number | string | null;
+  treatment_date?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  created_at?: string | null;
 };
 
 type AppPaymentRow = {
   id: string;
   patient_id: string;
+  professional_id?: string;
   amount: number | string | null;
-  method: string;
-  status: string;
-  payment_date: string;
+  method: string | null;
+  status: string | null;
+  payment_date?: string | null;
+  paid_at?: string | null;
+  created_at?: string | null;
   notes: string | null;
 };
 
@@ -117,24 +125,29 @@ function mapAppointment(record: AppAppointmentRow): Appointment {
 }
 
 function mapTreatment(record: AppTreatmentRow): Treatment {
+  const rawDate =
+    record.treatment_date ?? record.start_date ?? record.end_date ?? record.created_at ?? new Date().toISOString();
+  const normalizedDate = new Date(rawDate).toISOString().split('T')[0];
+
   return {
     id: record.id,
     patientId: record.patient_id,
-    type: record.type,
+    type: (record.type ?? record.title ?? 'Tratamiento').toString(),
     description: record.description ?? '',
     cost: Number(record.cost ?? 0),
-    date: record.treatment_date,
+    date: normalizedDate,
   };
 }
 
 function mapPayment(record: AppPaymentRow): Payment {
+  const rawDate = record.payment_date ?? record.paid_at ?? record.created_at ?? new Date().toISOString();
   return {
     id: record.id,
     patientId: record.patient_id,
     amount: Number(record.amount ?? 0),
     method: (record.method as Payment['method']) ?? 'other',
     status: (record.status as Payment['status']) ?? 'completed',
-    date: new Date(record.payment_date).toISOString(),
+    date: new Date(rawDate).toISOString(),
     notes: record.notes ?? undefined,
   };
 }
@@ -566,7 +579,8 @@ export async function listTreatments(
     .from(TREATMENTS_TABLE)
     .select('*')
     .eq('professional_id', professionalId)
-    .order('treatment_date', { ascending: false });
+    .order('start_date', { ascending: false })
+    .order('created_at', { ascending: false });
   if (patientId) {
     query = query.eq('patient_id', patientId);
   }
@@ -586,10 +600,9 @@ export async function createTreatment(
     .insert({
       professional_id: professionalId,
       patient_id: treatment.patientId,
-      type: treatment.type,
+      title: treatment.type,
       description: treatment.description,
-      cost: treatment.cost,
-      treatment_date: treatment.date,
+      start_date: treatment.date,
     })
     .select('*')
     .single();
@@ -606,7 +619,8 @@ export async function listPayments(
     .from(PAYMENTS_TABLE)
     .select('*')
     .eq('professional_id', professionalId)
-    .order('payment_date', { ascending: false });
+    .order('paid_at', { ascending: false })
+    .order('created_at', { ascending: false });
   if (patientId) {
     query = query.eq('patient_id', patientId);
   }
@@ -629,7 +643,7 @@ export async function createPayment(
       amount: payment.amount,
       method: payment.method,
       status: payment.status,
-      payment_date: payment.date,
+      paid_at: payment.date,
       notes: payment.notes ?? null,
     })
     .select('*')
