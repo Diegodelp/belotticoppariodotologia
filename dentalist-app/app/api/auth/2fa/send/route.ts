@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { findUserByDni, storeTwoFactorCode } from '@/lib/db/supabase-repository';
+import { sendTwoFactorCodeEmail } from '@/lib/email/mailer';
 
 function generateTwoFactorCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -24,13 +25,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!user.email) {
+      return NextResponse.json(
+        { error: 'La cuenta no tiene un correo electrónico registrado' },
+        { status: 422 },
+      );
+    }
+
     const code = generateTwoFactorCode();
     await storeTwoFactorCode(user, code);
 
+    await sendTwoFactorCodeEmail({
+      to: user.email,
+      code,
+      expiresMinutes: 5,
+      locale: 'es',
+    });
+
     return NextResponse.json({
       success: true,
-      message: 'Generamos un nuevo código de verificación',
-      code,
+      message: 'Enviamos el código de verificación a tu correo',
     });
   } catch (error) {
     console.error('Error al enviar código 2FA', error);
