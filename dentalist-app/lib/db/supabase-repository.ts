@@ -258,13 +258,13 @@ export async function findUserByDni(
 
 type StoredTwoFactor = {
   id: string;
-  user_id: string;
-  user_type: User['type'];
+  professional_id: string | null;
+  patient_id: string | null;
   email: string;
   code_hash: string;
   expires_at: string;
-  attempts: number;
   consumed_at: string | null;
+  created_at: string;
 };
 
 export async function storeTwoFactorCode(
@@ -276,13 +276,15 @@ export async function storeTwoFactorCode(
   const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString();
   const codeHash = await bcrypt.hash(code, 10);
 
-  const { error } = await client.from(TWO_FACTOR_CODES_TABLE).insert({
-    user_id: user.id,
-    user_type: user.type,
+  const payload = {
+    professional_id: user.type === 'profesional' ? user.id : null,
+    patient_id: user.type === 'paciente' ? user.id : null,
     email: user.email,
     code_hash: codeHash,
     expires_at: expiresAt,
-  });
+  };
+
+  const { error } = await client.from(TWO_FACTOR_CODES_TABLE).insert(payload);
 
   if (error) throw error;
 }
@@ -290,11 +292,12 @@ export async function storeTwoFactorCode(
 export async function validateTwoFactorCode(user: StoredAuthUser, code: string) {
   const client = getClient();
 
+  const userColumn = user.type === 'profesional' ? 'professional_id' : 'patient_id';
+
   const { data, error } = await client
     .from(TWO_FACTOR_CODES_TABLE)
     .select('*')
-    .eq('user_id', user.id)
-    .eq('user_type', user.type)
+    .eq(userColumn, user.id)
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle<StoredTwoFactor>();
@@ -314,10 +317,6 @@ export async function validateTwoFactorCode(user: StoredAuthUser, code: string) 
 
   const valid = await bcrypt.compare(code, data.code_hash);
   if (!valid) {
-    await client
-      .from(TWO_FACTOR_CODES_TABLE)
-      .update({ attempts: data.attempts + 1 })
-      .eq('id', data.id);
     return { valid: false, reason: 'Código incorrecto' } as const;
   }
 
