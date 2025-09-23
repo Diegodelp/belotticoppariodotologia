@@ -12,6 +12,8 @@ function resolveClientId() {
     process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ??
     process.env.GOOGLE_OAUTH_CLIENT_ID ??
     process.env.SUPABASE_GOOGLE_CLIENT_ID ??
+    process.env.SUPABASE_AUTH_GOOGLE_CLIENT_ID ??
+    process.env.SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID ??
     null
   );
 }
@@ -22,6 +24,8 @@ function resolveClientSecret() {
     process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET ??
     process.env.GOOGLE_OAUTH_CLIENT_SECRET ??
     process.env.SUPABASE_GOOGLE_CLIENT_SECRET ??
+    process.env.SUPABASE_AUTH_GOOGLE_CLIENT_SECRET ??
+    process.env.SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_SECRET ??
     null
   );
 }
