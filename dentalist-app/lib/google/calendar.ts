@@ -3,20 +3,43 @@ import { Credentials } from 'google-auth-library';
 
 const CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
 
-const clientId = process.env.GOOGLE_CLIENT_ID;
-const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const explicitRedirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
-const fallbackAppUrl =
-  process.env.NEXT_PUBLIC_APP_URL ??
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  process.env.SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
 const defaultTimeZone = process.env.GOOGLE_CALENDAR_TIMEZONE ?? 'America/Argentina/Buenos_Aires';
+
+function resolveClientId() {
+  return (
+    process.env.GOOGLE_CLIENT_ID ??
+    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ??
+    process.env.GOOGLE_OAUTH_CLIENT_ID ??
+    process.env.SUPABASE_GOOGLE_CLIENT_ID ??
+    null
+  );
+}
+
+function resolveClientSecret() {
+  return (
+    process.env.GOOGLE_CLIENT_SECRET ??
+    process.env.NEXT_PUBLIC_GOOGLE_CLIENT_SECRET ??
+    process.env.GOOGLE_OAUTH_CLIENT_SECRET ??
+    process.env.SUPABASE_GOOGLE_CLIENT_SECRET ??
+    null
+  );
+}
+
+function resolveFallbackAppUrl() {
+  return (
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    process.env.SITE_URL ??
+    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined)
+  );
+}
 
 function resolveRedirectUri() {
   if (explicitRedirectUri) {
     return explicitRedirectUri;
   }
+  const fallbackAppUrl = resolveFallbackAppUrl();
   if (!fallbackAppUrl) {
     return undefined;
   }
@@ -24,9 +47,11 @@ function resolveRedirectUri() {
 }
 
 function assertOAuthConfigured() {
+  const clientId = resolveClientId();
+  const clientSecret = resolveClientSecret();
   if (!clientId || !clientSecret) {
     throw new Error(
-      'Google OAuth no está configurado. Define GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en las variables de entorno.',
+      'Google OAuth no está configurado. Define GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET (o sus equivalentes NEXT_PUBLIC_/SUPABASE_) en las variables de entorno.',
     );
   }
   if (!resolveRedirectUri()) {
@@ -47,8 +72,10 @@ export function isCalendarReady() {
 
 export function buildOAuthClient() {
   assertOAuthConfigured();
+  const clientId = resolveClientId();
+  const clientSecret = resolveClientSecret();
   const redirectUri = resolveRedirectUri();
-  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  return new google.auth.OAuth2(clientId!, clientSecret!, redirectUri);
 }
 
 export function generateOAuthUrl(state: string) {
