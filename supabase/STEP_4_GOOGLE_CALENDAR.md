@@ -2,6 +2,20 @@
 
 Cada profesional debe vincular su propia cuenta de Google para que los turnos creados en Dentalist se sincronicen con su agenda personal.
 
+## 0. Aplicar la migración `0003`
+
+Antes de iniciar el flujo de Google Calendar asegurate de tener aplicada la migración
+`supabase/migrations/0003_create_google_calendar_credentials.sql`. Esa migración crea la
+tabla `professional_google_credentials`, que es donde se guardan los tokens OAuth de cada
+profesional. Si ves un error como `relation "public.professional_google_credentials" does not
+exist`, ejecutá:
+
+```bash
+supabase db push
+```
+
+Verificá en el Table Editor que la tabla exista antes de continuar con la integración.
+
 ## 1. Crear credenciales OAuth en Google Cloud
 1. Entrá a [Google Cloud Console](https://console.cloud.google.com/) y creá (o seleccioná) un proyecto.
 2. Habilitá la API de Google Calendar y la API de People (opcional, para obtener datos del perfil).
