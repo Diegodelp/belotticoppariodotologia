@@ -3,14 +3,27 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppointmentForm } from '@/components/appointments/AppointmentForm';
+import { ClinicalHistoryForm } from '@/components/patients/ClinicalHistoryForm';
+import { PrescriptionManager } from '@/components/patients/PrescriptionManager';
 import { PatientService } from '@/services/patient.service';
-import { Appointment, Patient, Payment, Treatment } from '@/types';
+import {
+  Appointment,
+  ClinicalHistory,
+  ClinicalHistoryInput,
+  CreatePrescriptionInput,
+  Patient,
+  Payment,
+  Prescription,
+  Treatment,
+} from '@/types';
 
 interface PatientDetailResponse {
   patient: Patient;
   appointments: Appointment[];
   treatments: Treatment[];
   payments: Payment[];
+  clinicalHistory: ClinicalHistory | null;
+  prescriptions: Prescription[];
 }
 
 export default function PatientDetailPage({ params: routeParams }: { params: { id: string } }) {
@@ -29,8 +42,16 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     phone: '',
     address: '',
     healthInsurance: 'Particular',
+    affiliateNumber: '',
     status: 'active' as 'active' | 'inactive',
   });
+  const [clinicalSaving, setClinicalSaving] = useState(false);
+  const [signatureInfo, setSignatureInfo] = useState<{ hasSignature: boolean; signatureUrl: string | null }>(
+    {
+      hasSignature: false,
+      signatureUrl: null,
+    },
+  );
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -42,9 +63,24 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
         setLoading(true);
         const response = await PatientService.getById(routeParams.id);
         if (response?.patient) {
-          setData(response as PatientDetailResponse);
+          const normalized: PatientDetailResponse = {
+            patient: response.patient,
+            appointments: response.appointments ?? [],
+            treatments: response.treatments ?? [],
+            payments: response.payments ?? [],
+            clinicalHistory: response.clinicalHistory ?? null,
+            prescriptions: response.prescriptions ?? [],
+          };
+          setData(normalized);
         } else {
           throw new Error('Paciente no encontrado');
+        }
+        const signature = await PatientService.getProfessionalSignature();
+        if (signature) {
+          setSignatureInfo({
+            hasSignature: Boolean(signature.hasSignature),
+            signatureUrl: signature.signatureUrl ?? null,
+          });
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Ocurrió un error inesperado');
@@ -71,6 +107,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
         phone: data.patient.phone,
         address: data.patient.address,
         healthInsurance: data.patient.healthInsurance,
+        affiliateNumber: data.patient.affiliateNumber ?? '',
         status: data.patient.status,
       });
       setFormError(null);
@@ -169,6 +206,72 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     }
   };
 
+  const handleClinicalHistorySubmit = async (input: ClinicalHistoryInput) => {
+    if (!data?.patient) {
+      throw new Error('Paciente no disponible');
+    }
+    setClinicalSaving(true);
+    try {
+      const response = await PatientService.saveClinicalHistory(data.patient.id, input);
+      if (!response?.success) {
+        throw new Error(response?.error ?? 'No pudimos guardar la historia clínica.');
+      }
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              clinicalHistory: response.clinicalHistory ?? null,
+            }
+          : current,
+      );
+    } finally {
+      setClinicalSaving(false);
+    }
+  };
+
+  const handleCreatePrescription = async (input: CreatePrescriptionInput) => {
+    if (!data?.patient) {
+      return { success: false, error: 'Paciente no disponible' };
+    }
+
+    try {
+      const response = await PatientService.createPrescription(data.patient.id, input);
+      if (!response?.success || !response.prescription) {
+        return {
+          success: false,
+          error: response?.error ?? 'No pudimos generar la receta',
+        };
+      }
+
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              prescriptions: [response.prescription as Prescription, ...current.prescriptions],
+            }
+          : current,
+      );
+
+      const signature = await PatientService.getProfessionalSignature();
+      if (signature) {
+        setSignatureInfo({
+          hasSignature: Boolean(signature.hasSignature),
+          signatureUrl: signature.signatureUrl ?? null,
+        });
+      }
+
+      return { success: true, prescription: response.prescription as Prescription };
+    } catch (creationError) {
+      return {
+        success: false,
+        error:
+          creationError instanceof Error
+            ? creationError.message
+            : 'No pudimos generar la receta',
+      };
+    }
+  };
+
   if (loading) {
     return <p className="px-8 py-6 text-sm text-slate-300">Cargando información del paciente...</p>;
   }
@@ -187,7 +290,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     );
   }
 
-  const { patient, appointments, treatments, payments } = data;
+  const { patient, appointments, treatments, payments, clinicalHistory, prescriptions } = data;
 
   return (
     <section className="space-y-8">
@@ -196,7 +299,10 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
           <h1 className="text-3xl font-semibold text-white">
             {patient.name} {patient.lastName}
           </h1>
-          <p className="text-sm text-slate-300">DNI {patient.dni} • {patient.healthInsurance || 'Particular'}</p>
+          <p className="text-sm text-slate-300">
+            DNI {patient.dni} • {patient.healthInsurance || 'Particular'}
+            {patient.affiliateNumber ? ` • Afiliado ${patient.affiliateNumber}` : ''}
+          </p>
         </div>
         <div className="flex flex-wrap gap-3">
           <Link
@@ -326,6 +432,16 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
                   />
                 </label>
                 <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                  N.º de afiliado
+                  <input
+                    name="affiliateNumber"
+                    value={formState.affiliateNumber}
+                    onChange={handleFieldChange}
+                    placeholder="Ej: 12345678/90"
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
                   Estado
                   <select
                     name="status"
@@ -378,6 +494,13 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
                 <dd>{patient.address || 'Sin dirección'}</dd>
               </div>
               <div>
+                <dt className="text-slate-400">Cobertura médica</dt>
+                <dd>
+                  {patient.healthInsurance || 'Particular'}
+                  {patient.affiliateNumber ? ` • Afiliado ${patient.affiliateNumber}` : ''}
+                </dd>
+              </div>
+              <div>
                 <dt className="text-slate-400">Estado</dt>
                 <dd>
                   <span className={`rounded-full px-3 py-1 text-xs ${patient.status === 'active' ? 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/40' : 'bg-amber-500/10 text-amber-200 border border-amber-400/40'}`}>
@@ -387,6 +510,12 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
               </div>
             </dl>
           </div>
+
+          <ClinicalHistoryForm
+            history={clinicalHistory}
+            onSubmit={handleClinicalHistorySubmit}
+            loading={clinicalSaving}
+          />
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
             <div className="flex items-center justify-between">
@@ -444,6 +573,13 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
               ))}
             </div>
           </div>
+
+          <PrescriptionManager
+            prescriptions={prescriptions}
+            onCreate={handleCreatePrescription}
+            hasSavedSignature={signatureInfo.hasSignature}
+            savedSignatureUrl={signatureInfo.signatureUrl}
+          />
         </div>
 
         <aside className="space-y-6">

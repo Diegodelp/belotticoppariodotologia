@@ -1,4 +1,10 @@
-import { Patient } from '@/types';
+import {
+  ClinicalHistory,
+  ClinicalHistoryInput,
+  CreatePrescriptionInput,
+  Patient,
+  Prescription,
+} from '@/types';
 
 function authHeaders(): Record<string, string> {
   if (typeof window === 'undefined') {
@@ -66,6 +72,66 @@ export class PatientService {
   static async remove(id: string) {
     const response = await fetch(`/api/patients/${id}`, {
       method: 'DELETE',
+      headers: {
+        ...authHeaders(),
+      },
+      credentials: 'include',
+    });
+    return response.json();
+  }
+
+  static async getClinicalHistory(id: string): Promise<{ clinicalHistory: ClinicalHistory | null }> {
+    const response = await fetch(`/api/patients/${id}/clinical-history`, {
+      headers: {
+        ...authHeaders(),
+      },
+      credentials: 'include',
+    });
+    return response.json();
+  }
+
+  static async saveClinicalHistory(id: string, data: ClinicalHistoryInput) {
+    const response = await fetch(`/api/patients/${id}/clinical-history`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    return response.json();
+  }
+
+  static async getPrescriptions(id: string): Promise<{ prescriptions: Prescription[] }> {
+    const response = await fetch(`/api/patients/${id}/prescriptions`, {
+      headers: {
+        ...authHeaders(),
+      },
+      credentials: 'include',
+    });
+    return response.json();
+  }
+
+  static async createPrescription(id: string, data: CreatePrescriptionInput) {
+    const response = await fetch(`/api/patients/${id}/prescriptions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
+    return response.json();
+  }
+
+  static async getProfessionalSignature(): Promise<{
+    hasSignature: boolean;
+    signatureUrl: string | null;
+    updatedAt: string | null;
+  }> {
+    const response = await fetch('/api/professionals/signature', {
       headers: {
         ...authHeaders(),
       },

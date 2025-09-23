@@ -1,6 +1,17 @@
+import crypto from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { createClient } from '@supabase/supabase-js';
-import { Appointment, Patient, Payment, Treatment, User } from '@/types';
+import {
+  Appointment,
+  ClinicalHistory,
+  ClinicalHistoryInput,
+  ClinicalStage,
+  Patient,
+  Payment,
+  Prescription,
+  Treatment,
+  User,
+} from '@/types';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -32,6 +43,21 @@ const TWO_FACTOR_CODES_TABLE =
 const GOOGLE_CREDENTIALS_TABLE =
   process.env.SUPABASE_TABLE_GOOGLE_CREDENTIALS ??
   'professional_google_credentials';
+const CLINICAL_HISTORIES_TABLE =
+  process.env.SUPABASE_TABLE_CLINICAL_HISTORIES ?? 'clinical_histories';
+const CEPHALOMETRIC_RECORDS_TABLE =
+  process.env.SUPABASE_TABLE_CEPHALOMETRIC_RECORDS ?? 'cephalometric_records';
+const PROFESSIONAL_SIGNATURES_TABLE =
+  process.env.SUPABASE_TABLE_PROFESSIONAL_SIGNATURES ?? 'professional_signatures';
+const PRESCRIPTIONS_TABLE =
+  process.env.SUPABASE_TABLE_PRESCRIPTIONS ?? 'prescriptions';
+const DOCUMENTS_BUCKET =
+  process.env.SUPABASE_BUCKET_CLINICAL_DOCUMENTS ?? 'clinical-documents';
+const SIGNATURES_BUCKET =
+  process.env.SUPABASE_BUCKET_PROFESSIONAL_SIGNATURES ??
+  'professional-signatures';
+
+const CLINICAL_STAGES: ClinicalStage[] = ['baseline', 'initial', 'intermediate', 'final'];
 
 function getClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -48,16 +74,38 @@ function getClient() {
   });
 }
 
+async function createSignedUrl(
+  client: ReturnType<typeof getClient>,
+  bucket: string,
+  path: string,
+  expiresInSeconds = 3600,
+): Promise<string | null> {
+  if (!path) {
+    return null;
+  }
+
+  const { data, error } = await client.storage
+    .from(bucket)
+    .createSignedUrl(path, expiresInSeconds);
+
+  if (error) {
+    console.error('No pudimos generar una URL firmada de Supabase', error);
+    return null;
+  }
+
+  return data?.signedUrl ?? null;
+}
+
 type AppPatientRow = {
   id: string;
   dni: string | null;
   first_name: string;
   last_name: string;
   email: string | null;
-  password_hash: string | null;
   phone: string | null;
   address: string | null;
-  health_insurance: string | null;
+  obra_social: string | null;
+  afiliado: string | null;
   status: string;
 };
 
@@ -111,6 +159,57 @@ type AppGoogleCredentialRow = {
   updated_at?: string | null;
 };
 
+type AppClinicalHistoryRow = {
+  id: string;
+  patient_id: string;
+  professional_id: string;
+  summary: string | null;
+  created_at: string;
+  updated_at: string;
+  cephalometric_records?: AppCephalometricRecordRow[] | null;
+};
+
+type AppCephalometricRecordRow = {
+  id: string;
+  clinical_history_id: string;
+  stage: ClinicalStage;
+  biotipo: string | null;
+  patron_esqueletal: string | null;
+  sna: string | null;
+  snb: string | null;
+  anb: string | null;
+  na_mm: string | null;
+  na_angle: string | null;
+  nb_mm: string | null;
+  nb_angle: string | null;
+  plano_mandibular: string | null;
+  recorded_at: string | null;
+};
+
+type AppPrescriptionRow = {
+  id: string;
+  patient_id: string;
+  professional_id: string;
+  title: string;
+  diagnosis: string | null;
+  medication: string;
+  instructions: string;
+  notes: string | null;
+  document_path: string;
+  signature_path: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type AppProfessionalSignatureRow = {
+  professional_id: string;
+  storage_path: string;
+  mime_type: string | null;
+  file_size: number | null;
+  updated_at: string;
+  created_at: string;
+};
+
 function mapPatient(record: AppPatientRow): Patient {
   return {
     id: record.id,
@@ -120,7 +219,8 @@ function mapPatient(record: AppPatientRow): Patient {
     email: record.email ?? '',
     phone: record.phone ?? '',
     address: record.address ?? '',
-    healthInsurance: record.health_insurance ?? 'Particular',
+    healthInsurance: record.obra_social ?? 'Particular',
+    affiliateNumber: record.afiliado ?? undefined,
     status: (record.status as Patient['status']) ?? 'active',
   };
 }
@@ -169,6 +269,51 @@ function mapPayment(record: AppPaymentRow): Payment {
     status: (record.status as Payment['status']) ?? 'completed',
     date: new Date(rawDate).toISOString(),
     notes: record.notes ?? undefined,
+  };
+}
+
+function mapClinicalHistory(row: AppClinicalHistoryRow): ClinicalHistory {
+  const stages: ClinicalHistory['stages'] = {};
+
+  for (const record of row.cephalometric_records ?? []) {
+    stages[record.stage] = {
+      stage: record.stage,
+      biotipo: record.biotipo ?? undefined,
+      patronEsqueletal: record.patron_esqueletal ?? undefined,
+      sna: record.sna ?? undefined,
+      snb: record.snb ?? undefined,
+      anb: record.anb ?? undefined,
+      naMm: record.na_mm ?? undefined,
+      naAngle: record.na_angle ?? undefined,
+      nbMm: record.nb_mm ?? undefined,
+      nbAngle: record.nb_angle ?? undefined,
+      planoMandibular: record.plano_mandibular ?? undefined,
+      recordedAt: record.recorded_at ?? undefined,
+    };
+  }
+
+  return {
+    id: row.id,
+    patientId: row.patient_id,
+    summary: row.summary,
+    stages,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapPrescription(row: AppPrescriptionRow, pdfUrl: string): Prescription {
+  return {
+    id: row.id,
+    patientId: row.patient_id,
+    title: row.title,
+    diagnosis: row.diagnosis ?? undefined,
+    medication: row.medication,
+    instructions: row.instructions,
+    notes: row.notes ?? undefined,
+    pdfUrl,
+    signaturePath: row.signature_path ?? undefined,
+    createdAt: row.created_at,
   };
 }
 
@@ -404,7 +549,8 @@ export async function createPatient(
       email: patient.email,
       phone: patient.phone,
       address: patient.address,
-      health_insurance: patient.healthInsurance,
+      obra_social: patient.healthInsurance,
+      afiliado: patient.affiliateNumber,
       status: patient.status,
     })
     .select('*')
@@ -443,7 +589,8 @@ export async function updatePatient(
       email: updates.email,
       phone: updates.phone,
       address: updates.address,
-      health_insurance: updates.healthInsurance,
+      obra_social: updates.healthInsurance,
+      afiliado: updates.affiliateNumber,
       status: updates.status,
     })
     .eq('id', patientId)
@@ -785,6 +932,289 @@ export async function createPayment(
     .single();
   if (error) throw error;
   return mapPayment(data as AppPaymentRow);
+}
+
+export async function getClinicalHistory(
+  professionalId: string,
+  patientId: string,
+): Promise<ClinicalHistory | null> {
+  const client = getClient();
+  const { data, error } = await client
+    .from(CLINICAL_HISTORIES_TABLE)
+    .select('*, cephalometric_records(*)')
+    .eq('professional_id', professionalId)
+    .eq('patient_id', patientId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    return null;
+  }
+
+  return mapClinicalHistory(data as AppClinicalHistoryRow);
+}
+
+export async function upsertClinicalHistory(
+  professionalId: string,
+  patientId: string,
+  input: ClinicalHistoryInput,
+): Promise<ClinicalHistory | null> {
+  const client = getClient();
+  const { data: existing, error: existingError } = await client
+    .from(CLINICAL_HISTORIES_TABLE)
+    .select('id')
+    .eq('professional_id', professionalId)
+    .eq('patient_id', patientId)
+    .maybeSingle();
+
+  if (existingError) throw existingError;
+
+  let historyId: string;
+
+  if (existing) {
+    const { error: updateError } = await client
+      .from(CLINICAL_HISTORIES_TABLE)
+      .update({ summary: input.summary ?? null })
+      .eq('id', existing.id);
+    if (updateError) throw updateError;
+    historyId = existing.id;
+  } else {
+    const { data: created, error: insertError } = await client
+      .from(CLINICAL_HISTORIES_TABLE)
+      .insert({
+        professional_id: professionalId,
+        patient_id: patientId,
+        summary: input.summary ?? null,
+      })
+      .select('id')
+      .single();
+
+    if (insertError) throw insertError;
+    historyId = (created as { id: string }).id;
+  }
+
+  const stageEntries = Object.entries(input.stages ?? {}) as [
+    ClinicalStage,
+    ClinicalHistoryInput['stages'][ClinicalStage],
+  ][];
+
+  const upserts: Array<Record<string, unknown>> = [];
+  const deletions: ClinicalStage[] = [];
+
+  for (const [stage, values] of stageEntries) {
+    if (!CLINICAL_STAGES.includes(stage)) {
+      continue;
+    }
+
+    const normalized = {
+      biotipo: values?.biotipo?.trim() || null,
+      patron_esqueletal: values?.patronEsqueletal?.trim() || null,
+      sna: values?.sna?.trim() || null,
+      snb: values?.snb?.trim() || null,
+      anb: values?.anb?.trim() || null,
+      na_mm: values?.naMm?.trim() || null,
+      na_angle: values?.naAngle?.trim() || null,
+      nb_mm: values?.nbMm?.trim() || null,
+      nb_angle: values?.nbAngle?.trim() || null,
+      plano_mandibular: values?.planoMandibular?.trim() || null,
+    };
+
+    const hasValue = Object.values(normalized).some((value) => value && value.toString().length > 0);
+
+    if (!hasValue) {
+      deletions.push(stage);
+      continue;
+    }
+
+    upserts.push({
+      clinical_history_id: historyId,
+      stage,
+      ...normalized,
+      recorded_at: new Date().toISOString(),
+    });
+  }
+
+  if (upserts.length > 0) {
+    const { error: upsertError } = await client
+      .from(CEPHALOMETRIC_RECORDS_TABLE)
+      .upsert(upserts, { onConflict: 'clinical_history_id,stage' });
+    if (upsertError) throw upsertError;
+  }
+
+  if (deletions.length > 0) {
+    const { error: deleteError } = await client
+      .from(CEPHALOMETRIC_RECORDS_TABLE)
+      .delete()
+      .eq('clinical_history_id', historyId)
+      .in('stage', deletions);
+    if (deleteError) throw deleteError;
+  }
+
+  return getClinicalHistory(professionalId, patientId);
+}
+
+export async function listPrescriptions(
+  professionalId: string,
+  patientId: string,
+): Promise<Prescription[]> {
+  const client = getClient();
+  const { data, error } = await client
+    .from(PRESCRIPTIONS_TABLE)
+    .select('*')
+    .eq('professional_id', professionalId)
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  const rows = (data ?? []) as AppPrescriptionRow[];
+  const signedUrls = await Promise.all(
+    rows.map((row) => createSignedUrl(client, DOCUMENTS_BUCKET, row.document_path)),
+  );
+
+  return rows.map((row, index) => mapPrescription(row, signedUrls[index] ?? ''));
+}
+
+export async function createPrescriptionRecord(
+  professionalId: string,
+  patientId: string,
+  payload: {
+    title: string;
+    diagnosis?: string | null;
+    medication: string;
+    instructions: string;
+    notes?: string | null;
+    pdfBuffer: Buffer;
+    signaturePath?: string | null;
+  },
+): Promise<Prescription> {
+  const client = getClient();
+  const fileName = `${new Date().toISOString().split('T')[0]}-${crypto.randomUUID()}.pdf`;
+  const storagePath = `${professionalId}/patients/${patientId}/prescriptions/${fileName}`;
+
+  const { error: uploadError } = await client.storage
+    .from(DOCUMENTS_BUCKET)
+    .upload(storagePath, payload.pdfBuffer, {
+      contentType: 'application/pdf',
+      upsert: false,
+    });
+
+  if (uploadError) throw uploadError;
+
+  const { data, error } = await client
+    .from(PRESCRIPTIONS_TABLE)
+    .insert({
+      patient_id: patientId,
+      professional_id: professionalId,
+      title: payload.title,
+      diagnosis: payload.diagnosis ?? null,
+      medication: payload.medication,
+      instructions: payload.instructions,
+      notes: payload.notes ?? null,
+      document_path: storagePath,
+      signature_path: payload.signaturePath ?? null,
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+
+  const signedUrl = await createSignedUrl(client, DOCUMENTS_BUCKET, storagePath);
+  return mapPrescription(data as AppPrescriptionRow, signedUrl ?? '');
+}
+
+export async function getProfessionalSignature(
+  professionalId: string,
+  options: { signedUrlExpiresIn?: number } = {},
+): Promise<(AppProfessionalSignatureRow & { signedUrl: string | null }) | null> {
+  const client = getClient();
+  const { data, error } = await client
+    .from(PROFESSIONAL_SIGNATURES_TABLE)
+    .select('*')
+    .eq('professional_id', professionalId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    return null;
+  }
+
+  const row = data as AppProfessionalSignatureRow;
+  const signedUrl = await createSignedUrl(
+    client,
+    SIGNATURES_BUCKET,
+    row.storage_path,
+    options.signedUrlExpiresIn ?? 3600,
+  );
+
+  return { ...row, signedUrl };
+}
+
+export async function saveProfessionalSignature(
+  professionalId: string,
+  file: { buffer: Buffer; mimeType: string },
+): Promise<{ storagePath: string; signedUrl: string | null }> {
+  const client = getClient();
+  const mimeType = file.mimeType?.startsWith('image/') ? file.mimeType : 'image/png';
+  const extension = mimeType.includes('png')
+    ? 'png'
+    : mimeType.includes('jpeg') || mimeType.includes('jpg')
+      ? 'jpg'
+      : 'png';
+  const storagePath = `${professionalId}/signature.${extension}`;
+
+  const { error: uploadError } = await client.storage
+    .from(SIGNATURES_BUCKET)
+    .upload(storagePath, file.buffer, {
+      contentType: mimeType,
+      upsert: true,
+    });
+
+  if (uploadError) throw uploadError;
+
+  const { error: upsertError } = await client
+    .from(PROFESSIONAL_SIGNATURES_TABLE)
+    .upsert(
+      {
+        professional_id: professionalId,
+        storage_path: storagePath,
+        mime_type: mimeType,
+        file_size: file.buffer.byteLength,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'professional_id' },
+    );
+
+  if (upsertError) throw upsertError;
+
+  const signedUrl = await createSignedUrl(client, SIGNATURES_BUCKET, storagePath);
+  return { storagePath, signedUrl };
+}
+
+export async function downloadProfessionalSignature(
+  professionalId: string,
+): Promise<{ buffer: Buffer; mimeType: string; storagePath: string } | null> {
+  const client = getClient();
+  const signature = await getProfessionalSignature(professionalId);
+  if (!signature) {
+    return null;
+  }
+
+  const { data, error } = await client.storage
+    .from(SIGNATURES_BUCKET)
+    .download(signature.storage_path);
+
+  if (error) throw error;
+  if (!data) {
+    return null;
+  }
+
+  const arrayBuffer = await data.arrayBuffer();
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    mimeType: signature.mime_type ?? 'image/png',
+    storagePath: signature.storage_path,
+  };
 }
 
 export function toPublicUser(user: {

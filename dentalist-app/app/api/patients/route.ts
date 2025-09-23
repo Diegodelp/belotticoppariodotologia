@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
       phone,
       address,
       healthInsurance,
+      affiliateNumber,
       status = 'active',
     } = body ?? {};
 
@@ -62,6 +63,7 @@ export async function POST(request: NextRequest) {
       phone: phone ?? '',
       address: address ?? '',
       healthInsurance: healthInsurance ?? 'Particular',
+      affiliateNumber: affiliateNumber ?? undefined,
       status,
     };
 

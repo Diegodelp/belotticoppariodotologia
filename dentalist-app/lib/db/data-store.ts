@@ -32,6 +32,7 @@ function createInitialPatients(): Patient[] {
       phone: '+54 9 11 4567-8910',
       address: 'Av. Corrientes 1234, CABA',
       healthInsurance: 'OSDE 310',
+      affiliateNumber: '12345678/90',
       status: 'active',
     },
     {
@@ -43,6 +44,7 @@ function createInitialPatients(): Patient[] {
       phone: '+54 9 221 678-9012',
       address: 'Calle 12 456, La Plata',
       healthInsurance: 'Swiss Medical SMG 30',
+      affiliateNumber: '99887766/55',
       status: 'active',
     },
     {
@@ -54,6 +56,7 @@ function createInitialPatients(): Patient[] {
       phone: '+54 9 261 555-7788',
       address: 'San Martín 987, Mendoza',
       healthInsurance: 'Galeno 360',
+      affiliateNumber: undefined,
       status: 'inactive',
     },
   ];

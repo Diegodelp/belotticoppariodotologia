@@ -12,6 +12,7 @@ const initialState = {
   phone: '',
   address: '',
   healthInsurance: 'Particular',
+  affiliateNumber: '',
 };
 
 export default function NewPatientPage() {
@@ -148,6 +149,19 @@ export default function NewPatientPage() {
               name="healthInsurance"
               value={formData.healthInsurance}
               onChange={handleChange}
+              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300" htmlFor="affiliateNumber">
+              Número de afiliado
+            </label>
+            <input
+              id="affiliateNumber"
+              name="affiliateNumber"
+              value={formData.affiliateNumber}
+              onChange={handleChange}
+              placeholder="Ej: 12345678/90"
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
             />
           </div>

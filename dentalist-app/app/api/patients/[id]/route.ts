@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth/get-user';
 import {
   getPatientById,
+  getClinicalHistory,
   listAppointments,
+  listPrescriptions,
   listPayments,
   listTreatments,
   removePatient,
@@ -23,13 +25,22 @@ export async function GET(
     return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
   }
 
-  const [appointments, treatments, payments] = await Promise.all([
+  const [appointments, treatments, payments, clinicalHistory, prescriptions] = await Promise.all([
     listAppointments(user.id, patient.id),
     listTreatments(user.id, patient.id),
     listPayments(user.id, patient.id),
+    getClinicalHistory(user.id, patient.id),
+    listPrescriptions(user.id, patient.id),
   ]);
 
-  return NextResponse.json({ patient, appointments, treatments, payments });
+  return NextResponse.json({
+    patient,
+    appointments,
+    treatments,
+    payments,
+    clinicalHistory,
+    prescriptions,
+  });
 }
 
 export async function PUT(
@@ -51,6 +62,7 @@ export async function PUT(
       phone: body.phone,
       address: body.address,
       healthInsurance: body.healthInsurance,
+      affiliateNumber: body.affiliateNumber,
       status: body.status,
     };
     const updated = await updatePatient(user.id, params.id, updates);
