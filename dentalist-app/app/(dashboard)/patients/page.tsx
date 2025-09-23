@@ -11,6 +11,8 @@ export default function PatientsPage() {
   const [status, setStatus] = useState<'all' | 'active' | 'inactive'>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
 
   useEffect(() => {
     const fetchPatients = async () => {
@@ -43,6 +45,33 @@ export default function PatientsPage() {
       return matchesSearch && matchesStatus;
     });
   }, [patients, search, status]);
+
+    const handleDeletePatient = async (patientId: string) => {
+    const patient = patients.find((item) => item.id === patientId);
+    const confirmationMessage = patient
+      ? `¿Seguro que querés eliminar a ${patient.name} ${patient.lastName}?`
+      : '¿Seguro que querés eliminar este paciente?';
+
+    if (!window.confirm(confirmationMessage)) {
+      return;
+    }
+
+    try {
+      setError(null);
+      setDeletingId(patientId);
+      const response = await PatientService.remove(patientId);
+      if (response?.error) {
+        throw new Error(response.error);
+      }
+      setPatients((prev) => prev.filter((item) => item.id !== patientId));
+    } catch (deleteError) {
+      console.error('Error al eliminar paciente', deleteError);
+      setError('No pudimos eliminar el paciente. Intentá nuevamente.');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
 
   return (
     <section className="space-y-8">
@@ -124,6 +153,14 @@ export default function PatientsPage() {
         )}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filteredPatients.map((patient) => (
+
+            <PatientCard
+              key={patient.id}
+              patient={patient}
+              onDelete={() => handleDeletePatient(patient.id)}
+              deleting={deletingId === patient.id}
+            />
+
             <PatientCard key={patient.id} patient={patient} />
           ))}
         </div>

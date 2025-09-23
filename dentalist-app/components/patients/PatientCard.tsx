@@ -3,9 +3,15 @@ import { Patient } from '@/types';
 
 interface PatientCardProps {
   patient: Patient;
+  onDelete?: (patient: Patient) => void;
+  deleting?: boolean;
+}
+
+export default function PatientCard({ patient, onDelete, deleting }: PatientCardProps) {
 }
 
 export default function PatientCard({ patient }: PatientCardProps) {
+
   const statusStyle =
     patient.status === 'active'
       ? 'bg-emerald-500/10 text-emerald-200 border-emerald-500/40'
@@ -16,6 +22,8 @@ export default function PatientCard({ patient }: PatientCardProps) {
       href={`/patients/${patient.id}`}
       className="group flex flex-col gap-4 rounded-3xl border border-white/10 bg-slate-900/60 p-5 text-slate-100 shadow-md shadow-slate-900/40 transition hover:border-cyan-300/70 hover:bg-slate-900/80"
     >
+
+      <div className="flex items-start justify-between gap-3">
       <div className="flex items-start justify-between">
         <div>
           <h3 className="text-lg font-semibold text-white group-hover:text-cyan-200">
@@ -24,6 +32,25 @@ export default function PatientCard({ patient }: PatientCardProps) {
           <p className="text-xs uppercase tracking-widest text-slate-400">
             DNI {patient.dni}
           </p>
+        </div>
+        <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+          <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusStyle}`}>
+            {patient.status === 'active' ? 'Activo' : 'Inactivo'}
+          </span>
+          {onDelete && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                onDelete(patient);
+              }}
+              disabled={deleting}
+              className="rounded-full border border-rose-500/40 bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-200 transition hover:border-rose-400 hover:bg-rose-500/20 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {deleting ? 'Eliminando…' : 'Eliminar'}
+            </button>
+          )}
         </div>
         <span className={`rounded-full border px-3 py-1 text-xs font-medium ${statusStyle}`}>
           {patient.status === 'active' ? 'Activo' : 'Inactivo'}
