@@ -5,6 +5,15 @@ import { Appointment, Patient, Payment, Treatment, User } from '@/types';
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+const PROFESSIONALS_TABLE =
+  process.env.SUPABASE_TABLE_PROFESIONALES ?? 'profesionales';
+const PATIENTS_TABLE = process.env.SUPABASE_TABLE_PACIENTES ?? 'pacientes';
+const APPOINTMENTS_TABLE = process.env.SUPABASE_TABLE_TURNOS ?? 'turnos';
+const TREATMENTS_TABLE = process.env.SUPABASE_TABLE_TRATAMIENTOS ?? 'tratamientos';
+const PAYMENTS_TABLE = process.env.SUPABASE_TABLE_PAGOS ?? 'pagos';
+const TWO_FACTOR_CODES_TABLE =
+  process.env.SUPABASE_TABLE_CODIGOS_DOBLE_FACTOR ?? 'codigos_doble_factor';
+
 function getClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
     throw new Error(
@@ -124,7 +133,7 @@ export async function registerProfessional(data: {
   const { dni, name, email, password } = data;
 
   const { data: existing } = await client
-    .from('app_professionals')
+    .from(PROFESSIONALS_TABLE)
     .select('id, dni')
     .or(`dni.eq.${dni},email.eq.${email}`)
     .maybeSingle();
@@ -136,7 +145,7 @@ export async function registerProfessional(data: {
   const passwordHash = await bcrypt.hash(password, 10);
 
   const { data: inserted, error } = await client
-    .from('app_professionals')
+    .from(PROFESSIONALS_TABLE)
     .insert({
       dni,
       full_name: name,
@@ -175,7 +184,7 @@ export async function findUserByDni(
   const client = getClient();
   if (type === 'profesional') {
     const { data, error } = await client
-      .from('app_professionals')
+      .from(PROFESSIONALS_TABLE)
       .select('*')
       .eq('dni', dni)
       .maybeSingle();
@@ -192,7 +201,7 @@ export async function findUserByDni(
   }
 
   const { data, error } = await client
-    .from('app_patients')
+    .from(PATIENTS_TABLE)
     .select('*')
     .eq('dni', dni)
     .maybeSingle();
@@ -228,7 +237,7 @@ export async function storeTwoFactorCode(
   const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString();
   const codeHash = await bcrypt.hash(code, 10);
 
-  const { error } = await client.from('app_two_factor_codes').insert({
+  const { error } = await client.from(TWO_FACTOR_CODES_TABLE).insert({
     user_id: user.id,
     user_type: user.type,
     email: user.email,
@@ -243,7 +252,7 @@ export async function validateTwoFactorCode(user: StoredAuthUser, code: string) 
   const client = getClient();
 
   const { data, error } = await client
-    .from('app_two_factor_codes')
+    .from(TWO_FACTOR_CODES_TABLE)
     .select('*')
     .eq('user_id', user.id)
     .eq('user_type', user.type)
@@ -267,14 +276,14 @@ export async function validateTwoFactorCode(user: StoredAuthUser, code: string) 
   const valid = await bcrypt.compare(code, data.code_hash);
   if (!valid) {
     await client
-      .from('app_two_factor_codes')
+      .from(TWO_FACTOR_CODES_TABLE)
       .update({ attempts: data.attempts + 1 })
       .eq('id', data.id);
     return { valid: false, reason: 'Código incorrecto' } as const;
   }
 
   await client
-    .from('app_two_factor_codes')
+    .from(TWO_FACTOR_CODES_TABLE)
     .update({ consumed_at: new Date().toISOString() })
     .eq('id', data.id);
 
@@ -287,7 +296,7 @@ export async function listPatients(
 ): Promise<Patient[]> {
   const client = getClient();
   let query = client
-    .from('app_patients')
+    .from(PATIENTS_TABLE)
     .select('*')
     .eq('professional_id', professionalId)
     .order('created_at', { ascending: true });
@@ -315,7 +324,7 @@ export async function createPatient(
 ): Promise<Patient> {
   const client = getClient();
   const { data, error } = await client
-    .from('app_patients')
+    .from(PATIENTS_TABLE)
     .insert({
       professional_id: professionalId,
       dni: patient.dni,
@@ -339,7 +348,7 @@ export async function getPatientById(
 ): Promise<Patient | null> {
   const client = getClient();
   const { data, error } = await client
-    .from('app_patients')
+    .from(PATIENTS_TABLE)
     .select('*')
     .eq('id', patientId)
     .eq('professional_id', professionalId)
@@ -355,7 +364,7 @@ export async function updatePatient(
 ): Promise<Patient | null> {
   const client = getClient();
   const { data, error } = await client
-    .from('app_patients')
+    .from(PATIENTS_TABLE)
     .update({
       dni: updates.dni,
       first_name: updates.name,
@@ -380,7 +389,7 @@ export async function removePatient(
 ): Promise<boolean> {
   const client = getClient();
   const { error } = await client
-    .from('app_patients')
+    .from(PATIENTS_TABLE)
     .delete()
     .eq('id', patientId)
     .eq('professional_id', professionalId);
@@ -391,7 +400,7 @@ export async function removePatient(
 export async function listAppointments(professionalId: string, patientId?: string) {
   const client = getClient();
   let query = client
-    .from('app_appointments')
+    .from(APPOINTMENTS_TABLE)
     .select('*')
     .eq('professional_id', professionalId)
     .order('start_at');
@@ -416,7 +425,7 @@ export async function createAppointment(
 ) {
   const client = getClient();
   const { data, error } = await client
-    .from('app_appointments')
+    .from(APPOINTMENTS_TABLE)
     .insert({
       professional_id: professionalId,
       patient_id: appointment.patientId ?? null,
@@ -438,7 +447,7 @@ export async function updateAppointment(
 ) {
   const client = getClient();
   const { data: currentRow, error: fetchError } = await client
-    .from('app_appointments')
+    .from(APPOINTMENTS_TABLE)
     .select('*')
     .eq('professional_id', professionalId)
     .eq('id', appointmentId)
@@ -483,7 +492,7 @@ export async function updateAppointment(
   }
 
   const { data, error } = await client
-    .from('app_appointments')
+    .from(APPOINTMENTS_TABLE)
     .update(payload)
     .eq('professional_id', professionalId)
     .eq('id', appointmentId)
@@ -500,7 +509,7 @@ export async function deleteAppointment(
 ) {
   const client = getClient();
   const { data, error } = await client
-    .from('app_appointments')
+    .from(APPOINTMENTS_TABLE)
     .delete()
     .eq('professional_id', professionalId)
     .eq('id', appointmentId)
@@ -516,7 +525,7 @@ export async function listTreatments(
 ) {
   const client = getClient();
   let query = client
-    .from('app_treatments')
+    .from(TREATMENTS_TABLE)
     .select('*')
     .eq('professional_id', professionalId)
     .order('treatment_date', { ascending: false });
@@ -535,7 +544,7 @@ export async function createTreatment(
 ) {
   const client = getClient();
   const { data, error } = await client
-    .from('app_treatments')
+    .from(TREATMENTS_TABLE)
     .insert({
       professional_id: professionalId,
       patient_id: treatment.patientId,
@@ -556,7 +565,7 @@ export async function listPayments(
 ) {
   const client = getClient();
   let query = client
-    .from('app_payments')
+    .from(PAYMENTS_TABLE)
     .select('*')
     .eq('professional_id', professionalId)
     .order('payment_date', { ascending: false });
@@ -575,7 +584,7 @@ export async function createPayment(
 ) {
   const client = getClient();
   const { data, error } = await client
-    .from('app_payments')
+    .from(PAYMENTS_TABLE)
     .insert({
       professional_id: professionalId,
       patient_id: payment.patientId,

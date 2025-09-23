@@ -1,8 +1,8 @@
--- Step 3: Simplified application tables used by the Next.js portal
--- These tables provide a pragmatic bridge while we finish wiring the
--- richer clinical schema defined in 0001_create_core_schema.sql.
+-- Step 3: Tablas base utilizadas por el portal Next.js
+-- Se utilizan los nombres históricos (profesionales, pacientes, etc.)
+-- para ser compatibles con la estructura que ya tenías en Firebase/Supabase.
 
-create table if not exists public.app_professionals (
+create table if not exists public.profesionales (
   id uuid primary key default uuid_generate_v4(),
   dni text not null unique,
   full_name text not null,
@@ -11,9 +11,9 @@ create table if not exists public.app_professionals (
   created_at timestamptz not null default now()
 );
 
-create table if not exists public.app_patients (
+create table if not exists public.pacientes (
   id uuid primary key default uuid_generate_v4(),
-  professional_id uuid not null references public.app_professionals(id) on delete cascade,
+  professional_id uuid not null references public.profesionales(id) on delete cascade,
   dni text,
   first_name text not null,
   last_name text not null,
@@ -27,7 +27,7 @@ create table if not exists public.app_patients (
   updated_at timestamptz not null default now()
 );
 
-create or replace function public.app_set_updated_at()
+create or replace function public.portal_set_updated_at()
 returns trigger as $$
 begin
   new.updated_at = now();
@@ -35,14 +35,14 @@ begin
 end;
 $$ language plpgsql;
 
-create trigger app_patients_set_updated_at
-before update on public.app_patients
-for each row execute function public.app_set_updated_at();
+create trigger pacientes_set_updated_at
+before update on public.pacientes
+for each row execute function public.portal_set_updated_at();
 
-create table if not exists public.app_appointments (
+create table if not exists public.turnos (
   id uuid primary key default uuid_generate_v4(),
-  professional_id uuid not null references public.app_professionals(id) on delete cascade,
-  patient_id uuid references public.app_patients(id) on delete set null,
+  professional_id uuid not null references public.profesionales(id) on delete cascade,
+  patient_id uuid references public.pacientes(id) on delete set null,
   title text not null,
   status text not null default 'confirmed',
   start_at timestamptz not null,
@@ -50,10 +50,10 @@ create table if not exists public.app_appointments (
   created_at timestamptz not null default now()
 );
 
-create table if not exists public.app_treatments (
+create table if not exists public.tratamientos (
   id uuid primary key default uuid_generate_v4(),
-  professional_id uuid not null references public.app_professionals(id) on delete cascade,
-  patient_id uuid not null references public.app_patients(id) on delete cascade,
+  professional_id uuid not null references public.profesionales(id) on delete cascade,
+  patient_id uuid not null references public.pacientes(id) on delete cascade,
   type text not null,
   description text,
   cost numeric(12,2) not null,
@@ -61,10 +61,10 @@ create table if not exists public.app_treatments (
   created_at timestamptz not null default now()
 );
 
-create table if not exists public.app_payments (
+create table if not exists public.pagos (
   id uuid primary key default uuid_generate_v4(),
-  professional_id uuid not null references public.app_professionals(id) on delete cascade,
-  patient_id uuid not null references public.app_patients(id) on delete cascade,
+  professional_id uuid not null references public.profesionales(id) on delete cascade,
+  patient_id uuid not null references public.pacientes(id) on delete cascade,
   amount numeric(12,2) not null,
   method text not null,
   status text not null default 'completed',
@@ -73,7 +73,7 @@ create table if not exists public.app_payments (
   created_at timestamptz not null default now()
 );
 
-create table if not exists public.app_two_factor_codes (
+create table if not exists public.codigos_doble_factor (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid not null,
   user_type text not null check (user_type in ('profesional', 'paciente')),
@@ -85,9 +85,8 @@ create table if not exists public.app_two_factor_codes (
   created_at timestamptz not null default now()
 );
 
-create index if not exists app_two_factor_codes_user_idx
-  on public.app_two_factor_codes(user_id, user_type);
+create index if not exists codigos_doble_factor_user_idx
+  on public.codigos_doble_factor(user_id, user_type);
 
-create index if not exists app_two_factor_codes_email_idx
-  on public.app_two_factor_codes(email);
-
+create index if not exists codigos_doble_factor_email_idx
+  on public.codigos_doble_factor(email);
