@@ -1,7 +1,13 @@
 import { google, calendar_v3 } from 'googleapis';
 import { Credentials } from 'google-auth-library';
 
-const CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
+const CALENDAR_SCOPES = [
+  'https://www.googleapis.com/auth/calendar.events',
+  'openid',
+  'email',
+  'https://www.googleapis.com/auth/userinfo.email',
+  'https://www.googleapis.com/auth/userinfo.profile',
+];
 
 const explicitRedirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
 const defaultTimeZone = process.env.GOOGLE_CALENDAR_TIMEZONE ?? 'America/Argentina/Buenos_Aires';
