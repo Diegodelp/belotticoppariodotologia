@@ -160,9 +160,31 @@ export async function registerProfessional(data: {
 
   const passwordHash = await bcrypt.hash(password, 10);
 
+  const { data: authData, error: authError } = await client.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: {
+      dni,
+      full_name: name,
+      role: 'professional',
+    },
+  });
+
+  if (authError || !authData.user) {
+    throw new Error(
+      authError?.message ??
+        'No pudimos crear la cuenta en Supabase Auth. Verifica que el correo no esté registrado.',
+    );
+  }
+
+  const professionalId = authData.user.id;
+
   const { data: inserted, error } = await client
     .from(PROFESSIONALS_TABLE)
     .insert({
+      id: professionalId,
+      user_id: professionalId,
       dni,
       full_name: name,
       email,
@@ -172,6 +194,7 @@ export async function registerProfessional(data: {
     .single();
 
   if (error) {
+    await client.auth.admin.deleteUser(professionalId);
     throw error;
   }
 
