@@ -1,15 +1,15 @@
 import { Appointment } from '@/types';
 
-function authHeaders() {
+function authHeaders(): HeadersInit | undefined {
   if (typeof window === 'undefined') {
-    return {};
+    return undefined;
   }
   const token = localStorage.getItem('token');
   return token
     ? {
         Authorization: `Bearer ${token}`,
       }
-    : {};
+    : undefined;
 }
 
 export class AppointmentService {
