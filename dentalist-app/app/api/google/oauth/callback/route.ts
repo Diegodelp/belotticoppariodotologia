@@ -16,6 +16,24 @@ interface StatePayload {
   redirect?: string;
 }
 
+function decodeGoogleIdToken(idToken: string): { sub?: string; email?: string } | null {
+  try {
+    const [, payload] = idToken.split('.');
+    if (!payload) {
+      return null;
+    }
+
+    const padded = payload.padEnd(payload.length + ((4 - (payload.length % 4)) % 4), '=');
+    const normalized = padded.replace(/-/g, '+').replace(/_/g, '/');
+    const json = Buffer.from(normalized, 'base64').toString('utf8');
+
+    return JSON.parse(json) as { sub?: string; email?: string };
+  } catch (error) {
+    console.warn('No se pudo decodificar el id_token de Google', error);
+    return null;
+  }
+}
+
 function redirectWithStatus(request: NextRequest, redirectPath: string | undefined, status: string, message?: string) {
   const target = new URL(redirectPath ?? '/settings', request.nextUrl.origin);
   target.searchParams.set('calendar', status);
@@ -88,10 +106,27 @@ export async function GET(request: NextRequest) {
       expiryDate,
     };
 
-    const { profile, latestCredentials } = await fetchGoogleProfile(tokenSet);
+    const idTokenClaims = tokens.id_token ? decodeGoogleIdToken(tokens.id_token) : null;
 
-    const googleUserId = profile.id ?? (profile as { sub?: string } | undefined)?.sub ?? null;
-    const email = profile.email ?? existing?.email ?? null;
+    let profile: Awaited<ReturnType<typeof fetchGoogleProfile>>['profile'] | null = null;
+    let latestCredentials: OAuthTokenSet = tokenSet;
+
+    try {
+      const fetched = await fetchGoogleProfile(tokenSet);
+      profile = fetched.profile;
+      latestCredentials = fetched.latestCredentials;
+    } catch (profileError) {
+      console.warn('No se pudo obtener el perfil de Google con la API userinfo', profileError);
+      latestCredentials = tokenSet;
+    }
+
+    const googleUserId =
+      profile?.id ??
+      (profile as { sub?: string } | undefined)?.sub ??
+      idTokenClaims?.sub ??
+      existing?.googleUserId ??
+      null;
+    const email = profile?.email ?? idTokenClaims?.email ?? existing?.email ?? null;
 
     if (!googleUserId || !email) {
       return redirectWithStatus(
