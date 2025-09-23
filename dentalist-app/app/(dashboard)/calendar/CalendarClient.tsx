@@ -12,6 +12,14 @@ interface AppointmentWithPatient extends Appointment {
   patient?: Patient;
 }
 
+function getPatientDisplayName(patient?: Patient) {
+  if (!patient) {
+    return undefined;
+  }
+  const fullName = [patient.name, patient.lastName].filter(Boolean).join(' ').trim();
+  return fullName || patient.email || undefined;
+}
+
 export function CalendarClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -184,7 +192,9 @@ export function CalendarClient() {
                         {appointment.time}
                       </div>
                       <div>
-                        <p className="text-sm font-semibold text-white">{appointment.patient?.fullName ?? 'Paciente sin asignar'}</p>
+                        <p className="text-sm font-semibold text-white">
+                          {getPatientDisplayName(appointment.patient) ?? 'Paciente sin asignar'}
+                        </p>
                         <p className="text-xs text-slate-300">{appointment.reason}</p>
                         {appointment.patient?.id && (
                           <Link
