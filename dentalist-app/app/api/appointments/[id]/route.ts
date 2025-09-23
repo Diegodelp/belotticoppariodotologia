@@ -4,11 +4,14 @@ import {
   deleteAppointment,
   getAppointmentById,
   getPatientById,
+  getProfessionalGoogleCredentials,
   updateAppointment,
+  upsertProfessionalGoogleCredentials,
 } from '@/lib/db/supabase-repository';
 import {
   deleteCalendarEvent,
   isCalendarReady,
+  OAuthTokenSet,
   updateCalendarEvent,
 } from '@/lib/google/calendar';
 
@@ -45,7 +48,9 @@ export async function PUT(
       return NextResponse.json({ success: true, appointment: updated });
     }
 
-    if (!isCalendarReady()) {
+    const credentials = await getProfessionalGoogleCredentials(user.id);
+
+    if (!isCalendarReady() || !credentials) {
       await updateAppointment(user.id, params.id, {
         status: current.status,
         type: current.type,
@@ -55,24 +60,9 @@ export async function PUT(
       return NextResponse.json(
         {
           error:
-            'Google Calendar no está configurado. Configurá las credenciales para poder actualizar el turno.',
+            'Conectá nuevamente tu cuenta de Google Calendar para sincronizar la reprogramación del turno.',
         },
         { status: 500 },
-      );
-    }
-
-    if (!user.email) {
-      await updateAppointment(user.id, params.id, {
-        status: current.status,
-        type: current.type,
-        date: current.date,
-        time: current.time,
-      }).catch(() => undefined);
-      return NextResponse.json(
-        {
-          error: 'El profesional no tiene un correo configurado para sincronizar con Google Calendar.',
-        },
-        { status: 400 },
       );
     }
 
@@ -81,8 +71,16 @@ export async function PUT(
       const start = updated.startAt ? new Date(updated.startAt) : new Date(`${updated.date}T${updated.time}:00`);
       const end = updated.endAt ? new Date(updated.endAt) : new Date(start.getTime() + 60 * 60 * 1000);
 
-      await updateCalendarEvent({
-        calendarId: user.email,
+      const tokenSet: OAuthTokenSet = {
+        accessToken: credentials.accessToken,
+        refreshToken: credentials.refreshToken,
+        scope: credentials.scope,
+        tokenType: credentials.tokenType,
+        expiryDate: credentials.expiryDate,
+      };
+
+      const { latestCredentials } = await updateCalendarEvent(tokenSet, {
+        calendarId: credentials.calendarId ?? undefined,
         eventId: updated.googleEventId,
         summary: `${updated.type} con ${patient ? `${patient.name} ${patient.lastName}` : 'paciente'}`,
         description: [
@@ -105,6 +103,26 @@ export async function PUT(
               ]
             : undefined,
       });
+
+      const credentialsChanged =
+        latestCredentials.accessToken !== credentials.accessToken ||
+        latestCredentials.refreshToken !== credentials.refreshToken ||
+        latestCredentials.scope !== credentials.scope ||
+        latestCredentials.tokenType !== credentials.tokenType ||
+        latestCredentials.expiryDate !== credentials.expiryDate;
+
+      if (credentialsChanged) {
+        await upsertProfessionalGoogleCredentials(user.id, {
+          googleUserId: credentials.googleUserId,
+          email: credentials.email,
+          calendarId: credentials.calendarId ?? 'primary',
+          accessToken: latestCredentials.accessToken,
+          refreshToken: latestCredentials.refreshToken,
+          scope: latestCredentials.scope,
+          tokenType: latestCredentials.tokenType,
+          expiryDate: latestCredentials.expiryDate,
+        });
+      }
     } catch (calendarError) {
       console.error('Error al actualizar evento en Google Calendar', calendarError);
       await updateAppointment(user.id, params.id, {
@@ -147,12 +165,44 @@ export async function DELETE(
     return NextResponse.json({ error: 'Turno no encontrado' }, { status: 404 });
   }
 
-  if (deleted.googleEventId && isCalendarReady() && user.email) {
+  if (deleted.googleEventId && isCalendarReady()) {
     try {
-      await deleteCalendarEvent({
-        calendarId: user.email,
-        eventId: deleted.googleEventId,
-      });
+      const credentials = await getProfessionalGoogleCredentials(user.id);
+
+      if (credentials) {
+        const tokenSet: OAuthTokenSet = {
+          accessToken: credentials.accessToken,
+          refreshToken: credentials.refreshToken,
+          scope: credentials.scope,
+          tokenType: credentials.tokenType,
+          expiryDate: credentials.expiryDate,
+        };
+
+        const { latestCredentials } = await deleteCalendarEvent(tokenSet, {
+          calendarId: credentials.calendarId ?? undefined,
+          eventId: deleted.googleEventId,
+        });
+
+        const credentialsChanged =
+          latestCredentials.accessToken !== credentials.accessToken ||
+          latestCredentials.refreshToken !== credentials.refreshToken ||
+          latestCredentials.scope !== credentials.scope ||
+          latestCredentials.tokenType !== credentials.tokenType ||
+          latestCredentials.expiryDate !== credentials.expiryDate;
+
+        if (credentialsChanged) {
+          await upsertProfessionalGoogleCredentials(user.id, {
+            googleUserId: credentials.googleUserId,
+            email: credentials.email,
+            calendarId: credentials.calendarId ?? 'primary',
+            accessToken: latestCredentials.accessToken,
+            refreshToken: latestCredentials.refreshToken,
+            scope: latestCredentials.scope,
+            tokenType: latestCredentials.tokenType,
+            expiryDate: latestCredentials.expiryDate,
+          });
+        }
+      }
     } catch (error) {
       console.error('No se pudo eliminar el evento en Google Calendar', error);
     }

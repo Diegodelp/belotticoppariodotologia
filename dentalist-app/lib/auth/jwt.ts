@@ -42,3 +42,14 @@ export function signToken(
 export function verifyToken(token: string) {
   return jwt.verify(token, resolveAuthSecret()) as DentalistJwtPayload;
 }
+
+export function signEphemeralToken<T extends object>(
+  payload: T,
+  expiresIn: SignOptions['expiresIn'] = '10m',
+) {
+  return jwt.sign(payload, resolveAuthSecret(), { expiresIn });
+}
+
+export function verifyEphemeralToken<T>(token: string) {
+  return jwt.verify(token, resolveAuthSecret()) as T & JwtPayload;
+}

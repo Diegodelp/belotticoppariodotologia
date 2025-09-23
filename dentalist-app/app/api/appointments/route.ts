@@ -5,13 +5,12 @@ import {
   createAppointment,
   deleteAppointment,
   getPatientById,
+  getProfessionalGoogleCredentials,
   listAppointments,
   listPatients,
+  upsertProfessionalGoogleCredentials,
 } from '@/lib/db/supabase-repository';
-import {
-  createCalendarEvent,
-  isCalendarReady,
-} from '@/lib/google/calendar';
+import { createCalendarEvent, isCalendarReady, OAuthTokenSet } from '@/lib/google/calendar';
 import { Appointment, Patient } from '@/types';
 
 export async function GET(request: NextRequest) {
@@ -83,23 +82,14 @@ export async function POST(request: NextRequest) {
       endAt: endAt.toISOString(),
     });
 
-    if (!isCalendarReady()) {
-      await deleteAppointment(user.id, appointment.id);
-      return NextResponse.json(
-        {
-          error:
-            'Google Calendar no está configurado. Define las credenciales del servicio para poder agendar turnos.',
-        },
-        { status: 500 },
-      );
-    }
+    const credentials = await getProfessionalGoogleCredentials(user.id);
 
-    if (!user.email) {
+    if (!isCalendarReady() || !credentials) {
       await deleteAppointment(user.id, appointment.id);
       return NextResponse.json(
         {
           error:
-            'Tu usuario no tiene un correo asociado. Actualizá el perfil antes de agendar turnos con Google Calendar.',
+            'Conectá tu cuenta de Google Calendar desde Configuración para poder sincronizar los turnos.',
         },
         { status: 400 },
       );
@@ -107,9 +97,16 @@ export async function POST(request: NextRequest) {
 
     try {
       const patient = patientId ? await getPatientById(user.id, patientId) : null;
+      const tokenSet: OAuthTokenSet = {
+        accessToken: credentials.accessToken,
+        refreshToken: credentials.refreshToken,
+        scope: credentials.scope,
+        tokenType: credentials.tokenType,
+        expiryDate: credentials.expiryDate,
+      };
 
-      const event = await createCalendarEvent({
-        calendarId: user.email,
+      const { event, latestCredentials } = await createCalendarEvent(tokenSet, {
+        calendarId: credentials.calendarId ?? undefined,
         summary: `${type} con ${patient ? `${patient.name} ${patient.lastName}` : 'paciente'}`,
         description: [
           patient ? `Paciente: ${patient.name} ${patient.lastName}` : null,
@@ -134,6 +131,26 @@ export async function POST(request: NextRequest) {
 
       if (!event.id) {
         throw new Error('La API de Google Calendar no devolvió un ID de evento.');
+      }
+
+      const credentialsChanged =
+        latestCredentials.accessToken !== credentials.accessToken ||
+        latestCredentials.refreshToken !== credentials.refreshToken ||
+        latestCredentials.scope !== credentials.scope ||
+        latestCredentials.tokenType !== credentials.tokenType ||
+        latestCredentials.expiryDate !== credentials.expiryDate;
+
+      if (credentialsChanged) {
+        await upsertProfessionalGoogleCredentials(user.id, {
+          googleUserId: credentials.googleUserId,
+          email: credentials.email,
+          calendarId: credentials.calendarId ?? 'primary',
+          accessToken: latestCredentials.accessToken,
+          refreshToken: latestCredentials.refreshToken,
+          scope: latestCredentials.scope,
+          tokenType: latestCredentials.tokenType,
+          expiryDate: latestCredentials.expiryDate,
+        });
       }
 
       const updated = await attachAppointmentGoogleEvent(user.id, appointment.id, event.id);

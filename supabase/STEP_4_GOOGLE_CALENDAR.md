@@ -1,30 +1,37 @@
-# Paso 4 · Integración con Google Calendar
+# Paso 4 · Integración con Google Calendar por profesional
 
-Para que los turnos que agendes desde Dentalist se sincronicen automáticamente con el calendario del profesional, necesitás configurar un servicio de Google Cloud con acceso a Calendar.
+Cada profesional debe vincular su propia cuenta de Google para que los turnos creados en Dentalist se sincronicen con su agenda personal.
 
-1. **Crear un proyecto y una cuenta de servicio**
-   - Ingresá a [Google Cloud Console](https://console.cloud.google.com/), creá (o seleccioná) un proyecto y habilitá la API de Google Calendar.
-   - En la sección **IAM & Admin → Service Accounts**, generá una cuenta de servicio nueva con acceso a la API de Calendar. Descargá la clave JSON.
+## 1. Crear credenciales OAuth en Google Cloud
+1. Entrá a [Google Cloud Console](https://console.cloud.google.com/) y creá (o seleccioná) un proyecto.
+2. Habilitá la API de Google Calendar y la API de People (opcional, para obtener datos del perfil).
+3. En **APIs & Services → Credentials**, generá un **OAuth 2.0 Client ID** de tipo "Web application".
+4. Configurá los siguientes URIs de redirección autorizados:
+   - `https://<tu-dominio>/api/google/oauth/callback`
+   - `http://localhost:3000/api/google/oauth/callback` (para desarrollo local)
+5. Descargá el Client ID y Client Secret.
 
-2. **Delegación y acceso al calendario**
-   - Si usás un dominio de Google Workspace, habilitá la *domain-wide delegation* para la cuenta de servicio e indicá el alcance `https://www.googleapis.com/auth/calendar.events`.
-   - Si trabajás con una cuenta de Gmail personal, compartí el calendario con la cuenta de servicio con permisos para "Hacer cambios y gestionar el uso compartido".
+## 2. Variables de entorno necesarias
+Agregá estas variables en Vercel y en `.env.local` antes de desplegar:
 
-3. **Variables de entorno necesarias**
-   Cargá estos valores en Vercel y en tu `.env.local`:
+```bash
+GOOGLE_CLIENT_ID=...
+GOOGLE_CLIENT_SECRET=...
+GOOGLE_OAUTH_REDIRECT_URI=https://<tu-dominio>/api/google/oauth/callback
+GOOGLE_CALENDAR_TIMEZONE=America/Argentina/Buenos_Aires
+```
 
-   ```bash
-   GOOGLE_SERVICE_ACCOUNT_EMAIL=...       # campo client_email del JSON
-   GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY="..." # campo private_key (reemplazá saltos de línea por \n)
-   GOOGLE_CALENDAR_DEFAULT_ID=...         # correo del calendario a sincronizar (por ejemplo, tu Gmail profesional)
-   GOOGLE_CALENDAR_DELEGATED_ACCOUNT=...  # opcional: correo a impersonar si usás domain-wide delegation
-   GOOGLE_CALENDAR_TIMEZONE=America/Argentina/Buenos_Aires
-   ```
+Si preferís derivar el redirect automáticamente según el dominio, podés omitir `GOOGLE_OAUTH_REDIRECT_URI` y definir `NEXT_PUBLIC_APP_URL` (por ejemplo `https://app.dentalist.com.ar`).
 
-   > ⚠️ Si el profesional tiene más de un calendario, podés reemplazar `GOOGLE_CALENDAR_DEFAULT_ID` por el ID específico (lo encontrás en la configuración de Calendar).
+## 3. Conectar la cuenta desde Dentalist
+1. Iniciá sesión como profesional y abrí **Configuración → Google Calendar**.
+2. Hacé clic en **Conectar con Google Calendar** y completá el flujo de consentimiento.
+3. Al finalizar, la app guardará los tokens OAuth en Supabase (`professional_google_credentials`) y mostrará la cuenta vinculada.
+4. Podés desconectar la cuenta en cualquier momento desde el mismo panel.
 
-4. **Prueba de funcionamiento**
-   - Iniciá sesión en la app, agendá un turno desde la ficha del paciente o desde `/calendar` y verificá que aparezca en Google Calendar.
-   - Al reprogramar o eliminar un turno, el evento se actualiza o elimina automáticamente.
+## 4. ¿Qué ocurre al agendar un turno?
+- Cuando creás, editás o eliminás un turno, Dentalist usa los tokens del profesional para invocar la API de Google Calendar sobre su calendario `primary`.
+- Si el token expira, se refresca automáticamente y se guarda nuevamente en Supabase.
+- Los pacientes reciben la invitación como asistentes (si se registró su email en la ficha).
 
-Con estas variables creadas, los endpoints de Dentalist usan la cuenta de servicio para insertar, actualizar y eliminar eventos en el calendario configurado.
+> ⚠️ Cada profesional debe completar este flujo individualmente. Sin la autorización, los turnos no se sincronizarán con Google Calendar.

@@ -29,6 +29,9 @@ const TWO_FACTOR_CODES_TABLE =
   process.env.SUPABASE_TABLE_CODIGOS_DOBLE_FACTOR ??
   process.env.SUPABASE_TABLE_TWO_FACTOR_CODES ??
   'two_factor_codes';
+const GOOGLE_CREDENTIALS_TABLE =
+  process.env.SUPABASE_TABLE_GOOGLE_CREDENTIALS ??
+  'professional_google_credentials';
 
 function getClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -93,6 +96,19 @@ type AppPaymentRow = {
   paid_at?: string | null;
   created_at?: string | null;
   notes: string | null;
+};
+
+type AppGoogleCredentialRow = {
+  professional_id: string;
+  google_user_id: string;
+  email: string | null;
+  calendar_id: string | null;
+  access_token: string;
+  refresh_token: string;
+  scope: string | null;
+  token_type: string | null;
+  expiry_date: string | null;
+  updated_at?: string | null;
 };
 
 function mapPatient(record: AppPatientRow): Patient {
@@ -524,6 +540,86 @@ export async function attachAppointmentGoogleEvent(
 
   if (error) throw error;
   return data ? mapAppointment(data as AppAppointmentRow) : null;
+}
+
+export interface ProfessionalGoogleCredentials {
+  professionalId: string;
+  googleUserId: string;
+  email: string | null;
+  calendarId: string | null;
+  accessToken: string;
+  refreshToken: string;
+  scope: string | null;
+  tokenType: string | null;
+  expiryDate: string | null;
+  updatedAt?: string | null;
+}
+
+export async function getProfessionalGoogleCredentials(
+  professionalId: string,
+): Promise<ProfessionalGoogleCredentials | null> {
+  const client = getClient();
+  const { data, error } = await client
+    .from(GOOGLE_CREDENTIALS_TABLE)
+    .select('*')
+    .eq('professional_id', professionalId)
+    .maybeSingle();
+
+  if (error && error.code !== 'PGRST116') {
+    throw error;
+  }
+
+  if (!data) {
+    return null;
+  }
+
+  const record = data as AppGoogleCredentialRow;
+  return {
+    professionalId: record.professional_id,
+    googleUserId: record.google_user_id,
+    email: record.email,
+    calendarId: record.calendar_id,
+    accessToken: record.access_token,
+    refreshToken: record.refresh_token,
+    scope: record.scope,
+    tokenType: record.token_type,
+    expiryDate: record.expiry_date,
+    updatedAt: record.updated_at ?? undefined,
+  };
+}
+
+export async function upsertProfessionalGoogleCredentials(
+  professionalId: string,
+  credentials: Omit<ProfessionalGoogleCredentials, 'professionalId' | 'updatedAt'>,
+) {
+  const client = getClient();
+  const { error } = await client.from(GOOGLE_CREDENTIALS_TABLE).upsert(
+    {
+      professional_id: professionalId,
+      google_user_id: credentials.googleUserId,
+      email: credentials.email,
+      calendar_id: credentials.calendarId,
+      access_token: credentials.accessToken,
+      refresh_token: credentials.refreshToken,
+      scope: credentials.scope,
+      token_type: credentials.tokenType,
+      expiry_date: credentials.expiryDate,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: 'professional_id' },
+  );
+
+  if (error) throw error;
+}
+
+export async function deleteProfessionalGoogleCredentials(professionalId: string) {
+  const client = getClient();
+  const { error } = await client
+    .from(GOOGLE_CREDENTIALS_TABLE)
+    .delete()
+    .eq('professional_id', professionalId);
+
+  if (error) throw error;
 }
 
 export async function updateAppointment(

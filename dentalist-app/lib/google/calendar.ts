@@ -1,46 +1,124 @@
 import { google, calendar_v3 } from 'googleapis';
+import { Credentials } from 'google-auth-library';
 
 const CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
 
-const serviceAccountEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-const rawPrivateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
-const delegatedAccount = process.env.GOOGLE_CALENDAR_DELEGATED_ACCOUNT;
-const defaultCalendarId = process.env.GOOGLE_CALENDAR_DEFAULT_ID;
+const clientId = process.env.GOOGLE_CLIENT_ID;
+const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const explicitRedirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
+const fallbackAppUrl = process.env.NEXT_PUBLIC_APP_URL;
 const defaultTimeZone = process.env.GOOGLE_CALENDAR_TIMEZONE ?? 'America/Argentina/Buenos_Aires';
 
-function getPrivateKey() {
-  if (!rawPrivateKey) {
+function resolveRedirectUri() {
+  if (explicitRedirectUri) {
+    return explicitRedirectUri;
+  }
+  if (!fallbackAppUrl) {
     return undefined;
   }
-  return rawPrivateKey.replace(/\\n/g, '\n');
+  return `${fallbackAppUrl.replace(/\/$/, '')}/api/google/oauth/callback`;
 }
 
-function assertCalendarConfigured() {
-  if (!serviceAccountEmail || !getPrivateKey()) {
+function assertOAuthConfigured() {
+  if (!clientId || !clientSecret) {
     throw new Error(
-      'Google Calendar no está configurado. Define GOOGLE_SERVICE_ACCOUNT_EMAIL y GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.',
+      'Google OAuth no está configurado. Define GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET en las variables de entorno.',
+    );
+  }
+  if (!resolveRedirectUri()) {
+    throw new Error(
+      'No encontramos un redirect URI para Google OAuth. Configurá GOOGLE_OAUTH_REDIRECT_URI o NEXT_PUBLIC_APP_URL.',
     );
   }
 }
 
-function buildAuth() {
-  assertCalendarConfigured();
-  return new google.auth.JWT({
-    email: serviceAccountEmail,
-    key: getPrivateKey(),
-    scopes: CALENDAR_SCOPES,
-    subject: delegatedAccount ?? undefined,
+export function isCalendarReady() {
+  try {
+    assertOAuthConfigured();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function buildOAuthClient() {
+  assertOAuthConfigured();
+  const redirectUri = resolveRedirectUri();
+  return new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+}
+
+export function generateOAuthUrl(state: string) {
+  const client = buildOAuthClient();
+  return client.generateAuthUrl({
+    access_type: 'offline',
+    scope: CALENDAR_SCOPES,
+    prompt: 'consent',
+    include_granted_scopes: true,
+    state,
   });
 }
 
-function resolveCalendarId(explicitId?: string) {
-  const id = explicitId ?? defaultCalendarId;
-  if (!id) {
-    throw new Error(
-      'No se encontró un calendario de Google para sincronizar. Configura GOOGLE_CALENDAR_DEFAULT_ID o provee un correo de calendario válido.',
-    );
+export interface OAuthTokenSet {
+  accessToken: string;
+  refreshToken: string;
+  scope: string | null;
+  tokenType: string | null;
+  expiryDate: string | null;
+}
+
+function normalizeCredentials(tokens: Credentials, fallback: OAuthTokenSet): OAuthTokenSet {
+  const expiryMillis =
+    typeof tokens.expiry_date === 'number'
+      ? tokens.expiry_date
+      : fallback.expiryDate
+      ? new Date(fallback.expiryDate).getTime()
+      : undefined;
+
+  return {
+    accessToken: tokens.access_token ?? fallback.accessToken,
+    refreshToken: tokens.refresh_token ?? fallback.refreshToken,
+    scope: tokens.scope ?? fallback.scope,
+    tokenType: tokens.token_type ?? fallback.tokenType,
+    expiryDate: typeof expiryMillis === 'number' ? new Date(expiryMillis).toISOString() : null,
+  };
+}
+
+async function ensureAuthorizedCalendar(tokens: OAuthTokenSet) {
+  const client = buildOAuthClient();
+  client.setCredentials({
+    access_token: tokens.accessToken,
+    refresh_token: tokens.refreshToken,
+    scope: tokens.scope ?? undefined,
+    token_type: tokens.tokenType ?? undefined,
+    expiry_date: tokens.expiryDate ? new Date(tokens.expiryDate).getTime() : undefined,
+  });
+
+  const needsRefresh = !tokens.expiryDate
+    || new Date(tokens.expiryDate).getTime() - 60_000 <= Date.now();
+
+  let latestCredentials: OAuthTokenSet = { ...tokens };
+
+  if (needsRefresh) {
+    const refreshed = await client.refreshAccessToken();
+    latestCredentials = normalizeCredentials(refreshed.credentials, tokens);
+    client.setCredentials({
+      access_token: latestCredentials.accessToken,
+      refresh_token: latestCredentials.refreshToken,
+      scope: latestCredentials.scope ?? undefined,
+      token_type: latestCredentials.tokenType ?? undefined,
+      expiry_date: latestCredentials.expiryDate
+        ? new Date(latestCredentials.expiryDate).getTime()
+        : undefined,
+    });
   }
-  return id;
+
+  const calendar = google.calendar({ version: 'v3', auth: client });
+
+  return {
+    calendar,
+    authClient: client,
+    latestCredentials,
+  };
 }
 
 function toEventDate(date: Date) {
@@ -50,26 +128,21 @@ function toEventDate(date: Date) {
   } satisfies calendar_v3.Schema$EventDateTime;
 }
 
-export function isCalendarReady() {
-  return Boolean(serviceAccountEmail && getPrivateKey());
-}
-
-export async function createCalendarEvent(params: {
-  calendarId?: string;
-  summary: string;
-  description?: string;
-  start: Date;
-  end: Date;
-  attendees?: calendar_v3.Schema$EventAttendee[];
-  location?: string;
-}) {
-  const calendarId = resolveCalendarId(params.calendarId);
-  const auth = buildAuth();
-  await auth.authorize();
-  const calendar = google.calendar({ version: 'v3', auth });
-
+export async function createCalendarEvent(
+  tokens: OAuthTokenSet,
+  params: {
+    calendarId?: string;
+    summary: string;
+    description?: string;
+    start: Date;
+    end: Date;
+    attendees?: calendar_v3.Schema$EventAttendee[];
+    location?: string;
+  },
+) {
+  const { calendar, latestCredentials } = await ensureAuthorizedCalendar(tokens);
   const response = await calendar.events.insert({
-    calendarId,
+    calendarId: params.calendarId ?? 'primary',
     requestBody: {
       summary: params.summary,
       description: params.description,
@@ -81,26 +154,25 @@ export async function createCalendarEvent(params: {
     sendUpdates: 'all',
   });
 
-  return response.data;
+  return { event: response.data, latestCredentials };
 }
 
-export async function updateCalendarEvent(params: {
-  calendarId?: string;
-  eventId: string;
-  summary: string;
-  description?: string;
-  start: Date;
-  end: Date;
-  attendees?: calendar_v3.Schema$EventAttendee[];
-  location?: string;
-}) {
-  const calendarId = resolveCalendarId(params.calendarId);
-  const auth = buildAuth();
-  await auth.authorize();
-  const calendar = google.calendar({ version: 'v3', auth });
-
+export async function updateCalendarEvent(
+  tokens: OAuthTokenSet,
+  params: {
+    calendarId?: string;
+    eventId: string;
+    summary: string;
+    description?: string;
+    start: Date;
+    end: Date;
+    attendees?: calendar_v3.Schema$EventAttendee[];
+    location?: string;
+  },
+) {
+  const { calendar, latestCredentials } = await ensureAuthorizedCalendar(tokens);
   const response = await calendar.events.patch({
-    calendarId,
+    calendarId: params.calendarId ?? 'primary',
     eventId: params.eventId,
     requestBody: {
       summary: params.summary,
@@ -113,18 +185,26 @@ export async function updateCalendarEvent(params: {
     sendUpdates: 'all',
   });
 
-  return response.data;
+  return { event: response.data, latestCredentials };
 }
 
-export async function deleteCalendarEvent(params: { calendarId?: string; eventId: string }) {
-  const calendarId = resolveCalendarId(params.calendarId);
-  const auth = buildAuth();
-  await auth.authorize();
-  const calendar = google.calendar({ version: 'v3', auth });
-
+export async function deleteCalendarEvent(
+  tokens: OAuthTokenSet,
+  params: { calendarId?: string; eventId: string },
+) {
+  const { calendar, latestCredentials } = await ensureAuthorizedCalendar(tokens);
   await calendar.events.delete({
-    calendarId,
+    calendarId: params.calendarId ?? 'primary',
     eventId: params.eventId,
     sendUpdates: 'all',
   });
+
+  return { latestCredentials };
+}
+
+export async function fetchGoogleProfile(tokens: OAuthTokenSet) {
+  const { authClient, latestCredentials } = await ensureAuthorizedCalendar(tokens);
+  const oauth2 = google.oauth2({ version: 'v2', auth: authClient });
+  const { data } = await oauth2.userinfo.get();
+  return { profile: data, latestCredentials };
 }
