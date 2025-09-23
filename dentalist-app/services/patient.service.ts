@@ -1,10 +1,26 @@
 import { Patient } from '@/types';
 
+function authHeaders(): Record<string, string> {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  const token = localStorage.getItem('token');
+
+  if (!token) {
+    return {};
+  }
+
+  return {
+    Authorization: `Bearer ${token}`,
+  };
+}
+
 export class PatientService {
   static async getAll() {
     const response = await fetch('/api/patients', {
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
+        ...authHeaders(),
       },
       credentials: 'include',
     });
@@ -14,7 +30,7 @@ export class PatientService {
   static async getById(id: string) {
     const response = await fetch(`/api/patients/${id}`, {
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
+        ...authHeaders(),
       },
       credentials: 'include',
     });
@@ -26,7 +42,7 @@ export class PatientService {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
+        ...authHeaders(),
       },
       credentials: 'include',
       body: JSON.stringify(data),
@@ -39,7 +55,7 @@ export class PatientService {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
+        ...authHeaders(),
       },
       credentials: 'include',
       body: JSON.stringify(data),
@@ -51,7 +67,7 @@ export class PatientService {
     const response = await fetch(`/api/patients/${id}`, {
       method: 'DELETE',
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('token')}`,
+        ...authHeaders(),
       },
       credentials: 'include',
     });
