@@ -27,11 +27,25 @@ async function resolveSharpModule(): Promise<SharpFactory> {
         console.error('Could not load any sharp implementation', error);
         throw error;
       });
+
+let sharpFactoryPromise: Promise<SharpFactory> | null = null;
+
+async function loadSharp(): Promise<SharpFactory> {
+  if (!sharpFactoryPromise) {
+    sharpFactoryPromise = import('sharp').then((mod) => {
+      const moduleWithDefault = mod as SharpModule & { default?: SharpFactory };
+      return moduleWithDefault.default ?? ((moduleWithDefault as unknown) as SharpFactory);
+    });
+
   }
 
   return sharpFactoryPromise;
 }
 
 export async function getSharp(): Promise<SharpFactory> {
+
   return resolveSharpModule();
+
+  return loadSharp();
+
 }

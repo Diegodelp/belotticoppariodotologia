@@ -3,6 +3,16 @@ import bcrypt from 'bcryptjs';
 import { findUserByDni, storeTwoFactorCode, toPublicUser } from '@/lib/db/supabase-repository';
 import { sendTwoFactorCodeEmail } from '@/lib/email/mailer';
 import { generateTwoFactorCode } from '@/lib/auth/two-factor';
+import {
+  findUserByDni,
+  storeTwoFactorCode,
+  toPublicUser,
+} from '@/lib/db/supabase-repository';
+import { sendTwoFactorCodeEmail } from '@/lib/email/mailer';
+
+function generateTwoFactorCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -52,20 +62,21 @@ export async function POST(request: NextRequest) {
 
     const code = generateTwoFactorCode();
     await storeTwoFactorCode(user, code);
-
     await sendTwoFactorCodeEmail({
       to: user.email,
       code,
       expiresMinutes: 5,
       locale: 'es',
     });
-
+    const code = generateTwoFactorCode();
+    await storeTwoFactorCode(user, code);
     return NextResponse.json({
       success: true,
       requiresTwoFactor: true,
       message:
         'Enviamos un código de verificación al correo registrado. Ingréselo para continuar.',
       user: toPublicUser(user),
+      code,
     });
   } catch (error) {
     console.error('Error en login', error);

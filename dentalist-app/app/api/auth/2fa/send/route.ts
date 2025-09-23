@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateTwoFactorCode } from '@/lib/auth/two-factor';
 import { findUserByDni, storeTwoFactorCode } from '@/lib/db/supabase-repository';
 import { sendTwoFactorCodeEmail } from '@/lib/email/mailer';
+import { findUserByDni, storeTwoFactorCode } from '@/lib/db/supabase-repository';
+import { sendTwoFactorCodeEmail } from '@/lib/email/mailer';
+
+function generateTwoFactorCode() {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
 
 export async function POST(request: NextRequest) {
   try {

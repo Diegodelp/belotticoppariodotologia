@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSharp } from '@/lib/utils/sharp';
+import { getSharp } from '@/lib/utils/sharp';
+import sharp from 'sharp';
 import { getUserFromRequest } from '@/lib/auth/get-user';
 import {
   createPrescriptionRecord,
@@ -11,7 +13,6 @@ import {
 } from '@/lib/db/supabase-repository';
 import { generatePrescriptionPdf } from '@/lib/documents/prescription-pdf';
 import { CreatePrescriptionInput } from '@/types';
-
 export const runtime = 'nodejs';
 
 function parseSignatureDataUrl(dataUrl: string): { buffer: Buffer; mimeType: string } {
@@ -28,6 +29,7 @@ function parseSignatureDataUrl(dataUrl: string): { buffer: Buffer; mimeType: str
 }
 
 async function bufferToPngDataUrl(buffer: Buffer): Promise<{ buffer: Buffer; dataUrl: string }> {
+  const sharp = await getSharp();
   const sharp = await getSharp();
   const pngBuffer = await sharp(buffer).png().toBuffer();
   return {
