@@ -641,6 +641,10 @@ export async function updateAppointment(
 
   const payload: Partial<AppAppointmentRow> = {};
 
+  if (updates.patientId !== undefined) {
+    payload.patient_id = updates.patientId ?? null;
+  }
+
   if (updates.status) {
     payload.status = updates.status;
   }

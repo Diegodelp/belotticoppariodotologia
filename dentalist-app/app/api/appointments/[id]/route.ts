@@ -32,12 +32,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Turno no encontrado' }, { status: 404 });
     }
 
-    const { status, type, date, time } = body ?? {};
+    const { status, type, date, time, patientId } = body ?? {};
     const updated = await updateAppointment(user.id, params.id, {
       status,
       type,
       date,
       time,
+      patientId,
     });
 
     if (!updated) {
@@ -56,6 +57,7 @@ export async function PUT(
         type: current.type,
         date: current.date,
         time: current.time,
+        patientId: current.patientId,
       }).catch(() => undefined);
       return NextResponse.json(
         {
@@ -130,6 +132,7 @@ export async function PUT(
         type: current.type,
         date: current.date,
         time: current.time,
+        patientId: current.patientId,
       }).catch(() => undefined);
       return NextResponse.json(
         {

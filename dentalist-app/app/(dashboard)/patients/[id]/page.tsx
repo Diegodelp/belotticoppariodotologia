@@ -1,7 +1,7 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { AppointmentForm } from '@/components/appointments/AppointmentForm';
 import { PatientService } from '@/services/patient.service';
 import { Appointment, Patient, Payment, Treatment } from '@/types';
@@ -13,18 +13,34 @@ interface PatientDetailResponse {
   payments: Payment[];
 }
 
-export default function PatientDetailPage({ params }: { params: { id: string } }) {
+export default function PatientDetailPage({ params: routeParams }: { params: { id: string } }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [data, setData] = useState<PatientDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showAppointmentForm, setShowAppointmentForm] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [formState, setFormState] = useState({
+    name: '',
+    lastName: '',
+    dni: '',
+    email: '',
+    phone: '',
+    address: '',
+    healthInsurance: 'Particular',
+    status: 'active' as 'active' | 'inactive',
+  });
+  const [formError, setFormError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [pageAlert, setPageAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await PatientService.getById(params.id);
+        const response = await PatientService.getById(routeParams.id);
         if (response?.patient) {
           setData(response as PatientDetailResponse);
         } else {
@@ -37,7 +53,121 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
       }
     };
     fetchData();
-  }, [params.id]);
+  }, [routeParams.id]);
+
+  const editParam = searchParams.get('edit');
+
+  useEffect(() => {
+    setIsEditing(editParam === 'true');
+  }, [editParam]);
+
+  useEffect(() => {
+    if (isEditing && data?.patient) {
+      setFormState({
+        name: data.patient.name,
+        lastName: data.patient.lastName,
+        dni: data.patient.dni,
+        email: data.patient.email,
+        phone: data.patient.phone,
+        address: data.patient.address,
+        healthInsurance: data.patient.healthInsurance,
+        status: data.patient.status,
+      });
+      setFormError(null);
+      setPageAlert(null);
+    }
+  }, [isEditing, data?.patient]);
+
+  const handleFieldChange = (
+    event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    const { name, value } = event.target;
+    setFormState((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const exitEditing = () => {
+    setIsEditing(false);
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete('edit');
+    const query = nextParams.toString();
+    router.replace(`/patients/${routeParams.id}${query ? `?${query}` : ''}`, {
+      scroll: false,
+    });
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!data?.patient) {
+      return;
+    }
+    setSaving(true);
+    setFormError(null);
+    setPageAlert(null);
+
+    try {
+      const response = await PatientService.update(data.patient.id, formState);
+      if (!response?.success) {
+        throw new Error(response?.error ?? 'No pudimos actualizar el paciente.');
+      }
+
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              patient: response.patient as Patient,
+            }
+          : current,
+      );
+      setPageAlert({ type: 'success', message: 'Datos del paciente actualizados correctamente.' });
+      exitEditing();
+    } catch (submitError) {
+      setFormError(
+        submitError instanceof Error
+          ? submitError.message
+          : 'Ocurrió un error inesperado al actualizar el paciente.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!data?.patient) {
+      return;
+    }
+    const confirmed = window.confirm(
+      '¿Deseás eliminar este paciente? Esta acción no se puede deshacer y se perderán los turnos asociados.',
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleting(true);
+    setFormError(null);
+    setPageAlert(null);
+
+    try {
+      const response = await PatientService.remove(data.patient.id);
+      if (!response?.success) {
+        throw new Error(response?.error ?? 'No pudimos eliminar el paciente.');
+      }
+      router.push('/patients');
+    } catch (deleteError) {
+      setPageAlert({
+        type: 'error',
+        message:
+          deleteError instanceof Error
+            ? deleteError.message
+            : 'Ocurrió un error inesperado al eliminar el paciente.',
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   if (loading) {
     return <p className="px-8 py-6 text-sm text-slate-300">Cargando información del paciente...</p>;
@@ -76,6 +206,13 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
             Editar datos
           </Link>
           <button
+            onClick={handleDelete}
+            disabled={deleting}
+            className="rounded-full border border-rose-400/60 px-5 py-2 text-sm font-semibold text-rose-200 transition hover:border-rose-300 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {deleting ? 'Eliminando...' : 'Eliminar paciente'}
+          </button>
+          <button
             onClick={() => setShowAppointmentForm((previous) => !previous)}
             className="rounded-full bg-cyan-500 px-5 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400"
           >
@@ -90,8 +227,141 @@ export default function PatientDetailPage({ params }: { params: { id: string } }
         </div>
       </div>
 
+      {pageAlert && (
+        <p
+          className={`rounded-2xl border px-4 py-3 text-sm ${
+            pageAlert.type === 'success'
+              ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
+              : 'border-rose-400/40 bg-rose-500/10 text-rose-100'
+          }`}
+        >
+          {pageAlert.message}
+        </p>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
         <div className="space-y-6">
+          {isEditing && (
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-6 rounded-3xl border border-cyan-300/40 bg-slate-900/60 p-6 shadow-lg shadow-cyan-500/20"
+            >
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-white">Editar datos del paciente</h2>
+                <button
+                  type="button"
+                  onClick={exitEditing}
+                  className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-cyan-300 hover:text-cyan-200"
+                >
+                  Cancelar edición
+                </button>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                  Nombre
+                  <input
+                    required
+                    name="name"
+                    value={formState.name}
+                    onChange={handleFieldChange}
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                  Apellido
+                  <input
+                    required
+                    name="lastName"
+                    value={formState.lastName}
+                    onChange={handleFieldChange}
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                  DNI
+                  <input
+                    required
+                    name="dni"
+                    value={formState.dni}
+                    onChange={handleFieldChange}
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                  Email
+                  <input
+                    required
+                    name="email"
+                    type="email"
+                    value={formState.email}
+                    onChange={handleFieldChange}
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                  Teléfono
+                  <input
+                    name="phone"
+                    value={formState.phone}
+                    onChange={handleFieldChange}
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                  Dirección
+                  <input
+                    name="address"
+                    value={formState.address}
+                    onChange={handleFieldChange}
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                  Cobertura médica
+                  <input
+                    name="healthInsurance"
+                    value={formState.healthInsurance}
+                    onChange={handleFieldChange}
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                  />
+                </label>
+                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                  Estado
+                  <select
+                    name="status"
+                    value={formState.status}
+                    onChange={handleFieldChange}
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                  >
+                    <option value="active">Activo</option>
+                    <option value="inactive">Inactivo</option>
+                  </select>
+                </label>
+              </div>
+
+              {formError && (
+                <p className="rounded-2xl bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{formError}</p>
+              )}
+
+              <div className="flex flex-wrap items-center justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={exitEditing}
+                  className="rounded-full border border-white/10 px-6 py-2 text-sm font-semibold text-slate-200 transition hover:border-slate-100/60"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="rounded-full bg-cyan-500 px-6 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {saving ? 'Guardando...' : 'Guardar cambios'}
+                </button>
+              </div>
+            </form>
+          )}
+
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
             <h2 className="text-lg font-semibold text-white">Datos de contacto</h2>
             <dl className="mt-4 grid gap-3 text-sm text-slate-300 md:grid-cols-2">

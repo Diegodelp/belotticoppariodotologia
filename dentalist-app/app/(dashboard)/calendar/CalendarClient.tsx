@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { AppointmentForm } from '@/components/appointments/AppointmentForm';
+import { AppointmentService } from '@/services/appointment.service';
 import { PatientService } from '@/services/patient.service';
 import { Appointment, Patient } from '@/types';
 
@@ -28,7 +29,11 @@ export function CalendarClient() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'all' | 'confirmed' | 'pending' | 'cancelled'>('all');
   const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const defaultPatientId = searchParams.get('patientId') ?? undefined;
+  const appointmentIdParam = searchParams.get('appointmentId');
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -66,6 +71,14 @@ export function CalendarClient() {
     }
   }, [defaultPatientId]);
 
+  useEffect(() => {
+    if (appointmentIdParam) {
+      setEditingId(appointmentIdParam);
+    } else {
+      setEditingId(null);
+    }
+  }, [appointmentIdParam]);
+
   const filteredAppointments = useMemo(() => {
     const filtered =
       status === 'all'
@@ -81,6 +94,50 @@ export function CalendarClient() {
       return acc;
     }, {});
   }, [filteredAppointments]);
+
+  const editingAppointment = useMemo(() => {
+    if (!editingId) return null;
+    return appointments.find((item) => item.id === editingId) ?? null;
+  }, [appointments, editingId]);
+
+  const clearMessages = () => {
+    setActionError(null);
+    setActionSuccess(null);
+  };
+
+  const exitEditing = () => {
+    setEditingId(null);
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('appointmentId');
+    router.replace(`/calendar${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false });
+  };
+
+  const handleDelete = async (appointmentId: string) => {
+    if (!window.confirm('¿Querés eliminar este turno? Esta acción también lo quitará del calendario sincronizado.')) {
+      return;
+    }
+
+    clearMessages();
+
+    try {
+      const response = await AppointmentService.remove(appointmentId);
+      if (!response?.success) {
+        throw new Error(response?.error ?? 'No pudimos eliminar el turno.');
+      }
+
+      setAppointments((previous) => previous.filter((item) => item.id !== appointmentId));
+      setActionSuccess('Turno eliminado correctamente.');
+      if (editingId === appointmentId) {
+        exitEditing();
+      }
+    } catch (error) {
+      setActionError(
+        error instanceof Error
+          ? error.message
+          : 'Ocurrió un error inesperado al eliminar el turno.',
+      );
+    }
+  };
 
   return (
     <section className="space-y-8">
@@ -99,6 +156,9 @@ export function CalendarClient() {
                 const params = new URLSearchParams(searchParams.toString());
                 params.delete('patientId');
                 router.replace(`/calendar${params.toString() ? `?${params.toString()}` : ''}`, { scroll: false });
+              }
+              if (editingId) {
+                exitEditing();
               }
             }}
             className="rounded-full bg-cyan-500 px-5 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400"
@@ -126,6 +186,7 @@ export function CalendarClient() {
                 patients={patients}
                 defaultPatientId={defaultPatientId}
                 onCreated={(appointment, patient) => {
+                  clearMessages();
                   setAppointments((previous) => [
                     ...previous,
                     {
@@ -135,12 +196,62 @@ export function CalendarClient() {
                   ]);
                   setShowForm(false);
                   router.replace('/calendar', { scroll: false });
+                  setActionSuccess('Turno creado y sincronizado correctamente.');
                 }}
                 onCancel={() => {
+                  clearMessages();
                   setShowForm(false);
                   router.replace('/calendar', { scroll: false });
                 }}
               />
+            </div>
+          </div>
+        )}
+
+        {editingAppointment && (
+          <div className="rounded-3xl border border-amber-300/40 bg-slate-900/60 p-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Editar turno</h2>
+                <p className="mt-1 text-xs text-slate-300">
+                  Actualizá los datos del turno o eliminá la cita definitivamente.
+                </p>
+              </div>
+              <button
+                onClick={exitEditing}
+                className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-cyan-300 hover:text-cyan-200"
+              >
+                Cerrar
+              </button>
+            </div>
+            <div className="mt-4 space-y-4">
+              <AppointmentForm
+                patients={patients}
+                appointment={editingAppointment}
+                mode="edit"
+                onUpdated={(appointment, patient) => {
+                  clearMessages();
+                  setAppointments((previous) =>
+                    previous.map((item) =>
+                      item.id === appointment.id
+                        ? {
+                            ...appointment,
+                            patient: patient ?? item.patient,
+                          }
+                        : item,
+                    ),
+                  );
+                  setActionSuccess('Turno actualizado correctamente.');
+                  exitEditing();
+                }}
+                onCancel={exitEditing}
+              />
+              <button
+                onClick={() => handleDelete(editingAppointment.id)}
+                className="w-full rounded-full border border-rose-400/60 px-5 py-2 text-sm font-semibold text-rose-200 transition hover:border-rose-300 hover:text-rose-100"
+              >
+                Eliminar turno
+              </button>
             </div>
           </div>
         )}
@@ -162,6 +273,14 @@ export function CalendarClient() {
         </div>
 
         {loading && <p className="text-sm text-slate-300">Cargando turnos...</p>}
+
+        {!loading && actionError && (
+          <p className="rounded-2xl bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{actionError}</p>
+        )}
+
+        {!loading && actionSuccess && (
+          <p className="rounded-2xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{actionSuccess}</p>
+        )}
 
         {!loading && Object.keys(groupedByDate).length === 0 && (
           <p className="rounded-2xl bg-slate-900/60 px-4 py-5 text-sm text-slate-300">
@@ -230,6 +349,7 @@ export function CalendarClient() {
                       </span>
                       <button
                         onClick={() => {
+                          clearMessages();
                           const params = new URLSearchParams();
                           params.set('appointmentId', appointment.id);
                           router.push(`/calendar?${params.toString()}`, { scroll: false });
@@ -237,6 +357,12 @@ export function CalendarClient() {
                         className="rounded-full border border-white/10 px-3 py-1 font-semibold text-slate-200 transition hover:border-cyan-300 hover:text-cyan-100"
                       >
                         Reprogramar
+                      </button>
+                      <button
+                        onClick={() => handleDelete(appointment.id)}
+                        className="rounded-full border border-rose-400/40 px-3 py-1 font-semibold text-rose-200 transition hover:border-rose-300 hover:text-rose-100"
+                      >
+                        Eliminar
                       </button>
                     </div>
                   </li>

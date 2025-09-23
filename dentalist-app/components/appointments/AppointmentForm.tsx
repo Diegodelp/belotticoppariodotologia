@@ -7,7 +7,10 @@ import { AppointmentService } from '@/services/appointment.service';
 interface AppointmentFormProps {
   patients: Patient[];
   defaultPatientId?: string;
+  appointment?: Appointment;
+  mode?: 'create' | 'edit';
   onCreated?: (appointment: Appointment, patient?: Patient) => void;
+  onUpdated?: (appointment: Appointment, patient?: Patient) => void;
   onCancel?: () => void;
 }
 
@@ -16,23 +19,40 @@ const defaultStatus: Appointment['status'] = 'confirmed';
 export function AppointmentForm({
   patients,
   defaultPatientId,
+  appointment,
+  mode = 'create',
   onCreated,
+  onUpdated,
   onCancel,
 }: AppointmentFormProps) {
-  const [patientId, setPatientId] = useState(defaultPatientId ?? '');
-  const [date, setDate] = useState('');
-  const [time, setTime] = useState('');
-  const [type, setType] = useState('Consulta de control');
-  const [status, setStatus] = useState<Appointment['status']>(defaultStatus);
+  const [patientId, setPatientId] = useState(
+    appointment?.patientId ?? defaultPatientId ?? '',
+  );
+  const [date, setDate] = useState(appointment?.date ?? '');
+  const [time, setTime] = useState(appointment?.time ?? '');
+  const [type, setType] = useState(appointment?.type ?? 'Consulta de control');
+  const [status, setStatus] = useState<Appointment['status']>(
+    appointment?.status ?? defaultStatus,
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   useEffect(() => {
-    if (defaultPatientId) {
+    if (defaultPatientId && !appointment) {
       setPatientId(defaultPatientId);
     }
-  }, [defaultPatientId]);
+  }, [defaultPatientId, appointment]);
+
+  useEffect(() => {
+    if (appointment && mode === 'edit') {
+      setPatientId(appointment.patientId);
+      setDate(appointment.date);
+      setTime(appointment.time);
+      setType(appointment.type);
+      setStatus(appointment.status);
+    }
+  }, [appointment, mode]);
 
   const patientOptions = useMemo(() => {
     return [...patients].sort((a, b) => a.name.localeCompare(b.name));
@@ -50,25 +70,43 @@ export function AppointmentForm({
 
     try {
       setLoading(true);
-      const response = await AppointmentService.create({
-        patientId,
-        date,
-        time,
-        type,
-        status,
-      });
+      const selectedPatient = patientOptions.find((item) => item.id === patientId);
 
-      if (!response?.success) {
-        throw new Error(response?.error ?? 'No pudimos agendar el turno.');
+      if (mode === 'edit' && appointment) {
+        const response = await AppointmentService.update(appointment.id, {
+          patientId,
+          date,
+          time,
+          type,
+          status,
+        });
+
+        if (!response?.success) {
+          throw new Error(response?.error ?? 'No pudimos actualizar el turno.');
+        }
+
+        onUpdated?.(response.appointment as Appointment, selectedPatient);
+        setSuccess(true);
+      } else {
+        const response = await AppointmentService.create({
+          patientId,
+          date,
+          time,
+          type,
+          status,
+        });
+
+        if (!response?.success) {
+          throw new Error(response?.error ?? 'No pudimos agendar el turno.');
+        }
+
+        onCreated?.(response.appointment as Appointment, selectedPatient);
+        setSuccess(true);
+        setDate('');
+        setTime('');
+        setType('Consulta de control');
+        setStatus(defaultStatus);
       }
-
-      const patient = patientOptions.find((item) => item.id === patientId);
-      onCreated?.(response.appointment as Appointment, patient);
-      setSuccess(true);
-      setDate('');
-      setTime('');
-      setType('Consulta de control');
-      setStatus(defaultStatus);
     } catch (formError) {
       setError(formError instanceof Error ? formError.message : 'Ocurrió un error inesperado.');
     } finally {
@@ -144,7 +182,9 @@ export function AppointmentForm({
       {error && <p className="rounded-2xl bg-rose-500/10 px-4 py-2 text-xs text-rose-200">{error}</p>}
       {success && (
         <p className="rounded-2xl bg-emerald-500/10 px-4 py-2 text-xs text-emerald-200">
-          Turno agendado y sincronizado con Google Calendar.
+          {mode === 'edit'
+            ? 'Turno actualizado correctamente.'
+            : 'Turno agendado y sincronizado con Google Calendar.'}
         </p>
       )}
 
@@ -154,7 +194,13 @@ export function AppointmentForm({
           disabled={loading}
           className="rounded-full bg-cyan-500 px-5 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {loading ? 'Agendando...' : 'Agendar turno'}
+          {loading
+            ? mode === 'edit'
+              ? 'Guardando...'
+              : 'Agendando...'
+            : mode === 'edit'
+              ? 'Guardar cambios'
+              : 'Agendar turno'}
         </button>
         {onCancel && (
           <button
