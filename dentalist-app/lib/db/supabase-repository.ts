@@ -1,0 +1,602 @@
+import bcrypt from 'bcryptjs';
+import { createClient } from '@supabase/supabase-js';
+import { Appointment, Patient, Payment, Treatment, User } from '@/types';
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+function getClient() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error(
+      'Supabase no está configurado. Asegúrate de definir NEXT_PUBLIC_SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY.',
+    );
+  }
+
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+    },
+  });
+}
+
+type AppPatientRow = {
+  id: string;
+  dni: string | null;
+  first_name: string;
+  last_name: string;
+  email: string | null;
+  password_hash: string | null;
+  phone: string | null;
+  address: string | null;
+  health_insurance: string | null;
+  status: string;
+};
+
+type AppAppointmentRow = {
+  id: string;
+  patient_id: string | null;
+  title: string;
+  status: string;
+  start_at: string;
+  end_at: string;
+};
+
+type AppTreatmentRow = {
+  id: string;
+  patient_id: string;
+  type: string;
+  description: string | null;
+  cost: number | string | null;
+  treatment_date: string;
+};
+
+type AppPaymentRow = {
+  id: string;
+  patient_id: string;
+  amount: number | string | null;
+  method: string;
+  status: string;
+  payment_date: string;
+  notes: string | null;
+};
+
+function mapPatient(record: AppPatientRow): Patient {
+  return {
+    id: record.id,
+    dni: record.dni ?? '',
+    name: record.first_name,
+    lastName: record.last_name,
+    email: record.email ?? '',
+    phone: record.phone ?? '',
+    address: record.address ?? '',
+    healthInsurance: record.health_insurance ?? 'Particular',
+    status: (record.status as Patient['status']) ?? 'active',
+  };
+}
+
+function mapAppointment(record: AppAppointmentRow): Appointment {
+  const start = new Date(record.start_at);
+
+  return {
+    id: record.id,
+    patientId: record.patient_id ?? '',
+    date: start.toISOString().split('T')[0],
+    time: `${start.getHours().toString().padStart(2, '0')}:${start
+      .getMinutes()
+      .toString()
+      .padStart(2, '0')}`,
+    type: record.title,
+    status: (record.status as Appointment['status']) ?? 'confirmed',
+  };
+}
+
+function mapTreatment(record: AppTreatmentRow): Treatment {
+  return {
+    id: record.id,
+    patientId: record.patient_id,
+    type: record.type,
+    description: record.description ?? '',
+    cost: Number(record.cost ?? 0),
+    date: record.treatment_date,
+  };
+}
+
+function mapPayment(record: AppPaymentRow): Payment {
+  return {
+    id: record.id,
+    patientId: record.patient_id,
+    amount: Number(record.amount ?? 0),
+    method: (record.method as Payment['method']) ?? 'other',
+    status: (record.status as Payment['status']) ?? 'completed',
+    date: new Date(record.payment_date).toISOString(),
+    notes: record.notes ?? undefined,
+  };
+}
+
+export async function registerProfessional(data: {
+  dni: string;
+  name: string;
+  email: string;
+  password: string;
+}): Promise<User> {
+  const client = getClient();
+  const { dni, name, email, password } = data;
+
+  const { data: existing } = await client
+    .from('app_professionals')
+    .select('id, dni')
+    .or(`dni.eq.${dni},email.eq.${email}`)
+    .maybeSingle();
+
+  if (existing) {
+    throw new Error('Ya existe un profesional con ese DNI o correo');
+  }
+
+  const passwordHash = await bcrypt.hash(password, 10);
+
+  const { data: inserted, error } = await client
+    .from('app_professionals')
+    .insert({
+      dni,
+      full_name: name,
+      email,
+      password_hash: passwordHash,
+    })
+    .select('*')
+    .single();
+
+  if (error) {
+    throw error;
+  }
+
+  return {
+    id: inserted.id,
+    dni: inserted.dni,
+    name: inserted.full_name,
+    email: inserted.email,
+    type: 'profesional',
+  };
+}
+
+export type StoredAuthUser = {
+  id: string;
+  dni: string;
+  name: string;
+  email: string;
+  type: User['type'];
+  passwordHash: string | null;
+};
+
+export async function findUserByDni(
+  dni: string,
+  type: User['type'],
+): Promise<StoredAuthUser | null> {
+  const client = getClient();
+  if (type === 'profesional') {
+    const { data, error } = await client
+      .from('app_professionals')
+      .select('*')
+      .eq('dni', dni)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+      id: data.id,
+      dni: data.dni,
+      name: data.full_name,
+      email: data.email,
+      type: 'profesional' as const,
+      passwordHash: data.password_hash,
+    };
+  }
+
+  const { data, error } = await client
+    .from('app_patients')
+    .select('*')
+    .eq('dni', dni)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return {
+    id: data.id,
+    dni: data.dni,
+    name: `${data.first_name} ${data.last_name}`.trim(),
+    email: data.email ?? '',
+    type: 'paciente' as const,
+    passwordHash: data.password_hash ?? null,
+  };
+}
+
+type StoredTwoFactor = {
+  id: string;
+  user_id: string;
+  user_type: User['type'];
+  email: string;
+  code_hash: string;
+  expires_at: string;
+  attempts: number;
+  consumed_at: string | null;
+};
+
+export async function storeTwoFactorCode(
+  user: StoredAuthUser,
+  code: string,
+  ttlMinutes = 5,
+) {
+  const client = getClient();
+  const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString();
+  const codeHash = await bcrypt.hash(code, 10);
+
+  const { error } = await client.from('app_two_factor_codes').insert({
+    user_id: user.id,
+    user_type: user.type,
+    email: user.email,
+    code_hash: codeHash,
+    expires_at: expiresAt,
+  });
+
+  if (error) throw error;
+}
+
+export async function validateTwoFactorCode(user: StoredAuthUser, code: string) {
+  const client = getClient();
+
+  const { data, error } = await client
+    .from('app_two_factor_codes')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('user_type', user.type)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle<StoredTwoFactor>();
+
+  if (error) throw error;
+  if (!data) {
+    return { valid: false, reason: 'Código no solicitado' } as const;
+  }
+
+  if (data.consumed_at) {
+    return { valid: false, reason: 'Código ya utilizado' } as const;
+  }
+
+  if (new Date(data.expires_at).getTime() < Date.now()) {
+    return { valid: false, reason: 'Código expirado' } as const;
+  }
+
+  const valid = await bcrypt.compare(code, data.code_hash);
+  if (!valid) {
+    await client
+      .from('app_two_factor_codes')
+      .update({ attempts: data.attempts + 1 })
+      .eq('id', data.id);
+    return { valid: false, reason: 'Código incorrecto' } as const;
+  }
+
+  await client
+    .from('app_two_factor_codes')
+    .update({ consumed_at: new Date().toISOString() })
+    .eq('id', data.id);
+
+  return { valid: true } as const;
+}
+
+export async function listPatients(
+  professionalId: string,
+  filters: { search?: string; status?: string } = {},
+): Promise<Patient[]> {
+  const client = getClient();
+  let query = client
+    .from('app_patients')
+    .select('*')
+    .eq('professional_id', professionalId)
+    .order('created_at', { ascending: true });
+
+  if (filters.status === 'active' || filters.status === 'inactive') {
+    query = query.eq('status', filters.status);
+  }
+
+  if (filters.search) {
+    const search = filters.search.trim();
+    query = query.or(
+      `first_name.ilike.%${search}%,last_name.ilike.%${search}%,dni.ilike.%${search}%`,
+    );
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+  const rows = (data ?? []) as AppPatientRow[];
+  return rows.map(mapPatient);
+}
+
+export async function createPatient(
+  professionalId: string,
+  patient: Omit<Patient, 'id'>,
+): Promise<Patient> {
+  const client = getClient();
+  const { data, error } = await client
+    .from('app_patients')
+    .insert({
+      professional_id: professionalId,
+      dni: patient.dni,
+      first_name: patient.name,
+      last_name: patient.lastName,
+      email: patient.email,
+      phone: patient.phone,
+      address: patient.address,
+      health_insurance: patient.healthInsurance,
+      status: patient.status,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return mapPatient(data as AppPatientRow);
+}
+
+export async function getPatientById(
+  professionalId: string,
+  patientId: string,
+): Promise<Patient | null> {
+  const client = getClient();
+  const { data, error } = await client
+    .from('app_patients')
+    .select('*')
+    .eq('id', patientId)
+    .eq('professional_id', professionalId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapPatient(data as AppPatientRow) : null;
+}
+
+export async function updatePatient(
+  professionalId: string,
+  patientId: string,
+  updates: Partial<Patient>,
+): Promise<Patient | null> {
+  const client = getClient();
+  const { data, error } = await client
+    .from('app_patients')
+    .update({
+      dni: updates.dni,
+      first_name: updates.name,
+      last_name: updates.lastName,
+      email: updates.email,
+      phone: updates.phone,
+      address: updates.address,
+      health_insurance: updates.healthInsurance,
+      status: updates.status,
+    })
+    .eq('id', patientId)
+    .eq('professional_id', professionalId)
+    .select('*')
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapPatient(data as AppPatientRow) : null;
+}
+
+export async function removePatient(
+  professionalId: string,
+  patientId: string,
+): Promise<boolean> {
+  const client = getClient();
+  const { error } = await client
+    .from('app_patients')
+    .delete()
+    .eq('id', patientId)
+    .eq('professional_id', professionalId);
+  if (error) throw error;
+  return true;
+}
+
+export async function listAppointments(professionalId: string, patientId?: string) {
+  const client = getClient();
+  let query = client
+    .from('app_appointments')
+    .select('*')
+    .eq('professional_id', professionalId)
+    .order('start_at');
+  if (patientId) {
+    query = query.eq('patient_id', patientId);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  const rows = (data ?? []) as AppAppointmentRow[];
+  return rows.map(mapAppointment);
+}
+
+export async function createAppointment(
+  professionalId: string,
+  appointment: {
+    patientId?: string;
+    title: string;
+    status: Appointment['status'];
+    startAt: string;
+    endAt: string;
+  },
+) {
+  const client = getClient();
+  const { data, error } = await client
+    .from('app_appointments')
+    .insert({
+      professional_id: professionalId,
+      patient_id: appointment.patientId ?? null,
+      title: appointment.title,
+      status: appointment.status,
+      start_at: appointment.startAt,
+      end_at: appointment.endAt,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return mapAppointment(data as AppAppointmentRow);
+}
+
+export async function updateAppointment(
+  professionalId: string,
+  appointmentId: string,
+  updates: Partial<Appointment> & { date?: string; time?: string; type?: string },
+) {
+  const client = getClient();
+  const { data: currentRow, error: fetchError } = await client
+    .from('app_appointments')
+    .select('*')
+    .eq('professional_id', professionalId)
+    .eq('id', appointmentId)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+  const current = currentRow as AppAppointmentRow | null;
+  if (!current) return null;
+
+  const payload: Partial<AppAppointmentRow> = {};
+
+  if (updates.status) {
+    payload.status = updates.status;
+  }
+
+  if (updates.type) {
+    payload.title = updates.type;
+  }
+
+  if (updates.date || updates.time) {
+    const startDate = new Date(current.start_at);
+    const endDate = new Date(current.end_at);
+
+    if (updates.date) {
+      const [year, month, day] = updates.date.split('-').map(Number);
+      startDate.setFullYear(year, (month ?? 1) - 1, day);
+    }
+
+    if (updates.time) {
+      const [hours, minutes] = updates.time.split(':').map(Number);
+      startDate.setHours(hours ?? 0, minutes ?? 0, 0, 0);
+    }
+
+    const duration = endDate.getTime() - new Date(current.start_at).getTime();
+    const newEnd = new Date(startDate.getTime() + duration);
+    payload.start_at = startDate.toISOString();
+    payload.end_at = newEnd.toISOString();
+  }
+
+  if (Object.keys(payload).length === 0) {
+    return mapAppointment(current);
+  }
+
+  const { data, error } = await client
+    .from('app_appointments')
+    .update(payload)
+    .eq('professional_id', professionalId)
+    .eq('id', appointmentId)
+    .select('*')
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapAppointment(data as AppAppointmentRow) : null;
+}
+
+export async function deleteAppointment(
+  professionalId: string,
+  appointmentId: string,
+) {
+  const client = getClient();
+  const { data, error } = await client
+    .from('app_appointments')
+    .delete()
+    .eq('professional_id', professionalId)
+    .eq('id', appointmentId)
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  return !!data;
+}
+
+export async function listTreatments(
+  professionalId: string,
+  patientId?: string,
+) {
+  const client = getClient();
+  let query = client
+    .from('app_treatments')
+    .select('*')
+    .eq('professional_id', professionalId)
+    .order('treatment_date', { ascending: false });
+  if (patientId) {
+    query = query.eq('patient_id', patientId);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  const rows = (data ?? []) as AppTreatmentRow[];
+  return rows.map(mapTreatment);
+}
+
+export async function createTreatment(
+  professionalId: string,
+  treatment: Omit<Treatment, 'id'>,
+) {
+  const client = getClient();
+  const { data, error } = await client
+    .from('app_treatments')
+    .insert({
+      professional_id: professionalId,
+      patient_id: treatment.patientId,
+      type: treatment.type,
+      description: treatment.description,
+      cost: treatment.cost,
+      treatment_date: treatment.date,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return mapTreatment(data as AppTreatmentRow);
+}
+
+export async function listPayments(
+  professionalId: string,
+  patientId?: string,
+) {
+  const client = getClient();
+  let query = client
+    .from('app_payments')
+    .select('*')
+    .eq('professional_id', professionalId)
+    .order('payment_date', { ascending: false });
+  if (patientId) {
+    query = query.eq('patient_id', patientId);
+  }
+  const { data, error } = await query;
+  if (error) throw error;
+  const rows = (data ?? []) as AppPaymentRow[];
+  return rows.map(mapPayment);
+}
+
+export async function createPayment(
+  professionalId: string,
+  payment: Omit<Payment, 'id'>,
+) {
+  const client = getClient();
+  const { data, error } = await client
+    .from('app_payments')
+    .insert({
+      professional_id: professionalId,
+      patient_id: payment.patientId,
+      amount: payment.amount,
+      method: payment.method,
+      status: payment.status,
+      payment_date: payment.date,
+      notes: payment.notes ?? null,
+    })
+    .select('*')
+    .single();
+  if (error) throw error;
+  return mapPayment(data as AppPaymentRow);
+}
+
+export function toPublicUser(user: {
+  id: string;
+  dni: string;
+  name: string;
+  email: string;
+  type: User['type'];
+}): User {
+  return user;
+}

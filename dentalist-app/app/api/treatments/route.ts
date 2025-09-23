@@ -1,31 +1,57 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { addTreatment, getTreatments, getPatients } from '@/lib/db/data-store';
-import { Treatment } from '@/types';
+import { getUserFromRequest } from '@/lib/auth/get-user';
+import {
+  createTreatment,
+  listPatients,
+  listTreatments,
+} from '@/lib/db/supabase-repository';
+import { Treatment, Patient } from '@/types';
 
 export async function GET(request: NextRequest) {
+  const user = getUserFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const patientId = searchParams.get('patientId') ?? undefined;
   const type = searchParams.get('type');
 
-  let treatments = getTreatments(patientId);
+  try {
+    const [treatments, patients] = await Promise.all([
+      listTreatments(user.id, patientId ?? undefined),
+      listPatients(user.id),
+    ]);
 
-  if (type) {
-    treatments = treatments.filter((item) =>
-      item.type.toLowerCase().includes(type.toLowerCase()),
+    const filtered = type
+      ? treatments.filter((item) =>
+          item.type.toLowerCase().includes(type.toLowerCase()),
+        )
+      : treatments;
+
+    const patientMap = new Map(patients.map((patient) => [patient.id, patient] as [string, Patient]));
+
+    const withPatient = filtered.map((treatment) => ({
+      ...treatment,
+      patient: patientMap.get(treatment.patientId),
+    }));
+
+    return NextResponse.json(withPatient);
+  } catch (error) {
+    console.error('Error al obtener tratamientos en Supabase', error);
+    return NextResponse.json(
+      { error: 'No pudimos obtener los tratamientos' },
+      { status: 500 },
     );
   }
-
-  const patients = getPatients();
-  const withPatient = treatments.map((treatment) => ({
-    ...treatment,
-    patient: patients.find((patient) => patient.id === treatment.patientId),
-  }));
-
-  return NextResponse.json(withPatient);
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const user = getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
     const body = await request.json();
     const { patientId, type, description, cost, date } = body ?? {};
 
@@ -36,16 +62,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const treatment: Treatment = {
-      id: crypto.randomUUID(),
+    const treatment: Treatment = await createTreatment(user.id, {
       patientId,
       type,
       description,
       cost,
       date,
-    };
+    });
 
-    addTreatment(treatment);
     return NextResponse.json({ success: true, treatment });
   } catch (error) {
     console.error('Error al registrar tratamiento', error);

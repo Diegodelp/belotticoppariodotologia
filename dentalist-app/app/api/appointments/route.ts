@@ -1,43 +1,60 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth/get-user';
 import {
-  addAppointment,
-  getAppointments,
-  getPatients,
-} from '@/lib/db/data-store';
-import { Appointment } from '@/types';
+  createAppointment,
+  listAppointments,
+  listPatients,
+} from '@/lib/db/supabase-repository';
+import { Appointment, Patient } from '@/types';
 
 export async function GET(request: NextRequest) {
+  const user = getUserFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  }
+
   const { searchParams } = new URL(request.url);
   const patientId = searchParams.get('patientId') ?? undefined;
   const status = searchParams.get('status');
   const from = searchParams.get('from');
   const to = searchParams.get('to');
 
-  let appointments = getAppointments(patientId ?? undefined);
+  try {
+    const [appointments, patients] = await Promise.all([
+      listAppointments(user.id, patientId ?? undefined),
+      listPatients(user.id),
+    ]);
 
-  if (status) {
-    appointments = appointments.filter((item) => item.status === status);
+    const filtered = appointments.filter((appointment) => {
+      const withinStatus = status ? appointment.status === status : true;
+      const gteFrom = from ? appointment.date >= from : true;
+      const lteTo = to ? appointment.date <= to : true;
+      return withinStatus && gteFrom && lteTo;
+    });
+
+    const patientMap = new Map(patients.map((patient) => [patient.id, patient] as [string, Patient]));
+
+    const withPatient = filtered.map((appointment) => ({
+      ...appointment,
+      patient: patientMap.get(appointment.patientId),
+    }));
+
+    return NextResponse.json(withPatient);
+  } catch (error) {
+    console.error('Error al listar turnos en Supabase', error);
+    return NextResponse.json(
+      { error: 'No pudimos obtener los turnos' },
+      { status: 500 },
+    );
   }
-
-  if (from) {
-    appointments = appointments.filter((item) => item.date >= from);
-  }
-
-  if (to) {
-    appointments = appointments.filter((item) => item.date <= to);
-  }
-
-  const patients = getPatients();
-  const withPatient = appointments.map((appointment) => ({
-    ...appointment,
-    patient: patients.find((patient) => patient.id === appointment.patientId),
-  }));
-
-  return NextResponse.json(withPatient);
 }
 
 export async function POST(request: NextRequest) {
   try {
+    const user = getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
     const body = await request.json();
     const { patientId, date, time, type, status = 'pending' } = body ?? {};
 
@@ -48,16 +65,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const appointment: Appointment = {
-      id: crypto.randomUUID(),
-      patientId,
-      date,
-      time,
-      type,
-      status,
-    };
+    const startAt = new Date(`${date}T${time}:00`);
+    const endAt = new Date(startAt.getTime() + 60 * 60 * 1000);
 
-    addAppointment(appointment);
+    const appointment: Appointment = await createAppointment(user.id, {
+      patientId,
+      title: type,
+      status,
+      startAt: startAt.toISOString(),
+      endAt: endAt.toISOString(),
+    });
+
     return NextResponse.json({ success: true, appointment });
   } catch (error) {
     console.error('Error al crear turno', error);

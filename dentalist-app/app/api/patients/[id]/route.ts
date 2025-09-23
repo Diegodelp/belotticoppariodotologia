@@ -1,26 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth/get-user';
 import {
-  getAppointments,
-  getPayments,
-  getPatients,
-  getTreatments,
+  getPatientById,
+  listAppointments,
+  listPayments,
+  listTreatments,
   removePatient,
   updatePatient,
-} from '@/lib/db/data-store';
+} from '@/lib/db/supabase-repository';
 
 export async function GET(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
+  const user = getUserFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  }
   const params = await context.params;
-  const patient = getPatients().find((item) => item.id === params.id);
+  const patient = await getPatientById(user.id, params.id);
   if (!patient) {
     return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
   }
 
-  const appointments = getAppointments(patient.id);
-  const treatments = getTreatments(patient.id);
-  const payments = getPayments(patient.id);
+  const [appointments, treatments, payments] = await Promise.all([
+    listAppointments(user.id, patient.id),
+    listTreatments(user.id, patient.id),
+    listPayments(user.id, patient.id),
+  ]);
 
   return NextResponse.json({ patient, appointments, treatments, payments });
 }
@@ -30,9 +37,23 @@ export async function PUT(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
     const params = await context.params;
     const body = await request.json();
-    const updated = updatePatient(params.id, body);
+    const updates = {
+      name: body.name,
+      lastName: body.lastName,
+      dni: body.dni,
+      email: body.email,
+      phone: body.phone,
+      address: body.address,
+      healthInsurance: body.healthInsurance,
+      status: body.status,
+    };
+    const updated = await updatePatient(user.id, params.id, updates);
 
     if (!updated) {
       return NextResponse.json(
@@ -55,8 +76,12 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
+  const user = getUserFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  }
   const params = await context.params;
-  const deleted = removePatient(params.id);
+  const deleted = await removePatient(user.id, params.id);
   if (!deleted) {
     return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
   }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth/jwt';
-import { findUserByDni, toPublicUser } from '@/lib/db/data-store';
+import { findUserByDni, toPublicUser } from '@/lib/db/supabase-repository';
 
 function extractToken(request: NextRequest) {
   const header = request.headers.get('authorization');
@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
     }
 
     const payload = verifyToken(token);
-    const user = findUserByDni(payload.dni, payload.type);
+    const user = await findUserByDni(payload.dni, payload.type);
 
     if (!user) {
       return NextResponse.json({ error: 'Usuario no encontrado' }, { status: 404 });

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { findUserByDni, storeTwoFactorCode } from '@/lib/db/data-store';
+import { findUserByDni, storeTwoFactorCode } from '@/lib/db/supabase-repository';
 
 function generateTwoFactorCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = findUserByDni(dni, type);
+    const user = await findUserByDni(dni, type);
     if (!user) {
       return NextResponse.json(
         { error: 'No encontramos una cuenta asociada' },
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     }
 
     const code = generateTwoFactorCode();
-    storeTwoFactorCode(user.id, code);
+    await storeTwoFactorCode(user, code);
 
     return NextResponse.json({
       success: true,

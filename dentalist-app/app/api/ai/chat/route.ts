@@ -1,19 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getUserFromRequest } from '@/lib/auth/get-user';
 import {
-  getAppointments,
-  getPatients,
-  getPayments,
-  getTreatments,
-} from '@/lib/db/data-store';
+  listAppointments,
+  listPatients,
+  listPayments,
+  listTreatments,
+} from '@/lib/db/supabase-repository';
 
 export async function POST(request: NextRequest) {
+  const user = getUserFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  }
+
   const { message } = await request.json();
   const text: string = (message ?? '').toString().toLowerCase();
 
-  const patients = getPatients();
-  const appointments = getAppointments();
-  const treatments = getTreatments();
-  const payments = getPayments();
+  try {
+    const [patients, appointments, treatments, payments] = await Promise.all([
+      listPatients(user.id),
+      listAppointments(user.id),
+      listTreatments(user.id),
+      listPayments(user.id),
+    ]);
 
   let response = 'Soy el asistente virtual de Dentalist. Puedo ayudarte con pacientes, agenda, tratamientos y finanzas.';
 
@@ -50,5 +59,15 @@ export async function POST(request: NextRequest) {
       : 'No registrás pagos pendientes. ¡Buen trabajo con la gestión de cobranzas!';
   }
 
-  return NextResponse.json({ response });
+    return NextResponse.json({ response });
+  } catch (error) {
+    console.error('Error al armar respuesta de chat con Supabase', error);
+    return NextResponse.json(
+      {
+        response:
+          'No pude acceder a los datos clínicos en este momento. Reintentá más tarde o verificá la conexión con Supabase.',
+      },
+      { status: 500 },
+    );
+  }
 }

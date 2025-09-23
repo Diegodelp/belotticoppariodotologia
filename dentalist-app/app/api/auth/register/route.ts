@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import bcrypt from 'bcryptjs';
-import { addUser, findUserByDni } from '@/lib/db/data-store';
+import { registerProfessional } from '@/lib/db/supabase-repository';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,24 +13,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existingUser = findUserByDni(dni, type);
-    if (existingUser) {
+    if (type !== 'profesional') {
       return NextResponse.json(
-        { error: 'Ya existe un usuario registrado con ese DNI' },
-        { status: 409 },
+        { error: 'Por el momento solo podemos registrar profesionales desde esta pantalla.' },
+        { status: 400 },
       );
     }
 
-    const passwordHash = await bcrypt.hash(password, 10);
-    addUser({
-      id: crypto.randomUUID(),
-      dni,
-      name,
-      email,
-      type,
-      passwordHash,
-      createdAt: new Date().toISOString(),
-    });
+    try {
+      await registerProfessional({ dni, name, email, password });
+    } catch (error) {
+      console.error('Error al registrar profesional en Supabase', error);
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'No pudimos crear la cuenta' },
+        { status: 400 },
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

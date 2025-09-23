@@ -3,7 +3,7 @@ import {
   findUserByDni,
   toPublicUser,
   validateTwoFactorCode,
-} from '@/lib/db/data-store';
+} from '@/lib/db/supabase-repository';
 import { signToken } from '@/lib/auth/jwt';
 
 export async function POST(request: NextRequest) {
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = findUserByDni(dni, type);
+    const user = await findUserByDni(dni, type);
     if (!user) {
       return NextResponse.json(
         { error: 'No encontramos una cuenta asociada' },
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const validation = validateTwoFactorCode(user.id, code);
+    const validation = await validateTwoFactorCode(user, code);
     if (!validation.valid) {
       return NextResponse.json(
         { error: validation.reason ?? 'Código inválido' },

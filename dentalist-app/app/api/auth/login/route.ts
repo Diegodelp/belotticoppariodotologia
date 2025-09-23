@@ -4,7 +4,7 @@ import {
   findUserByDni,
   storeTwoFactorCode,
   toPublicUser,
-} from '@/lib/db/data-store';
+} from '@/lib/db/supabase-repository';
 
 function generateTwoFactorCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -22,12 +22,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = findUserByDni(dni, type);
+    const user = await findUserByDni(dni, type);
 
     if (!user) {
       return NextResponse.json(
         { error: 'No encontramos una cuenta con esos datos' },
         { status: 404 },
+      );
+    }
+
+    if (!user.passwordHash) {
+      return NextResponse.json(
+        { error: 'La cuenta aún no tiene una contraseña establecida.' },
+        { status: 400 },
       );
     }
 
@@ -40,7 +47,7 @@ export async function POST(request: NextRequest) {
     }
 
     const code = generateTwoFactorCode();
-    storeTwoFactorCode(user.id, code);
+    await storeTwoFactorCode(user, code);
 
     return NextResponse.json({
       success: true,

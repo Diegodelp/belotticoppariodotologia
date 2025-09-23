@@ -1,23 +1,31 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { dentalistDb } from '@/lib/db/data-store';
+import { getUserFromRequest } from '@/lib/auth/get-user';
+import { deleteAppointment, updateAppointment } from '@/lib/db/supabase-repository';
 
 export async function PUT(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
   try {
+    const user = getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
     const body = await request.json();
     const params = await context.params;
-    const appointment = dentalistDb.appointments.find(
-      (item) => item.id === params.id,
-    );
+    const { status, type, date, time } = body ?? {};
+    const updated = await updateAppointment(user.id, params.id, {
+      status,
+      type,
+      date,
+      time,
+    });
 
-    if (!appointment) {
+    if (!updated) {
       return NextResponse.json({ error: 'Turno no encontrado' }, { status: 404 });
     }
 
-    Object.assign(appointment, body);
-    return NextResponse.json({ success: true, appointment });
+    return NextResponse.json({ success: true, appointment: updated });
   } catch (error) {
     console.error('Error al actualizar turno', error);
     return NextResponse.json(
@@ -31,15 +39,15 @@ export async function DELETE(
   request: NextRequest,
   context: { params: Promise<{ id: string }> },
 ) {
+  const user = getUserFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  }
   const params = await context.params;
-  const index = dentalistDb.appointments.findIndex(
-    (item) => item.id === params.id,
-  );
+  const deleted = await deleteAppointment(user.id, params.id);
 
-  if (index === -1) {
+  if (!deleted) {
     return NextResponse.json({ error: 'Turno no encontrado' }, { status: 404 });
   }
-
-  dentalistDb.appointments.splice(index, 1);
   return NextResponse.json({ success: true });
 }
