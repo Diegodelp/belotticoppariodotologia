@@ -13,7 +13,6 @@ export default function PatientsPage() {
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-
   useEffect(() => {
     const fetchPatients = async () => {
       try {
@@ -47,14 +46,11 @@ export default function PatientsPage() {
   }, [patients, search, status]);
 
 
-
   const handleDeletePatient = async (patientId: string) => {
-
-    const handleDeletePatient = async (patientId: string) => {
-
-
-    const patient = patients.find((item) => item.id === patientId);
-    const confirmationMessage = patient
+  const handleDeletePatient = async (patientId: string) => {
+  const handleDeletePatient = async (patientId: string) => {
+  const patient = patients.find((item) => item.id === patientId);
+  const confirmationMessage = patient
       ? `¿Seguro que querés eliminar a ${patient.name} ${patient.lastName}?`
       : '¿Seguro que querés eliminar este paciente?';
 
@@ -158,16 +154,13 @@ export default function PatientsPage() {
         )}
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {filteredPatients.map((patient) => (
-
             <PatientCard
               key={patient.id}
               patient={patient}
               onDelete={() => handleDeletePatient(patient.id)}
               deleting={deletingId === patient.id}
             />
-
             <PatientCard key={patient.id} patient={patient} />
-
           ))}
         </div>
       </div>

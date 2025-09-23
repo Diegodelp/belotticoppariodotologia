@@ -5,6 +5,7 @@ import {
   storeTwoFactorCode,
   toPublicUser,
 } from '@/lib/db/supabase-repository';
+import { sendTwoFactorCodeEmail } from '@/lib/email/mailer';
 
 function generateTwoFactorCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -46,9 +47,27 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!user.email) {
+      return NextResponse.json(
+        {
+          error:
+            'La cuenta no tiene un correo electrónico registrado para enviar el código de verificación.',
+        },
+        { status: 422 },
+      );
+    }
+
     const code = generateTwoFactorCode();
     await storeTwoFactorCode(user, code);
 
+    await sendTwoFactorCodeEmail({
+      to: user.email,
+      code,
+      expiresMinutes: 5,
+      locale: 'es',
+    });
+    const code = generateTwoFactorCode();
+    await storeTwoFactorCode(user, code);
     return NextResponse.json({
       success: true,
       requiresTwoFactor: true,

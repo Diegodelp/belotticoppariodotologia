@@ -1,18 +1,13 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-
 import {
   CephalometricValues,
   ClinicalHistory,
   ClinicalHistoryInput,
   ClinicalStage,
 } from '@/types';
-
-
 import { ClinicalHistory, ClinicalHistoryInput, ClinicalStage } from '@/types';
-
-
 const STAGES: Array<{ key: ClinicalStage; label: string; description: string }> = [
   {
     key: 'baseline',
@@ -36,20 +31,16 @@ const STAGES: Array<{ key: ClinicalStage; label: string; description: string }> 
   },
 ];
 
-
 type CephalometricField = keyof CephalometricValues;
 
 const FIELDS: Array<{ key: CephalometricField; label: string }> = [
-
-
 type CephalometricField = keyof CephalometricValues;
-
 const FIELDS: Array<{ key: CephalometricField; label: string }> = [
-
+type CephalometricField = keyof CephalometricValues;
+const FIELDS: Array<{ key: CephalometricField; label: string }> = [
 const FIELDS: Array<{ key: keyof ClinicalHistoryInput['stages'][ClinicalStage]; label: string } & {
   key: 'biotipo' | 'patronEsqueletal' | 'sna' | 'snb' | 'anb' | 'naMm' | 'naAngle' | 'nbMm' | 'nbAngle' | 'planoMandibular';
 }> = [
-
 
   { key: 'biotipo', label: 'Biotipo' },
   { key: 'patronEsqueletal', label: 'Patrón esqueletal' },
@@ -147,14 +138,10 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
 
   const handleStageChange = (
     stage: ClinicalStage,
-
     field: CephalometricField,
-
-
     field: CephalometricField,
-
+    field: CephalometricField,
     field: keyof ClinicalHistoryInput['stages'][ClinicalStage],
-
     value: string,
   ) => {
     setStages((prev) => ({

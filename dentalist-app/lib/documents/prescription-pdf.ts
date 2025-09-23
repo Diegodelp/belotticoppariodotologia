@@ -1,7 +1,6 @@
 import { getSharp } from '@/lib/utils/sharp';
 import sharp from 'sharp';
 
-
 function escapeXml(value: string): string {
   return value
     .replace(/&/g, '&amp;')
@@ -95,8 +94,6 @@ export async function generatePrescriptionPdf(options: PrescriptionPdfOptions): 
     options.professionalDni ? `Matrícula / DNI: ${options.professionalDni}` : 'Firma digital',
   )}</text>
 </svg>`;
-
-
   const sharp = await getSharp();
   const pdfBuffer = await sharp(Buffer.from(svg)).toFormat('pdf').toBuffer();
   return pdfBuffer;
