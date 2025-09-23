@@ -90,7 +90,7 @@ export async function GET(request: NextRequest) {
 
     const { profile, latestCredentials } = await fetchGoogleProfile(tokenSet);
 
-    const googleUserId = profile.id ?? profile.sub;
+    const googleUserId = profile.id ?? (profile as { sub?: string } | undefined)?.sub ?? null;
     const email = profile.email ?? existing?.email ?? null;
 
     if (!googleUserId || !email) {
