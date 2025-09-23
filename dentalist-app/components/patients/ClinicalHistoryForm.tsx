@@ -9,6 +9,7 @@ import {
   ClinicalStage,
 } from '@/types';
 
+
 import { ClinicalHistory, ClinicalHistoryInput, ClinicalStage } from '@/types';
 
 
@@ -40,9 +41,15 @@ type CephalometricField = keyof CephalometricValues;
 
 const FIELDS: Array<{ key: CephalometricField; label: string }> = [
 
+
+type CephalometricField = keyof CephalometricValues;
+
+const FIELDS: Array<{ key: CephalometricField; label: string }> = [
+
 const FIELDS: Array<{ key: keyof ClinicalHistoryInput['stages'][ClinicalStage]; label: string } & {
   key: 'biotipo' | 'patronEsqueletal' | 'sna' | 'snb' | 'anb' | 'naMm' | 'naAngle' | 'nbMm' | 'nbAngle' | 'planoMandibular';
 }> = [
+
 
   { key: 'biotipo', label: 'Biotipo' },
   { key: 'patronEsqueletal', label: 'Patrón esqueletal' },
@@ -140,6 +147,9 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
 
   const handleStageChange = (
     stage: ClinicalStage,
+
+    field: CephalometricField,
+
 
     field: CephalometricField,
 
