@@ -84,6 +84,8 @@ export interface ClinicalHistoryInput {
   stages: Partial<Record<ClinicalStage, CephalometricValues>>;
 }
 
+export type CephalometricField = keyof CephalometricValues;
+
 export interface Prescription {
   id: string;
   patientId: string;

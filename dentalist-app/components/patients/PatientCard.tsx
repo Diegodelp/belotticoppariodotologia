@@ -31,6 +31,7 @@ export default function PatientCard({ patient }: PatientCardProps) {
       <div className="flex items-start justify-between gap-3">
       <div className="flex items-start justify-between gap-3">
       <div className="flex items-start justify-between">
+
         <div>
           <h3 className="text-lg font-semibold text-white group-hover:text-cyan-200">
             {patient.name} {patient.lastName}

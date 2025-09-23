@@ -21,14 +21,12 @@ export default function LoginPage() {
     try {
       const response = await AuthService.login(form.dni, form.password, form.type);
       if (response?.requiresTwoFactor) {
-
         setMessage(response.message ?? 'Ingresá el código de verificación.');
-
+        setMessage(response.message ?? 'Ingresá el código de verificación.');
         const codeHint = response.code ? ` Código temporal: ${response.code}.` : '';
         setMessage(
           `${response.message ?? 'Ingresá el código de verificación.'}${codeHint}`,
         );
-
         setStep('two-factor');
       } else if (response?.token) {
         AuthService.storeSession(response.token);
@@ -66,12 +64,10 @@ export default function LoginPage() {
     setMessage(null);
     const response = await AuthService.resendTwoFactor(form.dni, form.type);
     if (response?.message) {
-
       setMessage(response.message);
-
+      setMessage(response.message);
       const codeHint = response.code ? ` Código temporal: ${response.code}.` : '';
       setMessage(`${response.message}${codeHint}`);
-
     }
   };
 

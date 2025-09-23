@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { CephalometricField, ClinicalHistory, ClinicalHistoryInput, ClinicalStage } from '@/types';
 import {
   CephalometricValues,
   ClinicalHistory,
@@ -31,8 +32,8 @@ const STAGES: Array<{ key: ClinicalStage; label: string; description: string }> 
   },
 ];
 
+const FIELDS: Array<{ key: CephalometricField; label: string }> = [
 type CephalometricField = keyof CephalometricValues;
-
 const FIELDS: Array<{ key: CephalometricField; label: string }> = [
 type CephalometricField = keyof CephalometricValues;
 const FIELDS: Array<{ key: CephalometricField; label: string }> = [
@@ -41,7 +42,6 @@ const FIELDS: Array<{ key: CephalometricField; label: string }> = [
 const FIELDS: Array<{ key: keyof ClinicalHistoryInput['stages'][ClinicalStage]; label: string } & {
   key: 'biotipo' | 'patronEsqueletal' | 'sna' | 'snb' | 'anb' | 'naMm' | 'naAngle' | 'nbMm' | 'nbAngle' | 'planoMandibular';
 }> = [
-
   { key: 'biotipo', label: 'Biotipo' },
   { key: 'patronEsqueletal', label: 'Patrón esqueletal' },
   { key: 'sna', label: 'SNA' },
