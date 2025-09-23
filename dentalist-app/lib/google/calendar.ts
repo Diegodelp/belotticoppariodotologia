@@ -6,7 +6,11 @@ const CALENDAR_SCOPES = ['https://www.googleapis.com/auth/calendar.events'];
 const clientId = process.env.GOOGLE_CLIENT_ID;
 const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const explicitRedirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
-const fallbackAppUrl = process.env.NEXT_PUBLIC_APP_URL;
+const fallbackAppUrl =
+  process.env.NEXT_PUBLIC_APP_URL ??
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  process.env.SITE_URL ??
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
 const defaultTimeZone = process.env.GOOGLE_CALENDAR_TIMEZONE ?? 'America/Argentina/Buenos_Aires';
 
 function resolveRedirectUri() {
@@ -27,7 +31,7 @@ function assertOAuthConfigured() {
   }
   if (!resolveRedirectUri()) {
     throw new Error(
-      'No encontramos un redirect URI para Google OAuth. Configurá GOOGLE_OAUTH_REDIRECT_URI o NEXT_PUBLIC_APP_URL.',
+      'No encontramos un redirect URI para Google OAuth. Configurá GOOGLE_OAUTH_REDIRECT_URI, NEXT_PUBLIC_APP_URL o SITE_URL.',
     );
   }
 }
