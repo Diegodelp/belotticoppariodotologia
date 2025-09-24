@@ -30,6 +30,7 @@ interface PdfContentOptions {
   affiliateNumber: string;
   professionalName: string;
   professionalDni?: string;
+  professionalLicense?: string;
   diagnosis: string;
   medication: string;
   instructions: string;
@@ -316,9 +317,16 @@ function buildContentStream(options: PdfContentOptions, signature?: PngImage): B
 
   drawText('F2', 12, COLORS.label, signatureStartX + 10, signatureLineY - 30, options.professionalName);
 
-  const professionalLabel = options.professionalDni
-    ? `Matrícula / DNI: ${options.professionalDni}`
-    : 'Firma digital';
+  const professionalDetails: string[] = [];
+  if (options.professionalLicense) {
+    professionalDetails.push(`Matrícula: ${options.professionalLicense}`);
+  }
+  if (options.professionalDni) {
+    professionalDetails.push(`DNI: ${options.professionalDni}`);
+  }
+
+  const professionalLabel =
+    professionalDetails.length > 0 ? professionalDetails.join(' · ') : 'Firma digital';
 
   drawText('F1', 11, COLORS.muted, signatureStartX + 10, signatureLineY - 48, professionalLabel);
 
@@ -352,6 +360,7 @@ export interface PrescriptionPdfOptions {
   affiliateNumber?: string;
   professionalName: string;
   professionalDni?: string;
+  professionalLicense?: string;
   diagnosis?: string;
   medication: string;
   instructions: string;
@@ -387,6 +396,7 @@ export async function generatePrescriptionPdf(options: PrescriptionPdfOptions): 
     affiliateNumber: affiliateLabel,
     professionalName: options.professionalName,
     professionalDni: options.professionalDni,
+    professionalLicense: options.professionalLicense,
     diagnosis: options.diagnosis?.trim() || 'No especificado',
     medication: options.medication.trim(),
     instructions: options.instructions.trim(),

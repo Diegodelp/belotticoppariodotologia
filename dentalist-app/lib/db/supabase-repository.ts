@@ -18,6 +18,7 @@ import {
   Prescription,
   Treatment,
   User,
+  ProfessionalProfile,
 } from '@/types';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -184,6 +185,18 @@ async function createSignedUrl(
   return data?.signedUrl ?? null;
 }
 
+type AppProfessionalRow = {
+  id: string;
+  dni: string | null;
+  full_name: string | null;
+  email: string | null;
+  clinic_name: string | null;
+  license_number: string | null;
+  phone: string | null;
+  address: string | null;
+  updated_at: string | null;
+};
+
 type AppPatientRow = {
   id: string;
   dni: string | null;
@@ -302,6 +315,20 @@ type AppProfessionalSignatureRow = {
   updated_at: string;
   created_at: string;
 };
+
+function mapProfessionalProfile(row: AppProfessionalRow): ProfessionalProfile {
+  return {
+    id: row.id,
+    dni: row.dni ?? null,
+    fullName: row.full_name ?? null,
+    email: row.email ?? null,
+    clinicName: row.clinic_name ?? null,
+    licenseNumber: row.license_number ?? null,
+    phone: row.phone ?? null,
+    address: row.address ?? null,
+    updatedAt: row.updated_at ?? null,
+  };
+}
 
 function mapPatient(record: AppPatientRow): Patient {
   return {
@@ -686,6 +713,9 @@ export async function registerProfessional(data: {
     email: inserted.email,
     type: 'profesional',
     clinicName: (inserted as { clinic_name?: string | null }).clinic_name ?? null,
+    licenseNumber: (inserted as { license_number?: string | null }).license_number ?? null,
+    phone: (inserted as { phone?: string | null }).phone ?? null,
+    address: (inserted as { address?: string | null }).address ?? null,
   };
 }
 
@@ -697,6 +727,9 @@ export type StoredAuthUser = {
   type: User['type'];
   passwordHash: string | null;
   clinicName: string | null;
+  licenseNumber: string | null;
+  phone: string | null;
+  address: string | null;
 };
 
 export async function findUserByDni(
@@ -720,6 +753,9 @@ export async function findUserByDni(
       type: 'profesional' as const,
       passwordHash: data.password_hash,
       clinicName: data.clinic_name ?? null,
+      licenseNumber: data.license_number ?? null,
+      phone: data.phone ?? null,
+      address: data.address ?? null,
     };
   }
 
@@ -738,6 +774,9 @@ export async function findUserByDni(
     type: 'paciente' as const,
     passwordHash: data.password_hash ?? null,
     clinicName: null,
+    licenseNumber: null,
+    phone: null,
+    address: null,
   };
 }
 
@@ -811,6 +850,100 @@ export async function validateTwoFactorCode(user: StoredAuthUser, code: string) 
     .eq('id', data.id);
 
   return { valid: true } as const;
+}
+
+export type ProfessionalProfileUpdate = {
+  fullName?: string | null;
+  clinicName?: string | null;
+  licenseNumber?: string | null;
+  phone?: string | null;
+  address?: string | null;
+};
+
+export async function getProfessionalProfile(professionalId: string): Promise<ProfessionalProfile | null> {
+  const client = getClient();
+
+  const { data, error } = await client
+    .from(PROFESSIONALS_TABLE)
+    .select('id, dni, full_name, email, clinic_name, license_number, phone, address, updated_at')
+    .eq('id', professionalId)
+    .maybeSingle<AppProfessionalRow>();
+
+  if (error) throw error;
+  if (!data) {
+    return null;
+  }
+
+  return mapProfessionalProfile(data);
+}
+
+export async function updateProfessionalProfile(
+  professionalId: string,
+  updates: ProfessionalProfileUpdate,
+): Promise<ProfessionalProfile> {
+  const client = getClient();
+
+  const normalize = (value: string | null | undefined): string | null | undefined => {
+    if (value === null) {
+      return null;
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed.length > 0 ? trimmed : null;
+    }
+    return undefined;
+  };
+
+  const payload: Record<string, string | null | undefined> = {};
+
+  const fullName = normalize(updates.fullName);
+  if (fullName !== undefined) {
+    payload.full_name = fullName;
+  }
+
+  const clinicName = normalize(updates.clinicName);
+  if (clinicName !== undefined) {
+    payload.clinic_name = clinicName;
+  }
+
+  const licenseNumber = normalize(updates.licenseNumber);
+  if (licenseNumber !== undefined) {
+    payload.license_number = licenseNumber;
+  }
+
+  const phone = normalize(updates.phone);
+  if (phone !== undefined) {
+    payload.phone = phone;
+  }
+
+  const address = normalize(updates.address);
+  if (address !== undefined) {
+    payload.address = address;
+  }
+
+  if (Object.keys(payload).length === 0) {
+    const existing = await getProfessionalProfile(professionalId);
+    if (!existing) {
+      throw new Error('Profesional no encontrado');
+    }
+    return existing;
+  }
+
+  payload.updated_at = new Date().toISOString();
+
+  const { data, error } = await client
+    .from(PROFESSIONALS_TABLE)
+    .update(payload)
+    .eq('id', professionalId)
+    .select('id, dni, full_name, email, clinic_name, license_number, phone, address, updated_at')
+    .maybeSingle<AppProfessionalRow>();
+
+  if (error) throw error;
+  if (!data) {
+    throw new Error('Profesional no encontrado');
+  }
+
+  return mapProfessionalProfile(data);
 }
 
 export async function listPatients(
@@ -1598,6 +1731,9 @@ export function toPublicUser(user: {
   email: string;
   type: User['type'];
   clinicName?: string | null;
+  licenseNumber?: string | null;
+  phone?: string | null;
+  address?: string | null;
 }): User {
   return {
     id: user.id,
@@ -1606,5 +1742,8 @@ export function toPublicUser(user: {
     email: user.email,
     type: user.type,
     clinicName: user.clinicName ?? null,
+    licenseNumber: user.licenseNumber ?? null,
+    phone: user.phone ?? null,
+    address: user.address ?? null,
   };
 }

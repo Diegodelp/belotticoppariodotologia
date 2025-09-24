@@ -5,6 +5,9 @@ export interface User {
   email: string;
   type: 'profesional' | 'paciente';
   clinicName?: string | null;
+  licenseNumber?: string | null;
+  phone?: string | null;
+  address?: string | null;
 }
 
 export interface Patient {
@@ -145,6 +148,18 @@ export interface Prescription {
   pdfUrl: string;
   signaturePath?: string | null;
   createdAt: string;
+}
+
+export interface ProfessionalProfile {
+  id: string;
+  dni: string | null;
+  fullName: string | null;
+  email: string | null;
+  clinicName: string | null;
+  licenseNumber: string | null;
+  phone: string | null;
+  address: string | null;
+  updatedAt: string | null;
 }
 
 export interface CreatePrescriptionInput {

@@ -5,6 +5,7 @@ import {
   deletePrescriptionRecord,
   downloadProfessionalSignature,
   getPatientById,
+  getProfessionalProfile,
   getProfessionalSignature,
   listPrescriptions,
   saveProfessionalSignature,
@@ -100,8 +101,14 @@ export async function POST(
       );
     }
 
-    const clinicTitle = user.clinicName?.trim();
-    const pdfTitle = clinicTitle && clinicTitle.length > 0 ? clinicTitle : 'Receta digital';
+    const professionalProfile = await getProfessionalProfile(user.id);
+    const clinicTitle =
+      professionalProfile?.clinicName?.trim() || user.clinicName?.trim() || '';
+    const professionalName = professionalProfile?.fullName?.trim() || user.name;
+    const professionalDni = professionalProfile?.dni ?? user.dni;
+    const professionalLicense = professionalProfile?.licenseNumber ?? user.licenseNumber ?? undefined;
+
+    const pdfTitle = clinicTitle.length > 0 ? clinicTitle : 'Receta digital';
 
     const pdfBuffer = await generatePrescriptionPdf({
       title: pdfTitle,
@@ -109,8 +116,9 @@ export async function POST(
       patientDni: patient.dni,
       healthInsurance: patient.healthInsurance,
       affiliateNumber: patient.affiliateNumber,
-      professionalName: user.name,
-      professionalDni: user.dni,
+      professionalName,
+      professionalDni,
+      professionalLicense,
       diagnosis: body.diagnosis,
       medication: body.medication,
       instructions: body.instructions,

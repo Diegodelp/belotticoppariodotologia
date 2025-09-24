@@ -3,13 +3,22 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { GoogleCalendarService, GoogleCalendarStatus } from '@/services/google-calendar.service';
+import { ProfessionalService } from '@/services/professional.service';
+import { useAuth } from '@/hooks/useAuth';
+import { ProfessionalProfile } from '@/types';
 
 export function SettingsClient() {
-  const [clinic, setClinic] = useState({
-    name: 'Dentalist - Belotti & Coppario',
-    phone: '+54 9 11 5555-8899',
-    address: 'Av. Santa Fe 1234, CABA',
-    timezone: 'America/Argentina/Buenos_Aires',
+  const { user, refresh: refreshUser } = useAuth();
+  const [profile, setProfile] = useState<ProfessionalProfile | null>(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [form, setForm] = useState({
+    fullName: '',
+    clinicName: '',
+    licenseNumber: '',
+    phone: '',
+    address: '',
   });
   const [notifications, setNotifications] = useState({
     whatsapp: true,
@@ -17,7 +26,7 @@ export function SettingsClient() {
     dailySummary: true,
     autoBilling: false,
   });
-  const [message, setMessage] = useState<string | null>(null);
+  const [banner, setBanner] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [calendarStatus, setCalendarStatus] = useState<GoogleCalendarStatus | null>(null);
   const [calendarLoading, setCalendarLoading] = useState(true);
   const [calendarError, setCalendarError] = useState<string | null>(null);
@@ -49,6 +58,47 @@ export function SettingsClient() {
     };
 
     loadStatus();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadProfile = async () => {
+      setProfileLoading(true);
+      if (active) {
+        setProfileError(null);
+      }
+      try {
+        const response = await ProfessionalService.getProfile();
+        if (!active) {
+          return;
+        }
+        setProfile(response.profile);
+        setForm({
+          fullName: response.profile.fullName ?? '',
+          clinicName: response.profile.clinicName ?? '',
+          licenseNumber: response.profile.licenseNumber ?? '',
+          phone: response.profile.phone ?? '',
+          address: response.profile.address ?? '',
+        });
+        setProfileError(null);
+      } catch (error) {
+        console.error('Error al cargar el perfil profesional', error);
+        if (active) {
+          setProfileError('No pudimos cargar los datos del profesional.');
+        }
+      } finally {
+        if (active) {
+          setProfileLoading(false);
+        }
+      }
+    };
+
+    loadProfile();
 
     return () => {
       active = false;
@@ -114,14 +164,44 @@ export function SettingsClient() {
     }
   };
 
-  const handleClinicSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleProfileSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setMessage('Datos de la clínica actualizados.');
+    setBanner(null);
+    try {
+      setSavingProfile(true);
+      const response = await ProfessionalService.updateProfile({
+        fullName: form.fullName,
+        clinicName: form.clinicName,
+        licenseNumber: form.licenseNumber,
+        phone: form.phone,
+        address: form.address,
+      });
+      setProfile(response.profile);
+      setForm({
+        fullName: response.profile.fullName ?? '',
+        clinicName: response.profile.clinicName ?? '',
+        licenseNumber: response.profile.licenseNumber ?? '',
+        phone: response.profile.phone ?? '',
+        address: response.profile.address ?? '',
+      });
+      setProfileError(null);
+      setBanner({ type: 'success', text: 'Datos del profesional actualizados.' });
+      await refreshUser();
+    } catch (error) {
+      console.error('Error al actualizar datos del profesional', error);
+      const text =
+        error instanceof Error && error.message
+          ? error.message
+          : 'No pudimos guardar los cambios.';
+      setBanner({ type: 'error', text });
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   const handleNotificationsSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setMessage('Preferencias de comunicación guardadas.');
+    setBanner({ type: 'success', text: 'Preferencias de comunicación guardadas.' });
   };
 
   return (
@@ -133,9 +213,15 @@ export function SettingsClient() {
         </p>
       </div>
 
-      {message && (
-        <p className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100">
-          {message}
+      {banner && (
+        <p
+          className={`rounded-2xl border px-4 py-3 text-sm ${
+            banner.type === 'success'
+              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
+              : 'border-rose-500/40 bg-rose-500/10 text-rose-100'
+          }`}
+        >
+          {banner.text}
         </p>
       )}
 
@@ -213,71 +299,130 @@ export function SettingsClient() {
       </div>
 
       <form
-        onSubmit={handleClinicSubmit}
+        onSubmit={handleProfileSubmit}
         className="grid gap-6 rounded-3xl border border-white/10 bg-white/5 p-8 shadow-lg shadow-cyan-500/10"
       >
         <div>
-          <h2 className="text-lg font-semibold text-white">Datos de la clínica</h2>
+          <h2 className="text-lg font-semibold text-white">Perfil del profesional</h2>
           <p className="text-xs text-slate-400">
-            Esta información se utilizará en recordatorios y comunicaciones.
+            Actualizá la información que aparecerá en recetas, presupuestos y comunicaciones.
           </p>
         </div>
+
+        {profileLoading && (
+          <p className="text-sm text-slate-300">Cargando datos del profesional...</p>
+        )}
+
+        {profileError && !profileLoading && (
+          <p className="rounded-2xl border border-rose-500/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">
+            {profileError}
+          </p>
+        )}
+
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-2">
-            <label className="text-sm text-slate-300" htmlFor="clinic-name">
-              Nombre comercial
+            <label className="text-sm text-slate-300" htmlFor="profile-full-name">
+              Nombre completo
             </label>
             <input
-              id="clinic-name"
-              value={clinic.name}
-              onChange={(event) => setClinic((prev) => ({ ...prev, name: event.target.value }))}
+              id="profile-full-name"
+              value={form.fullName}
+              onChange={(event) => setForm((prev) => ({ ...prev, fullName: event.target.value }))}
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+              autoComplete="name"
+              disabled={profileLoading || savingProfile}
             />
           </div>
           <div className="space-y-2">
-            <label className="text-sm text-slate-300" htmlFor="clinic-phone">
+            <label className="text-sm text-slate-300" htmlFor="profile-license">
+              Matrícula profesional
+            </label>
+            <input
+              id="profile-license"
+              value={form.licenseNumber}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, licenseNumber: event.target.value }))
+              }
+              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+              autoComplete="off"
+              disabled={profileLoading || savingProfile}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300" htmlFor="profile-clinic-name">
+              Nombre de la clínica
+            </label>
+            <input
+              id="profile-clinic-name"
+              value={form.clinicName}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, clinicName: event.target.value }))
+              }
+              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+              autoComplete="organization"
+              disabled={profileLoading || savingProfile}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300" htmlFor="profile-phone">
               Teléfono de contacto
             </label>
             <input
-              id="clinic-phone"
-              value={clinic.phone}
-              onChange={(event) => setClinic((prev) => ({ ...prev, phone: event.target.value }))}
+              id="profile-phone"
+              value={form.phone}
+              onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+              autoComplete="tel"
+              disabled={profileLoading || savingProfile}
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-sm text-slate-300" htmlFor="clinic-address">
+          <div className="space-y-2 md:col-span-2">
+            <label className="text-sm text-slate-300" htmlFor="profile-address">
               Dirección
             </label>
             <input
-              id="clinic-address"
-              value={clinic.address}
-              onChange={(event) => setClinic((prev) => ({ ...prev, address: event.target.value }))}
+              id="profile-address"
+              value={form.address}
+              onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+              autoComplete="street-address"
+              disabled={profileLoading || savingProfile}
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-sm text-slate-300" htmlFor="clinic-timezone">
-              Zona horaria
-            </label>
-            <select
-              id="clinic-timezone"
-              value={clinic.timezone}
-              onChange={(event) => setClinic((prev) => ({ ...prev, timezone: event.target.value }))}
-              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
-            >
-              <option value="America/Argentina/Buenos_Aires">Buenos Aires (GMT-3)</option>
-              <option value="America/Montevideo">Montevideo (GMT-3)</option>
-              <option value="America/Sao_Paulo">São Paulo (GMT-3)</option>
-            </select>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 text-sm text-slate-200">
+            <p className="text-xs uppercase tracking-wide text-slate-400">Documento</p>
+            <p className="text-base font-semibold text-white">
+              {profile?.dni ?? user?.dni ?? 'No informado'}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 text-sm text-slate-200">
+            <p className="text-xs uppercase tracking-wide text-slate-400">Correo electrónico</p>
+            <p className="text-base font-semibold text-white">
+              {profile?.email ?? user?.email ?? 'No informado'}
+            </p>
           </div>
         </div>
+
+        {profile?.updatedAt && (
+          <p className="text-xs text-slate-400">
+            Última actualización:{' '}
+            {new Intl.DateTimeFormat('es-AR', {
+              dateStyle: 'short',
+              timeStyle: 'short',
+            }).format(new Date(profile.updatedAt))}
+          </p>
+        )}
+
         <div className="flex justify-end">
           <button
             type="submit"
-            className="rounded-full bg-cyan-500 px-6 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400"
+            disabled={savingProfile || profileLoading}
+            className="rounded-full bg-cyan-500 px-6 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            Guardar cambios
+            {savingProfile ? 'Guardando...' : 'Guardar cambios'}
           </button>
         </div>
       </form>
