@@ -300,6 +300,68 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     }
   };
 
+  const handleDeletePrescription = async (prescriptionId: string) => {
+    if (!data?.patient) {
+      return { success: false, error: 'Paciente no disponible' };
+    }
+
+    try {
+      const response = await PatientService.deletePrescription(data.patient.id, prescriptionId);
+      if (!response?.success) {
+        return {
+          success: false,
+          error: response?.error ?? 'No pudimos eliminar la receta',
+        };
+      }
+
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              prescriptions: current.prescriptions.filter((item) => item.id !== prescriptionId),
+            }
+          : current,
+      );
+
+      return { success: true };
+    } catch (deleteError) {
+      return {
+        success: false,
+        error:
+          deleteError instanceof Error
+            ? deleteError.message
+            : 'No pudimos eliminar la receta',
+      };
+    }
+  };
+
+  const handleUpdateSignature = async (signatureDataUrl: string) => {
+    try {
+      const response = await PatientService.updateProfessionalSignature(signatureDataUrl);
+      if (!response?.success) {
+        return {
+          success: false,
+          error: response?.error ?? 'No pudimos actualizar la firma digital',
+        };
+      }
+
+      setSignatureInfo({
+        hasSignature: Boolean(response.hasSignature ?? true),
+        signatureUrl: response.signatureUrl ?? null,
+      });
+
+      return { success: true, signatureUrl: response.signatureUrl ?? null };
+    } catch (updateError) {
+      return {
+        success: false,
+        error:
+          updateError instanceof Error
+            ? updateError.message
+            : 'No pudimos actualizar la firma digital',
+      };
+    }
+  };
+
   const handleTreatmentSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -758,6 +820,8 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
             onCreate={handleCreatePrescription}
             hasSavedSignature={signatureInfo.hasSignature}
             savedSignatureUrl={signatureInfo.signatureUrl}
+            onDelete={handleDeletePrescription}
+            onUpdateSignature={handleUpdateSignature}
           />
         </div>
 

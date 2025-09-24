@@ -1451,6 +1451,48 @@ export async function createPrescriptionRecord(
   return mapPrescription(data as AppPrescriptionRow, signedUrl ?? '');
 }
 
+export async function deletePrescriptionRecord(
+  professionalId: string,
+  patientId: string,
+  prescriptionId: string,
+): Promise<void> {
+  const client = getClient();
+
+  const { data: existing, error: fetchError } = await client
+    .from(PRESCRIPTIONS_TABLE)
+    .select('id, document_path')
+    .eq('id', prescriptionId)
+    .eq('professional_id', professionalId)
+    .eq('patient_id', patientId)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+  if (!existing) {
+    throw new Error('Receta no encontrada');
+  }
+
+  const { error: deleteError } = await client
+    .from(PRESCRIPTIONS_TABLE)
+    .delete()
+    .eq('id', prescriptionId)
+    .eq('professional_id', professionalId)
+    .eq('patient_id', patientId);
+
+  if (deleteError) throw deleteError;
+
+  const documentPath = (existing as { document_path: string | null }).document_path;
+
+  if (documentPath) {
+    const { error: storageError } = await client.storage
+      .from(DOCUMENTS_BUCKET)
+      .remove([documentPath]);
+
+    if (storageError) {
+      console.warn('No se pudo eliminar el PDF de la receta', storageError);
+    }
+  }
+}
+
 export async function getProfessionalSignature(
   professionalId: string,
   options: { signedUrlExpiresIn?: number } = {},

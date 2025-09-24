@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth/get-user';
 import {
   createPrescriptionRecord,
+  deletePrescriptionRecord,
   downloadProfessionalSignature,
   getPatientById,
   getProfessionalSignature,
@@ -9,22 +10,10 @@ import {
   saveProfessionalSignature,
 } from '@/lib/db/supabase-repository';
 import { generatePrescriptionPdf } from '@/lib/documents/prescription-pdf';
+import { parseSignatureDataUrl } from '@/lib/utils/signature';
 import { CreatePrescriptionInput } from '@/types';
 
 export const runtime = 'nodejs';
-
-function parseSignatureDataUrl(dataUrl: string): { buffer: Buffer; mimeType: string } {
-  const matches = /^data:(.+);base64,(.+)$/.exec(dataUrl);
-  if (!matches) {
-    throw new Error('Firma inválida');
-  }
-  const mimeType = matches[1];
-  const base64 = matches[2];
-  return {
-    buffer: Buffer.from(base64, 'base64'),
-    mimeType,
-  };
-}
 
 export async function GET(
   request: NextRequest,
@@ -151,6 +140,43 @@ export async function POST(
     console.error('Error al crear receta', error);
     return NextResponse.json(
       { error: 'No pudimos generar la receta en este momento' },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  const user = getUserFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  }
+
+  const params = await context.params;
+  const patient = await getPatientById(user.id, params.id);
+
+  if (!patient) {
+    return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
+  }
+
+  const prescriptionId = request.nextUrl.searchParams.get('prescriptionId');
+
+  if (!prescriptionId) {
+    return NextResponse.json(
+      { error: 'Falta el identificador de la receta a eliminar' },
+      { status: 400 },
+    );
+  }
+
+  try {
+    await deletePrescriptionRecord(user.id, patient.id, prescriptionId);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error al eliminar receta', error);
+    return NextResponse.json(
+      { error: 'No pudimos eliminar la receta en este momento' },
       { status: 500 },
     );
   }

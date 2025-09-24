@@ -126,6 +126,20 @@ export class PatientService {
     return response.json();
   }
 
+  static async deletePrescription(patientId: string, prescriptionId: string) {
+    const response = await fetch(
+      `/api/patients/${patientId}/prescriptions?prescriptionId=${encodeURIComponent(prescriptionId)}`,
+      {
+        method: 'DELETE',
+        headers: {
+          ...authHeaders(),
+        },
+        credentials: 'include',
+      },
+    );
+    return response.json();
+  }
+
   static async getProfessionalSignature(): Promise<{
     hasSignature: boolean;
     signatureUrl: string | null;
@@ -137,6 +151,20 @@ export class PatientService {
       },
       credentials: 'include',
     });
+    return response.json();
+  }
+
+  static async updateProfessionalSignature(signatureDataUrl: string) {
+    const response = await fetch('/api/professionals/signature', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ signatureDataUrl }),
+    });
+
     return response.json();
   }
 }
