@@ -685,6 +685,7 @@ export async function registerProfessional(data: {
     name: inserted.full_name,
     email: inserted.email,
     type: 'profesional',
+    clinicName: (inserted as { clinic_name?: string | null }).clinic_name ?? null,
   };
 }
 
@@ -695,6 +696,7 @@ export type StoredAuthUser = {
   email: string;
   type: User['type'];
   passwordHash: string | null;
+  clinicName: string | null;
 };
 
 export async function findUserByDni(
@@ -717,6 +719,7 @@ export async function findUserByDni(
       email: data.email,
       type: 'profesional' as const,
       passwordHash: data.password_hash,
+      clinicName: data.clinic_name ?? null,
     };
   }
 
@@ -734,6 +737,7 @@ export async function findUserByDni(
     email: data.email ?? '',
     type: 'paciente' as const,
     passwordHash: data.password_hash ?? null,
+    clinicName: null,
   };
 }
 
@@ -1551,6 +1555,14 @@ export function toPublicUser(user: {
   name: string;
   email: string;
   type: User['type'];
+  clinicName?: string | null;
 }): User {
-  return user;
+  return {
+    id: user.id,
+    dni: user.dni,
+    name: user.name,
+    email: user.email,
+    type: user.type,
+    clinicName: user.clinicName ?? null,
+  };
 }

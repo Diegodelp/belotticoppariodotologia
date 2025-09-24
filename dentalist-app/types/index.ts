@@ -4,6 +4,7 @@ export interface User {
   name: string;
   email: string;
   type: 'profesional' | 'paciente';
+  clinicName?: string | null;
 }
 
 export interface Patient {

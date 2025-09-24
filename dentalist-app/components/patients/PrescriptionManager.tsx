@@ -22,7 +22,7 @@ export function PrescriptionManager({
   hasSavedSignature = false,
   savedSignatureUrl = null,
 }: PrescriptionManagerProps) {
-  const [title, setTitle] = useState('Receta odontológica');
+  const [title, setTitle] = useState('Receta digital');
   const [diagnosis, setDiagnosis] = useState('');
   const [medication, setMedication] = useState('');
   const [instructions, setInstructions] = useState('');
@@ -55,7 +55,7 @@ export function PrescriptionManager({
   );
 
   const resetForm = () => {
-    setTitle('Receta odontológica');
+    setTitle('Receta digital');
     setDiagnosis('');
     setMedication('');
     setInstructions('');

@@ -63,24 +63,32 @@ function wrapText(
   fontWidthCalculator: (value: string, size: number) => number,
 ): string[] {
   const normalized = text.replace(/\r/g, '');
-  const words = normalized.split(/\s+/);
+  const segments = normalized.split('\n');
   const lines: string[] = [];
-  let currentLine = '';
 
-  for (const word of words) {
-    const candidate = currentLine ? `${currentLine} ${word}` : word;
-    if (fontWidthCalculator(candidate, fontSize) <= maxWidth) {
-      currentLine = candidate;
-    } else {
-      if (currentLine) {
-        lines.push(currentLine);
-      }
-      currentLine = word;
+  for (const segment of segments) {
+    const words = segment.trim().length > 0 ? segment.trim().split(/\s+/) : [];
+    if (words.length === 0) {
+      lines.push('');
+      continue;
     }
-  }
 
-  if (currentLine) {
-    lines.push(currentLine);
+    let currentLine = '';
+    for (const word of words) {
+      const candidate = currentLine ? `${currentLine} ${word}` : word;
+      if (fontWidthCalculator(candidate, fontSize) <= maxWidth) {
+        currentLine = candidate;
+      } else {
+        if (currentLine) {
+          lines.push(currentLine);
+        }
+        currentLine = word;
+      }
+    }
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
   }
 
   return lines.length > 0 ? lines : [''];
@@ -129,22 +137,61 @@ function parsePng(buffer: Buffer): PngImage {
   const bytesPerPixel = 4;
   const stride = width * bytesPerPixel;
   const rgbBytes = Buffer.alloc(width * height * 3);
+  const decodedRow = Buffer.alloc(stride);
+  const previousRow = Buffer.alloc(stride);
 
   let srcOffset = 0;
   let dstOffset = 0;
 
+  const paethPredictor = (left: number, up: number, upLeft: number) => {
+    const p = left + up - upLeft;
+    const pa = Math.abs(p - left);
+    const pb = Math.abs(p - up);
+    const pc = Math.abs(p - upLeft);
+    if (pa <= pb && pa <= pc) return left;
+    if (pb <= pc) return up;
+    return upLeft;
+  };
+
   for (let y = 0; y < height; y++) {
     const filter = decompressed.readUInt8(srcOffset);
-    if (filter !== 0) {
-      throw new Error('La firma utiliza un filtro PNG no soportado');
-    }
     srcOffset += 1;
 
+    for (let x = 0; x < stride; x++) {
+      const raw = decompressed[srcOffset + x];
+      const left = x >= bytesPerPixel ? decodedRow[x - bytesPerPixel] : 0;
+      const up = previousRow[x];
+      const upLeft = x >= bytesPerPixel ? previousRow[x - bytesPerPixel] : 0;
+
+      let value: number;
+      switch (filter) {
+        case 0:
+          value = raw;
+          break;
+        case 1:
+          value = (raw + left) & 0xff;
+          break;
+        case 2:
+          value = (raw + up) & 0xff;
+          break;
+        case 3:
+          value = (raw + Math.floor((left + up) / 2)) & 0xff;
+          break;
+        case 4:
+          value = (raw + paethPredictor(left, up, upLeft)) & 0xff;
+          break;
+        default:
+          throw new Error(`Filtro PNG ${filter} no soportado`);
+      }
+
+      decodedRow[x] = value;
+    }
+
     for (let x = 0; x < stride; x += bytesPerPixel) {
-      const r = decompressed[srcOffset + x];
-      const g = decompressed[srcOffset + x + 1];
-      const b = decompressed[srcOffset + x + 2];
-      const a = decompressed[srcOffset + x + 3] / 255;
+      const r = decodedRow[x];
+      const g = decodedRow[x + 1];
+      const b = decodedRow[x + 2];
+      const a = decodedRow[x + 3] / 255;
 
       const outR = Math.round(r * a + 255 * (1 - a));
       const outG = Math.round(g * a + 255 * (1 - a));
@@ -155,6 +202,7 @@ function parsePng(buffer: Buffer): PngImage {
       rgbBytes[dstOffset++] = outB;
     }
 
+    decodedRow.copy(previousRow);
     srcOffset += stride;
   }
 
@@ -212,7 +260,7 @@ function buildContentStream(options: PdfContentOptions, signature?: PngImage): B
 
   const sections: Array<{ title: string; value: string }> = [
     { title: 'Diagnóstico', value: options.diagnosis || 'No especificado' },
-    { title: 'Prescripción', value: `Rp/. ${options.medication}`.trim() },
+    { title: 'Prescripción', value: `Rp/.\n${options.medication}`.trim() },
     { title: 'Indicaciones', value: options.instructions },
     { title: 'Notas adicionales', value: options.notes || 'Sin observaciones' },
   ];
@@ -226,6 +274,10 @@ function buildContentStream(options: PdfContentOptions, signature?: PngImage): B
 
     const lines = wrapText(section.value, 14, paragraphWidth, fontWidth);
     for (const line of lines) {
+      if (line === '') {
+        cursorY -= lineHeight;
+        continue;
+      }
       drawText('F1', 14, COLORS.value, MARGIN + 20, cursorY, line);
       cursorY -= lineHeight;
     }
@@ -270,7 +322,7 @@ function buildContentStream(options: PdfContentOptions, signature?: PngImage): B
 
   drawText('F2', 12, COLORS.label, MARGIN + 20, signatureLineY - 18, `Fecha: ${formatDate(options.issuedAt)}`);
 
-  return Buffer.from(commands.join('\n') + '\n', 'utf8');
+  return Buffer.from(commands.join('\n') + '\n', 'latin1');
 }
 
 interface PdfObject {
@@ -326,7 +378,7 @@ export async function generatePrescriptionPdf(options: PrescriptionPdfOptions): 
   }
 
   const pdfOptions: PdfContentOptions = {
-    title: options.title,
+    title: options.title?.trim() || 'Receta digital',
     patientName: options.patientName,
     patientDni: options.patientDni ?? 'No informado',
     healthInsurance: insuranceLabel,
@@ -368,8 +420,18 @@ export async function generatePrescriptionPdf(options: PrescriptionPdfOptions): 
     ),
   );
 
-  objects.push(createObject(fontRegularId, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'));
-  objects.push(createObject(fontBoldId, '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>'));
+  objects.push(
+    createObject(
+      fontRegularId,
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+    ),
+  );
+  objects.push(
+    createObject(
+      fontBoldId,
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
+    ),
+  );
 
   if (signature && imageId) {
     objects.push(

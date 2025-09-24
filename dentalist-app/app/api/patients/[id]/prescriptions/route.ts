@@ -111,8 +111,11 @@ export async function POST(
       );
     }
 
+    const clinicTitle = user.clinicName?.trim();
+    const pdfTitle = clinicTitle && clinicTitle.length > 0 ? clinicTitle : 'Receta digital';
+
     const pdfBuffer = await generatePrescriptionPdf({
-      title: body.title,
+      title: pdfTitle,
       patientName: `${patient.name} ${patient.lastName}`.trim(),
       patientDni: patient.dni,
       healthInsurance: patient.healthInsurance,
