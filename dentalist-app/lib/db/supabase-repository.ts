@@ -74,6 +74,55 @@ function getClient() {
   });
 }
 
+const bucketChecks = new Map<string, Promise<void>>();
+
+function isBucketMissing(error: { message?: string; status?: number; statusCode?: string }) {
+  const message = error.message?.toLowerCase() ?? '';
+  return (
+    error.status === 404 ||
+    error.statusCode === '404' ||
+    message.includes('not found') ||
+    message.includes('does not exist')
+  );
+}
+
+function isBucketAlreadyCreated(error: { message?: string; status?: number; statusCode?: string }) {
+  const message = error.message?.toLowerCase() ?? '';
+  return error.status === 409 || error.statusCode === '409' || message.includes('already exists');
+}
+
+async function ensureBucketExists(client: ReturnType<typeof getClient>, bucket: string) {
+  if (!bucketChecks.has(bucket)) {
+    const checkPromise = (async () => {
+      const { data, error } = await client.storage.getBucket(bucket);
+
+      if (!error && data) {
+        return;
+      }
+
+      if (error && !isBucketMissing(error)) {
+        throw error;
+      }
+
+      const { error: createError } = await client.storage.createBucket(bucket, { public: false });
+
+      if (createError && !isBucketAlreadyCreated(createError)) {
+        throw createError;
+      }
+    })().catch((ensureError) => {
+      bucketChecks.delete(bucket);
+      throw ensureError;
+    });
+
+    bucketChecks.set(bucket, checkPromise);
+  }
+
+  const ensure = bucketChecks.get(bucket);
+  if (ensure) {
+    await ensure;
+  }
+}
+
 async function createSignedUrl(
   client: ReturnType<typeof getClient>,
   bucket: string,
@@ -83,6 +132,8 @@ async function createSignedUrl(
   if (!path) {
     return null;
   }
+
+  await ensureBucketExists(client, bucket);
 
   const { data, error } = await client.storage
     .from(bucket)
@@ -1093,6 +1144,8 @@ export async function createPrescriptionRecord(
   const fileName = `${new Date().toISOString().split('T')[0]}-${crypto.randomUUID()}.pdf`;
   const storagePath = `${professionalId}/patients/${patientId}/prescriptions/${fileName}`;
 
+  await ensureBucketExists(client, DOCUMENTS_BUCKET);
+
   const { error: uploadError } = await client.storage
     .from(DOCUMENTS_BUCKET)
     .upload(storagePath, payload.pdfBuffer, {
@@ -1164,6 +1217,8 @@ export async function saveProfessionalSignature(
       : 'png';
   const storagePath = `${professionalId}/signature.${extension}`;
 
+  await ensureBucketExists(client, SIGNATURES_BUCKET);
+
   const { error: uploadError } = await client.storage
     .from(SIGNATURES_BUCKET)
     .upload(storagePath, file.buffer, {
@@ -1200,6 +1255,8 @@ export async function downloadProfessionalSignature(
   if (!signature) {
     return null;
   }
+
+  await ensureBucketExists(client, SIGNATURES_BUCKET);
 
   const { data, error } = await client.storage
     .from(SIGNATURES_BUCKET)
