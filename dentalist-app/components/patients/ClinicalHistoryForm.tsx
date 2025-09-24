@@ -194,7 +194,7 @@ const ODONTOGRAM_SURFACE_SEQUENCE: OdontogramSurface[] = [
   'lingual',
 ];
 
-const ODONTOGRAM_SURFACE_LAYOUT: Array<{
+const ODONTOGRAM_BASE_SURFACE_LAYOUT: Array<{
   key: Exclude<OdontogramSurface, 'whole' | 'crown'>;
   row: number;
   col: number;
@@ -205,6 +205,35 @@ const ODONTOGRAM_SURFACE_LAYOUT: Array<{
   { key: 'distal', row: 2, col: 3 },
   { key: 'lingual', row: 3, col: 2 },
 ];
+
+function shouldFlipMesialDistal(tooth: string): boolean {
+  const quadrant = getQuadrant(tooth);
+  if (!quadrant) {
+    return false;
+  }
+
+  return quadrant === 1 || quadrant === 3 || quadrant === 5 || quadrant === 7;
+}
+
+function getToothSurfaceLayout(tooth: string, flipOverride?: boolean) {
+  const flip = typeof flipOverride === 'boolean' ? flipOverride : shouldFlipMesialDistal(tooth);
+
+  if (!flip) {
+    return ODONTOGRAM_BASE_SURFACE_LAYOUT;
+  }
+
+  return ODONTOGRAM_BASE_SURFACE_LAYOUT.map((surface) => {
+    if (surface.key === 'mesial') {
+      return { ...surface, col: 3 };
+    }
+
+    if (surface.key === 'distal') {
+      return { ...surface, col: 1 };
+    }
+
+    return surface;
+  });
+}
 
 function getQuadrant(tooth: string): number | null {
   const quadrant = Number.parseInt(tooth.charAt(0), 10);
@@ -282,23 +311,25 @@ function getSurfaceAbbreviation(tooth: string, surface: OdontogramSurface): stri
   }
 }
 
-const ODONTOGRAM_QUADRANTS: Array<{ label: string; teeth: string[] }> = [
-  {
-    label: 'Cuadrante superior derecho',
-    teeth: ['18', '17', '16', '15', '14', '13', '12', '11'],
-  },
-  {
-    label: 'Cuadrante superior izquierdo',
-    teeth: ['21', '22', '23', '24', '25', '26', '27', '28'],
-  },
-  {
-    label: 'Cuadrante inferior derecho',
-    teeth: ['48', '47', '46', '45', '44', '43', '42', '41'],
-  },
-  {
-    label: 'Cuadrante inferior izquierdo',
-    teeth: ['31', '32', '33', '34', '35', '36', '37', '38'],
-  },
+type ToothRowConfig = {
+  label: string;
+  teeth: string[];
+  labelPosition: 'top' | 'bottom';
+  flipMesial: boolean;
+};
+
+const PERMANENT_TOOTH_ROWS: ToothRowConfig[] = [
+  { label: '18 – 11', teeth: ['18', '17', '16', '15', '14', '13', '12', '11'], labelPosition: 'top', flipMesial: true },
+  { label: '21 – 28', teeth: ['21', '22', '23', '24', '25', '26', '27', '28'], labelPosition: 'top', flipMesial: false },
+  { label: '48 – 41', teeth: ['48', '47', '46', '45', '44', '43', '42', '41'], labelPosition: 'bottom', flipMesial: true },
+  { label: '31 – 38', teeth: ['31', '32', '33', '34', '35', '36', '37', '38'], labelPosition: 'bottom', flipMesial: false },
+];
+
+const PRIMARY_TOOTH_ROWS: ToothRowConfig[] = [
+  { label: '55 – 51', teeth: ['55', '54', '53', '52', '51'], labelPosition: 'top', flipMesial: true },
+  { label: '61 – 65', teeth: ['61', '62', '63', '64', '65'], labelPosition: 'top', flipMesial: false },
+  { label: '85 – 81', teeth: ['85', '84', '83', '82', '81'], labelPosition: 'bottom', flipMesial: true },
+  { label: '71 – 75', teeth: ['71', '72', '73', '74', '75'], labelPosition: 'bottom', flipMesial: false },
 ];
 
 function cloneOdontogram(
@@ -434,12 +465,10 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
   const [selectedProcedure, setSelectedProcedure] = useState<OdontogramProcedure>('caries');
   const [selectedStatus, setSelectedStatus] = useState<OdontogramMarkStatus>('planned');
   const [odontogramTool, setOdontogramTool] = useState<'apply' | 'erase'>('apply');
-  const [odontogramSectionsOpen, setOdontogramSectionsOpen] = useState<Record<string, boolean>>(() =>
-    ODONTOGRAM_QUADRANTS.reduce<Record<string, boolean>>((accumulator, quadrant) => {
-      accumulator[quadrant.label] = true;
-      return accumulator;
-    }, {} as Record<string, boolean>),
-  );
+  const [activeTooth, setActiveTooth] = useState<string | null>(() => {
+    const firstTooth = history?.odontogram ? Object.keys(history.odontogram)[0] : undefined;
+    return firstTooth ?? null;
+  });
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -472,6 +501,8 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
     }
     setStages(nextStages);
     setOdontogram(cloneOdontogram(history?.odontogram ?? null));
+    const firstTooth = history?.odontogram ? Object.keys(history.odontogram)[0] : null;
+    setActiveTooth(firstTooth ?? null);
     setSelectedProcedure('caries');
     setSelectedStatus('planned');
     setOdontogramTool('apply');
@@ -482,6 +513,17 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
       }, {} as Record<ClinicalStage, boolean>),
     );
   }, [history]);
+
+  useEffect(() => {
+    if (activeTooth) {
+      return;
+    }
+
+    const firstTooth = Object.keys(odontogram)[0];
+    if (firstTooth) {
+      setActiveTooth(firstTooth);
+    }
+  }, [activeTooth, odontogram]);
 
   const lastUpdated = useMemo(() => {
     if (!history?.updatedAt) {
@@ -496,6 +538,26 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
       minute: '2-digit',
     });
   }, [history?.updatedAt]);
+
+  const activeToothMarks = useMemo(() => {
+    if (!activeTooth) {
+      return [] as Array<{ surface: OdontogramSurface; mark: OdontogramSurfaceMark }>;
+    }
+
+    const toothState = odontogram[activeTooth];
+    if (!toothState) {
+      return [] as Array<{ surface: OdontogramSurface; mark: OdontogramSurfaceMark }>;
+    }
+
+    const entries: Array<{ surface: OdontogramSurface; mark: OdontogramSurfaceMark }> = [];
+    for (const surface of ODONTOGRAM_SURFACE_SEQUENCE) {
+      const mark = toothState[surface];
+      if (mark) {
+        entries.push({ surface, mark });
+      }
+    }
+    return entries;
+  }, [activeTooth, odontogram]);
 
   const handleStageChange = (
     stage: ClinicalStage,
@@ -558,6 +620,7 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
     tooth: string,
     surface: Exclude<OdontogramSurface, 'whole' | 'crown'>,
   ) => {
+    setActiveTooth(tooth);
     updateToothState(tooth, (current) => {
       const next = current ? { ...current } : {};
 
@@ -583,6 +646,7 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
   };
 
   const handleWholeToggle = (tooth: string) => {
+    setActiveTooth(tooth);
     updateToothState(tooth, (current) => {
       const next = current ? { ...current } : {};
 
@@ -608,6 +672,7 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
   };
 
   const handleCrownToggle = (tooth: string) => {
+    setActiveTooth(tooth);
     updateToothState(tooth, (current) => {
       const next = current ? { ...current } : {};
 
@@ -646,6 +711,82 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
 
   const clearOdontogram = () => {
     setOdontogram({});
+    setActiveTooth(null);
+  };
+
+  const renderTooth = (tooth: string, labelPosition: 'top' | 'bottom', flipMesial: boolean) => {
+    const toothState = odontogram[tooth];
+    const wholeMark = toothState?.whole;
+    const crownMark = toothState?.crown;
+    const isActive = activeTooth === tooth;
+    const outlineClass = wholeMark
+      ? ODONTOGRAM_STATUS_RING_CLASSES[wholeMark.status]
+      : 'border-white/10';
+    const layout = getToothSurfaceLayout(tooth, flipMesial);
+
+    const renderNumberButton = () => (
+      <button
+        type="button"
+        onClick={() => setActiveTooth(tooth)}
+        className={`text-[11px] font-semibold transition ${
+          isActive ? 'text-cyan-300' : 'text-slate-300 hover:text-cyan-100'
+        }`}
+      >
+        {tooth}
+      </button>
+    );
+
+    return (
+      <div key={tooth} className="flex flex-col items-center gap-1">
+        {labelPosition === 'top' && renderNumberButton()}
+        <div
+          className={`relative rounded-xl ${
+            isActive ? 'ring-2 ring-cyan-400/60 ring-offset-2 ring-offset-slate-950' : ''
+          }`}
+        >
+          <div
+            className={`relative grid h-14 w-14 grid-cols-3 grid-rows-3 gap-[2px] rounded-lg border bg-slate-900/60 ${outlineClass}`}
+          >
+            {crownMark && (
+              <div
+                className={`pointer-events-none absolute inset-2 rounded-full border-2 ${
+                  ODONTOGRAM_STATUS_RING_CLASSES[crownMark.status]
+                }`}
+              />
+            )}
+            {layout.map((surface) => {
+              const mark = toothState?.[surface.key];
+              const buttonClasses = mark
+                ? ODONTOGRAM_STATUS_SURFACE_CLASSES[mark.status]
+                : 'border-white/10 bg-slate-900/60 text-slate-300 hover:border-cyan-300/60 hover:text-cyan-100';
+
+              return (
+                <button
+                  key={`${tooth}-${surface.key}`}
+                  type="button"
+                  style={{ gridRowStart: surface.row, gridColumnStart: surface.col }}
+                  onClick={() => {
+                    setActiveTooth(tooth);
+                    handleSurfaceMark(tooth, surface.key);
+                  }}
+                  className={`relative flex items-center justify-center rounded-sm border text-[10px] font-semibold uppercase tracking-wide transition focus:outline-none focus:ring-2 focus:ring-cyan-300/40 focus:ring-offset-1 focus:ring-offset-slate-950 ${buttonClasses}`}
+                >
+                  <span>{getSurfaceAbbreviation(tooth, surface.key)}</span>
+                  <span className="sr-only">
+                    {`${getSurfaceLabel(tooth, surface.key)} · ${
+                      mark
+                        ? `${ODONTOGRAM_CONDITION_LABELS[mark.condition]} (${ODONTOGRAM_STATUS_LABELS[mark.status]})`
+                        : 'Sin registro'
+                    }`}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+        {labelPosition === 'bottom' && renderNumberButton()}
+      </div>
+    );
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -981,140 +1122,95 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
             </div>
           </div>
         </div>
-        <div className="space-y-5">
-          {ODONTOGRAM_QUADRANTS.map((quadrant) => (
-            <details
-              key={quadrant.label}
-              className="rounded-xl border border-white/5 bg-slate-950/40 p-4"
-              open={odontogramSectionsOpen[quadrant.label] ?? true}
-              onToggle={(event) => {
-                const isOpen = event.currentTarget.open;
-                setOdontogramSectionsOpen((previous) => ({
-                  ...previous,
-                  [quadrant.label]: isOpen,
-                }));
-              }}
-            >
-              <summary className="cursor-pointer text-sm font-semibold text-white">
-                {quadrant.label}
-              </summary>
-              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                {quadrant.teeth.map((tooth) => {
-                  const toothState = odontogram[tooth];
-                  const wholeMark = toothState?.whole;
-                  const crownMark = toothState?.crown;
-                  const toothOutlineClass = wholeMark
-                    ? ODONTOGRAM_STATUS_RING_CLASSES[wholeMark.status]
-                    : 'border-white/10';
-                  const summaryChips = ODONTOGRAM_SURFACE_SEQUENCE.map((surface) => {
-                    const mark = toothState?.[surface];
-                    if (!mark) {
-                      return null;
-                    }
-
-                    const label = getSurfaceLabel(tooth, surface);
-                    const conditionLabel = ODONTOGRAM_CONDITION_LABELS[mark.condition];
-
-                    return (
-                      <span
-                        key={`${tooth}-${surface}`}
-                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium ${ODONTOGRAM_STATUS_BADGES[mark.status]}`}
-                      >
-                        <span>{label}</span>
-                        <span className="font-semibold text-white">{conditionLabel}</span>
-                        <span className="text-[10px] uppercase tracking-wide opacity-80">
-                          {ODONTOGRAM_STATUS_LABELS[mark.status]}
-                        </span>
-                      </span>
-                    );
-                  }).filter((chip): chip is NonNullable<typeof chip> => chip !== null);
-
-                  return (
-                    <div
-                      key={tooth}
-                      className="space-y-3 rounded-xl border border-white/10 bg-slate-950/70 p-3 shadow-inner shadow-cyan-500/10"
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_260px]">
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">Dentición permanente</p>
+              {PERMANENT_TOOTH_ROWS.map((row) => (
+                <div key={row.label} className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{row.label}</p>
+                  <div className="flex flex-wrap items-start justify-center gap-3">
+                    {row.teeth.map((tooth) => renderTooth(tooth, row.labelPosition, row.flipMesial))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">Dentición temporal</p>
+              {PRIMARY_TOOTH_ROWS.map((row) => (
+                <div key={row.label} className="space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{row.label}</p>
+                  <div className="flex flex-wrap items-start justify-center gap-3">
+                    {row.teeth.map((tooth) => renderTooth(tooth, row.labelPosition, row.flipMesial))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <aside className="flex h-full flex-col justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
+            <div className="space-y-3">
+              {activeTooth ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-base font-semibold text-white">Pieza {activeTooth}</h4>
+                    <button
+                      type="button"
+                      onClick={() => clearTooth(activeTooth)}
+                      className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold text-slate-300 transition hover:border-rose-400/60 hover:text-rose-200"
                     >
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <p className="text-sm font-semibold text-white">Pieza {tooth}</p>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => handleWholeToggle(tooth)}
-                            className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
-                              wholeMark
-                                ? ODONTOGRAM_STATUS_SURFACE_CLASSES[wholeMark.status]
-                                : 'border-white/10 text-slate-300 hover:border-cyan-300/60 hover:text-cyan-100'
-                            }`}
-                          >
-                            Pieza completa
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleCrownToggle(tooth)}
-                            className={`rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
-                              crownMark
-                                ? ODONTOGRAM_STATUS_SURFACE_CLASSES[crownMark.status]
-                                : 'border-white/10 text-slate-300 hover:border-cyan-300/60 hover:text-cyan-100'
-                            }`}
-                          >
-                            Corona
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => clearTooth(tooth)}
-                            className="rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold text-slate-300 transition hover:border-rose-400/60 hover:text-rose-200"
-                          >
-                            Limpiar
-                          </button>
-                        </div>
-                      </div>
-                      <div className="relative flex justify-center">
-                        <div
-                          className={`relative grid h-24 w-24 grid-cols-3 grid-rows-3 gap-0.5 rounded-lg border bg-slate-900/50 transition-colors ${toothOutlineClass}`}
+                      Limpiar
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-300">
+                    Seleccioná una cara para aplicar el procedimiento y estado definidos. Usá las acciones inferiores para marcar la
+                    pieza completa o la corona.
+                  </p>
+                  {activeToothMarks.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {activeToothMarks.map(({ surface, mark }) => (
+                        <span
+                          key={`${activeTooth}-${surface}`}
+                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-medium ${ODONTOGRAM_STATUS_BADGES[mark.status]}`}
                         >
-                          {crownMark && (
-                            <div
-                              className={`pointer-events-none absolute inset-3 rounded-full border-2 ${ODONTOGRAM_STATUS_RING_CLASSES[crownMark.status]}`}
-                            />
-                          )}
-                          {ODONTOGRAM_SURFACE_LAYOUT.map((surface) => {
-                            const mark = toothState?.[surface.key];
-                            const buttonClasses = mark
-                              ? ODONTOGRAM_STATUS_SURFACE_CLASSES[mark.status]
-                              : 'border-white/10 bg-slate-900/60 text-slate-300 hover:border-cyan-300/60 hover:text-cyan-100';
-
-                            return (
-                              <button
-                                key={surface.key}
-                                type="button"
-                                style={{ gridRowStart: surface.row, gridColumnStart: surface.col }}
-                                onClick={() => handleSurfaceMark(tooth, surface.key)}
-                                className={`relative flex items-center justify-center rounded-sm border text-[10px] font-semibold uppercase tracking-wide transition focus:outline-none focus:ring-2 focus:ring-cyan-300/40 focus:ring-offset-2 focus:ring-offset-slate-900 ${buttonClasses}`}
-                              >
-                                <span>{getSurfaceAbbreviation(tooth, surface.key)}</span>
-                                <span className="sr-only">
-                                  {`${getSurfaceLabel(tooth, surface.key)} · ${
-                                    mark
-                                      ? `${ODONTOGRAM_CONDITION_LABELS[mark.condition]} (${ODONTOGRAM_STATUS_LABELS[mark.status]})`
-                                      : 'Sin registro'
-                                  }`}
-                                </span>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      {summaryChips.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">{summaryChips}</div>
-                      ) : (
-                        <p className="text-xs text-slate-400">Sin registros para esta pieza.</p>
-                      )}
+                          <span className="font-semibold uppercase">{getSurfaceAbbreviation(activeTooth, surface)}</span>
+                          <span>{ODONTOGRAM_CONDITION_LABELS[mark.condition]}</span>
+                          <span className="text-[10px]">{ODONTOGRAM_STATUS_LABELS[mark.status]}</span>
+                        </span>
+                      ))}
                     </div>
-                  );
-                })}
-              </div>
-            </details>
-          ))}
+                  ) : (
+                    <p className="text-xs text-slate-400">Aún no registraste caras para esta pieza.</p>
+                  )}
+                </>
+              ) : (
+                <div className="space-y-2 text-sm text-slate-300">
+                  <p className="font-semibold text-white">Seleccioná una pieza</p>
+                  <p>
+                    Elegí una pieza del odontograma para ver sus registros y marcar procedimientos. Podés alternar entre realizar o
+                    borrar utilizando las herramientas de la izquierda.
+                  </p>
+                </div>
+              )}
+            </div>
+            <div className="space-y-2">
+              <button
+                type="button"
+                disabled={!activeTooth}
+                onClick={() => activeTooth && handleWholeToggle(activeTooth)}
+                className="w-full rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 transition enabled:hover:border-cyan-300/60 enabled:hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {selectedStatus === 'planned' ? 'Marcar pieza completa (a realizar)' : 'Marcar pieza completa (realizada)'}
+              </button>
+              <button
+                type="button"
+                disabled={!activeTooth}
+                onClick={() => activeTooth && handleCrownToggle(activeTooth)}
+                className="w-full rounded-full border border-white/10 px-3 py-2 text-xs font-semibold text-slate-200 transition enabled:hover:border-cyan-300/60 enabled:hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {selectedStatus === 'planned' ? 'Marcar corona (a realizar)' : 'Marcar corona (realizada)'}
+              </button>
+            </div>
+          </aside>
         </div>
       </section>
 
