@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSharp } from '@/lib/utils/sharp';
 import { getUserFromRequest } from '@/lib/auth/get-user';
 import {
   createPrescriptionRecord,
@@ -24,15 +23,6 @@ function parseSignatureDataUrl(dataUrl: string): { buffer: Buffer; mimeType: str
   return {
     buffer: Buffer.from(base64, 'base64'),
     mimeType,
-  };
-}
-
-async function bufferToPngDataUrl(buffer: Buffer): Promise<{ buffer: Buffer; dataUrl: string }> {
-  const sharp = await getSharp();
-  const pngBuffer = await sharp(buffer).png().toBuffer();
-  return {
-    buffer: pngBuffer,
-    dataUrl: `data:image/png;base64,${pngBuffer.toString('base64')}`,
   };
 }
 
@@ -98,18 +88,17 @@ export async function POST(
           { status: 400 },
         );
       }
-      const pngSignature = await bufferToPngDataUrl(stored.buffer);
-      signatureDataUrl = pngSignature.dataUrl;
+      const mimeType = stored.mimeType || 'image/png';
+      signatureDataUrl = `data:${mimeType};base64,${stored.buffer.toString('base64')}`;
       signaturePath = stored.storagePath;
     } else if (body.signatureDataUrl) {
       const parsed = parseSignatureDataUrl(body.signatureDataUrl);
-      const pngSignature = await bufferToPngDataUrl(parsed.buffer);
-      signatureDataUrl = pngSignature.dataUrl;
+      signatureDataUrl = body.signatureDataUrl;
 
       if (body.saveSignature) {
         const saved = await saveProfessionalSignature(user.id, {
-          buffer: pngSignature.buffer,
-          mimeType: 'image/png',
+          buffer: parsed.buffer,
+          mimeType: parsed.mimeType,
         });
         signaturePath = saved.storagePath;
       }

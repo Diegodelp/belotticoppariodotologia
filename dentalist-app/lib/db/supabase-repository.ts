@@ -884,6 +884,7 @@ export async function createTreatment(
       patient_id: treatment.patientId,
       title: treatment.type,
       description: treatment.description,
+      cost: treatment.cost,
       start_date: treatment.date,
     })
     .select('*')
