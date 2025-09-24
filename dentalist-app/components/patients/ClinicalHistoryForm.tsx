@@ -311,25 +311,88 @@ function getSurfaceAbbreviation(tooth: string, surface: OdontogramSurface): stri
   }
 }
 
-type ToothRowConfig = {
+type ToothQuadrantConfig = {
+  id: string;
   label: string;
   teeth: string[];
   labelPosition: 'top' | 'bottom';
   flipMesial: boolean;
 };
 
-const PERMANENT_TOOTH_ROWS: ToothRowConfig[] = [
-  { label: '18 – 11', teeth: ['18', '17', '16', '15', '14', '13', '12', '11'], labelPosition: 'top', flipMesial: true },
-  { label: '21 – 28', teeth: ['21', '22', '23', '24', '25', '26', '27', '28'], labelPosition: 'top', flipMesial: false },
-  { label: '48 – 41', teeth: ['48', '47', '46', '45', '44', '43', '42', '41'], labelPosition: 'bottom', flipMesial: true },
-  { label: '31 – 38', teeth: ['31', '32', '33', '34', '35', '36', '37', '38'], labelPosition: 'bottom', flipMesial: false },
+const PERMANENT_TOOTH_QUADRANTS: Record<'q1' | 'q2' | 'q3' | 'q4', ToothQuadrantConfig> = {
+  q1: {
+    id: 'permanent-q1',
+    label: '18 – 11',
+    teeth: ['18', '17', '16', '15', '14', '13', '12', '11'],
+    labelPosition: 'top',
+    flipMesial: true,
+  },
+  q2: {
+    id: 'permanent-q2',
+    label: '21 – 28',
+    teeth: ['21', '22', '23', '24', '25', '26', '27', '28'],
+    labelPosition: 'top',
+    flipMesial: false,
+  },
+  q3: {
+    id: 'permanent-q3',
+    label: '31 – 38',
+    teeth: ['31', '32', '33', '34', '35', '36', '37', '38'],
+    labelPosition: 'bottom',
+    flipMesial: false,
+  },
+  q4: {
+    id: 'permanent-q4',
+    label: '48 – 41',
+    teeth: ['48', '47', '46', '45', '44', '43', '42', '41'],
+    labelPosition: 'bottom',
+    flipMesial: true,
+  },
+};
+
+const PERMANENT_TOOTH_ORDER: ToothQuadrantConfig[] = [
+  PERMANENT_TOOTH_QUADRANTS.q1,
+  PERMANENT_TOOTH_QUADRANTS.q2,
+  PERMANENT_TOOTH_QUADRANTS.q4,
+  PERMANENT_TOOTH_QUADRANTS.q3,
 ];
 
-const PRIMARY_TOOTH_ROWS: ToothRowConfig[] = [
-  { label: '55 – 51', teeth: ['55', '54', '53', '52', '51'], labelPosition: 'top', flipMesial: true },
-  { label: '61 – 65', teeth: ['61', '62', '63', '64', '65'], labelPosition: 'top', flipMesial: false },
-  { label: '85 – 81', teeth: ['85', '84', '83', '82', '81'], labelPosition: 'bottom', flipMesial: true },
-  { label: '71 – 75', teeth: ['71', '72', '73', '74', '75'], labelPosition: 'bottom', flipMesial: false },
+const PRIMARY_TOOTH_QUADRANTS: Record<'q5' | 'q6' | 'q7' | 'q8', ToothQuadrantConfig> = {
+  q5: {
+    id: 'primary-q5',
+    label: '55 – 51',
+    teeth: ['55', '54', '53', '52', '51'],
+    labelPosition: 'top',
+    flipMesial: true,
+  },
+  q6: {
+    id: 'primary-q6',
+    label: '61 – 65',
+    teeth: ['61', '62', '63', '64', '65'],
+    labelPosition: 'top',
+    flipMesial: false,
+  },
+  q7: {
+    id: 'primary-q7',
+    label: '71 – 75',
+    teeth: ['71', '72', '73', '74', '75'],
+    labelPosition: 'bottom',
+    flipMesial: false,
+  },
+  q8: {
+    id: 'primary-q8',
+    label: '85 – 81',
+    teeth: ['85', '84', '83', '82', '81'],
+    labelPosition: 'bottom',
+    flipMesial: true,
+  },
+};
+
+const PRIMARY_TOOTH_ORDER: ToothQuadrantConfig[] = [
+  PRIMARY_TOOTH_QUADRANTS.q5,
+  PRIMARY_TOOTH_QUADRANTS.q6,
+  PRIMARY_TOOTH_QUADRANTS.q8,
+  PRIMARY_TOOTH_QUADRANTS.q7,
 ];
 
 function cloneOdontogram(
@@ -1126,25 +1189,33 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
           <div className="space-y-6">
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">Dentición permanente</p>
-              {PERMANENT_TOOTH_ROWS.map((row) => (
-                <div key={row.label} className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{row.label}</p>
-                  <div className="flex flex-wrap items-start justify-center gap-3">
-                    {row.teeth.map((tooth) => renderTooth(tooth, row.labelPosition, row.flipMesial))}
+              <div className="grid gap-4 sm:grid-cols-2">
+                {PERMANENT_TOOTH_ORDER.map((quadrant) => (
+                  <div key={quadrant.id} className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{quadrant.label}</p>
+                    <div className="flex flex-wrap items-start justify-center gap-3">
+                      {quadrant.teeth.map((tooth) =>
+                        renderTooth(tooth, quadrant.labelPosition, quadrant.flipMesial),
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-300">Dentición temporal</p>
-              {PRIMARY_TOOTH_ROWS.map((row) => (
-                <div key={row.label} className="space-y-2">
-                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{row.label}</p>
-                  <div className="flex flex-wrap items-start justify-center gap-3">
-                    {row.teeth.map((tooth) => renderTooth(tooth, row.labelPosition, row.flipMesial))}
+              <div className="grid gap-4 sm:grid-cols-2">
+                {PRIMARY_TOOTH_ORDER.map((quadrant) => (
+                  <div key={quadrant.id} className="space-y-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{quadrant.label}</p>
+                    <div className="flex flex-wrap items-start justify-center gap-3">
+                      {quadrant.teeth.map((tooth) =>
+                        renderTooth(tooth, quadrant.labelPosition, quadrant.flipMesial),
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
           <aside className="flex h-full flex-col justify-between gap-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4">
