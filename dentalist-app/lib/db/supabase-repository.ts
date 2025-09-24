@@ -10,6 +10,9 @@ import {
   MedicalBackground,
   Odontogram,
   OdontogramCondition,
+  OdontogramMarkStatus,
+  OdontogramSurface,
+  OdontogramSurfaceMark,
   Patient,
   Payment,
   Prescription,
@@ -69,6 +72,16 @@ const ODONTOGRAM_CONDITIONS: OdontogramCondition[] = [
   'crown',
   'endodontic',
 ];
+const ODONTOGRAM_SURFACES: OdontogramSurface[] = [
+  'mesial',
+  'distal',
+  'occlusal',
+  'vestibular',
+  'lingual',
+  'whole',
+  'crown',
+];
+const ODONTOGRAM_STATUSES: OdontogramMarkStatus[] = ['planned', 'completed'];
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -385,6 +398,18 @@ function mapFamilyHistory(value: unknown): FamilyHistory | null {
   return Object.values(family).some((entry) => typeof entry === 'string' && entry.length > 0) ? family : null;
 }
 
+function isValidOdontogramCondition(value: unknown): value is OdontogramCondition {
+  return typeof value === 'string' && (ODONTOGRAM_CONDITIONS as string[]).includes(value);
+}
+
+function isValidOdontogramSurface(value: unknown): value is OdontogramSurface {
+  return typeof value === 'string' && (ODONTOGRAM_SURFACES as string[]).includes(value);
+}
+
+function isValidOdontogramStatus(value: unknown): value is OdontogramMarkStatus {
+  return typeof value === 'string' && (ODONTOGRAM_STATUSES as string[]).includes(value);
+}
+
 function mapOdontogram(value: unknown): Odontogram | null {
   if (!isPlainRecord(value)) {
     return null;
@@ -397,16 +422,41 @@ function mapOdontogram(value: unknown): Odontogram | null {
       continue;
     }
 
-    const toothState: Partial<Record<OdontogramCondition, boolean>> = {};
+    const toothState: Record<string, OdontogramSurfaceMark> = {};
 
-    for (const condition of ODONTOGRAM_CONDITIONS) {
-      if (typeof rawState[condition] === 'boolean') {
-        toothState[condition] = rawState[condition] as boolean;
+    for (const [surfaceKey, rawMark] of Object.entries(rawState)) {
+      if (!isValidOdontogramSurface(surfaceKey) || !isPlainRecord(rawMark)) {
+        continue;
+      }
+
+      const condition = (rawMark as Record<string, unknown>).condition;
+      const status = (rawMark as Record<string, unknown>).status;
+
+      if (!isValidOdontogramCondition(condition) || !isValidOdontogramStatus(status)) {
+        continue;
+      }
+
+      toothState[surfaceKey] = {
+        condition,
+        status,
+      };
+    }
+
+    if (Object.keys(toothState).length === 0) {
+      for (const condition of ODONTOGRAM_CONDITIONS) {
+        if (rawState[condition] === true) {
+          const fallbackMark: OdontogramSurfaceMark = {
+            condition,
+            status: 'planned',
+          };
+          toothState['whole'] = fallbackMark;
+          break;
+        }
       }
     }
 
     if (Object.keys(toothState).length > 0) {
-      odontogram[tooth] = toothState;
+      odontogram[tooth] = toothState as Record<OdontogramSurface, OdontogramSurfaceMark>;
     }
   }
 
@@ -475,24 +525,37 @@ function normalizeFamilyHistory(
 
 function normalizeOdontogram(
   input: ClinicalHistoryInput['odontogram'],
-): Record<string, Record<OdontogramCondition, boolean>> | null {
+): Record<string, Record<OdontogramSurface, OdontogramSurfaceMark>> | null {
   if (!input) {
     return null;
   }
 
-  const normalized: Record<string, Record<OdontogramCondition, boolean>> = {};
+  const normalized: Record<string, Record<OdontogramSurface, OdontogramSurfaceMark>> = {};
 
   for (const [tooth, state] of Object.entries(input)) {
     if (!state) {
       continue;
     }
 
-    const toothState: Record<OdontogramCondition, boolean> = {} as Record<OdontogramCondition, boolean>;
+    const toothState: Record<OdontogramSurface, OdontogramSurfaceMark> = {} as Record<
+      OdontogramSurface,
+      OdontogramSurfaceMark
+    >;
 
-    for (const condition of ODONTOGRAM_CONDITIONS) {
-      if (state[condition]) {
-        toothState[condition] = true;
+    for (const surface of ODONTOGRAM_SURFACES) {
+      const mark = state[surface];
+      if (!mark) {
+        continue;
       }
+
+      if (!isValidOdontogramCondition(mark.condition) || !isValidOdontogramStatus(mark.status)) {
+        continue;
+      }
+
+      toothState[surface] = {
+        condition: mark.condition,
+        status: mark.status,
+      };
     }
 
     if (Object.keys(toothState).length > 0) {

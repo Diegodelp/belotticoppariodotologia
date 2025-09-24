@@ -87,7 +87,23 @@ export interface FamilyHistory {
 
 export type OdontogramCondition = 'caries' | 'extraction' | 'sealant' | 'crown' | 'endodontic';
 
-export type OdontogramToothState = Partial<Record<OdontogramCondition, boolean>>;
+export type OdontogramMarkStatus = 'planned' | 'completed';
+
+export type OdontogramSurface =
+  | 'mesial'
+  | 'distal'
+  | 'occlusal'
+  | 'vestibular'
+  | 'lingual'
+  | 'whole'
+  | 'crown';
+
+export interface OdontogramSurfaceMark {
+  condition: OdontogramCondition;
+  status: OdontogramMarkStatus;
+}
+
+export type OdontogramToothState = Partial<Record<OdontogramSurface, OdontogramSurfaceMark>>;
 
 export type Odontogram = Record<string, OdontogramToothState>;
 

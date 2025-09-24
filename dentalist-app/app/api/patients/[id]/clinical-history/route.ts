@@ -5,7 +5,14 @@ import {
   getPatientById,
   upsertClinicalHistory,
 } from '@/lib/db/supabase-repository';
-import { ClinicalHistoryInput, ClinicalStage, OdontogramCondition } from '@/types';
+import {
+  ClinicalHistoryInput,
+  ClinicalStage,
+  OdontogramCondition,
+  OdontogramMarkStatus,
+  OdontogramSurface,
+  OdontogramSurfaceMark,
+} from '@/types';
 
 const ALLOWED_STAGES: ClinicalStage[] = ['baseline', 'initial', 'intermediate', 'final'];
 const ODONTOGRAM_CONDITIONS: OdontogramCondition[] = [
@@ -15,6 +22,16 @@ const ODONTOGRAM_CONDITIONS: OdontogramCondition[] = [
   'crown',
   'endodontic',
 ];
+const ODONTOGRAM_SURFACES: OdontogramSurface[] = [
+  'mesial',
+  'distal',
+  'occlusal',
+  'vestibular',
+  'lingual',
+  'whole',
+  'crown',
+];
+const ODONTOGRAM_STATUSES: OdontogramMarkStatus[] = ['planned', 'completed'];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -111,16 +128,44 @@ function sanitizeInput(body: unknown): ClinicalHistoryInput {
         continue;
       }
 
-      const toothState: Record<OdontogramCondition, boolean> = {} as Record<OdontogramCondition, boolean>;
+      const toothState: Partial<Record<OdontogramSurface, OdontogramSurfaceMark>> = {};
 
-      for (const condition of ODONTOGRAM_CONDITIONS) {
-        if (typeof value[condition] === 'boolean') {
-          toothState[condition] = value[condition] as boolean;
+      for (const surface of ODONTOGRAM_SURFACES) {
+        const surfaceValue = value[surface];
+        if (!isRecord(surfaceValue)) {
+          continue;
+        }
+
+        const condition = surfaceValue.condition;
+        const status = surfaceValue.status;
+
+        if (
+          typeof condition === 'string' &&
+          (ODONTOGRAM_CONDITIONS as string[]).includes(condition) &&
+          typeof status === 'string' &&
+          (ODONTOGRAM_STATUSES as string[]).includes(status)
+        ) {
+          toothState[surface] = {
+            condition: condition as OdontogramCondition,
+            status: status as OdontogramMarkStatus,
+          };
+        }
+      }
+
+      if (Object.keys(toothState).length === 0) {
+        for (const condition of ODONTOGRAM_CONDITIONS) {
+          if (value[condition] === true) {
+            toothState.whole = {
+              condition,
+              status: 'planned',
+            };
+            break;
+          }
         }
       }
 
       if (Object.keys(toothState).length > 0) {
-        odontogramEntries[tooth] = toothState;
+        odontogramEntries[tooth] = toothState as Record<OdontogramSurface, OdontogramSurfaceMark>;
       }
     }
   }
