@@ -194,7 +194,7 @@ const ODONTOGRAM_SURFACE_SEQUENCE: OdontogramSurface[] = [
   'lingual',
 ];
 
-const ODONTOGRAM_BASE_SURFACE_LAYOUT: Array<{
+const ODONTOGRAM_UPPER_SURFACE_LAYOUT: Array<{
   key: Exclude<OdontogramSurface, 'whole' | 'crown'>;
   row: number;
   col: number;
@@ -204,6 +204,18 @@ const ODONTOGRAM_BASE_SURFACE_LAYOUT: Array<{
   { key: 'occlusal', row: 2, col: 2 },
   { key: 'distal', row: 2, col: 3 },
   { key: 'lingual', row: 3, col: 2 },
+];
+
+const ODONTOGRAM_LOWER_SURFACE_LAYOUT: Array<{
+  key: Exclude<OdontogramSurface, 'whole' | 'crown'>;
+  row: number;
+  col: number;
+}> = [
+  { key: 'lingual', row: 1, col: 2 },
+  { key: 'mesial', row: 2, col: 1 },
+  { key: 'occlusal', row: 2, col: 2 },
+  { key: 'distal', row: 2, col: 3 },
+  { key: 'vestibular', row: 3, col: 2 },
 ];
 
 function shouldFlipMesialDistal(tooth: string): boolean {
@@ -216,13 +228,17 @@ function shouldFlipMesialDistal(tooth: string): boolean {
 }
 
 function getToothSurfaceLayout(tooth: string, flipOverride?: boolean) {
+  const quadrant = getQuadrant(tooth);
+  const baseLayout = isUpperQuadrant(quadrant)
+    ? ODONTOGRAM_UPPER_SURFACE_LAYOUT
+    : ODONTOGRAM_LOWER_SURFACE_LAYOUT;
   const flip = typeof flipOverride === 'boolean' ? flipOverride : shouldFlipMesialDistal(tooth);
 
   if (!flip) {
-    return ODONTOGRAM_BASE_SURFACE_LAYOUT;
+    return baseLayout;
   }
 
-  return ODONTOGRAM_BASE_SURFACE_LAYOUT.map((surface) => {
+  return baseLayout.map((surface) => {
     if (surface.key === 'mesial') {
       return { ...surface, col: 3 };
     }
@@ -241,7 +257,7 @@ function getQuadrant(tooth: string): number | null {
 }
 
 function isUpperQuadrant(quadrant: number | null) {
-  return quadrant === 1 || quadrant === 2;
+  return quadrant === 1 || quadrant === 2 || quadrant === 5 || quadrant === 6;
 }
 
 function isAnteriorTooth(tooth: string): boolean {

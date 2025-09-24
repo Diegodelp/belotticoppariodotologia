@@ -26,6 +26,7 @@ interface PdfContentOptions {
   patientName: string;
   patientDni: string;
   healthInsurance: string;
+  affiliateNumber: string;
   professionalName: string;
   professionalDni?: string;
   diagnosis: string;
@@ -191,10 +192,7 @@ function buildContentStream(options: PdfContentOptions, signature?: PngImage): B
   };
 
   drawText('F2', 26, COLORS.title, MARGIN + 20, cursorY, options.title);
-  cursorY -= 30;
-
-  drawText('F1', 12, COLORS.muted, MARGIN + 20, cursorY, `Emitido el ${formatDate(options.issuedAt)}`);
-  cursorY -= 40;
+  cursorY -= 44;
 
   drawText('F2', 18, COLORS.subtitle, MARGIN + 20, cursorY, 'Datos del paciente');
   cursorY -= 26;
@@ -202,7 +200,8 @@ function buildContentStream(options: PdfContentOptions, signature?: PngImage): B
   const patientRows = [
     ['Nombre', options.patientName],
     ['DNI', options.patientDni],
-    ['Cobertura', options.healthInsurance],
+    ['Obra Social', options.healthInsurance],
+    ['N.º Afiliado', options.affiliateNumber],
   ] as const;
 
   for (const [label, value] of patientRows) {
@@ -213,7 +212,7 @@ function buildContentStream(options: PdfContentOptions, signature?: PngImage): B
 
   const sections: Array<{ title: string; value: string }> = [
     { title: 'Diagnóstico', value: options.diagnosis || 'No especificado' },
-    { title: 'Medicaciones / Tratamiento indicado', value: options.medication },
+    { title: 'Prescripción', value: `Rp/. ${options.medication}`.trim() },
     { title: 'Indicaciones', value: options.instructions },
     { title: 'Notas adicionales', value: options.notes || 'Sin observaciones' },
   ];
@@ -247,15 +246,16 @@ function buildContentStream(options: PdfContentOptions, signature?: PngImage): B
   commands.push('Q');
 
   if (signature) {
-    const desiredWidth = 190;
-    const desiredHeight = 90;
-    const scaleX = desiredWidth;
-    const scaleY = desiredHeight;
-    const positionX = signatureEndX - desiredWidth;
-    const positionY = signatureLineY - desiredHeight + 20;
+    const maxWidth = 190;
+    const maxHeight = 90;
+    const scale = Math.min(maxWidth / signature.width, maxHeight / signature.height);
+    const drawWidth = signature.width * scale;
+    const drawHeight = signature.height * scale;
+    const positionX = signatureEndX - drawWidth;
+    const positionY = signatureLineY - drawHeight + 20;
 
     commands.push('q');
-    commands.push(`${scaleX} 0 0 ${scaleY} ${positionX} ${positionY} cm`);
+    commands.push(`${drawWidth} 0 0 ${drawHeight} ${positionX} ${positionY} cm`);
     commands.push('/Im1 Do');
     commands.push('Q');
   }
@@ -267,6 +267,8 @@ function buildContentStream(options: PdfContentOptions, signature?: PngImage): B
     : 'Firma digital';
 
   drawText('F1', 11, COLORS.muted, signatureStartX + 10, signatureLineY - 48, professionalLabel);
+
+  drawText('F2', 12, COLORS.label, MARGIN + 20, signatureLineY - 18, `Fecha: ${formatDate(options.issuedAt)}`);
 
   return Buffer.from(commands.join('\n') + '\n', 'utf8');
 }
@@ -306,9 +308,8 @@ export interface PrescriptionPdfOptions {
 
 export async function generatePrescriptionPdf(options: PrescriptionPdfOptions): Promise<Buffer> {
   const issuedAt = options.issuedAt ?? new Date();
-  const insuranceLabel = options.healthInsurance
-    ? `${options.healthInsurance}${options.affiliateNumber ? ` · N.º ${options.affiliateNumber}` : ''}`
-    : 'Particular';
+  const insuranceLabel = options.healthInsurance ? options.healthInsurance : 'Particular';
+  const affiliateLabel = options.affiliateNumber?.trim() || 'No informado';
 
   let signature: PngImage | undefined;
   if (options.signatureDataUrl) {
@@ -329,6 +330,7 @@ export async function generatePrescriptionPdf(options: PrescriptionPdfOptions): 
     patientName: options.patientName,
     patientDni: options.patientDni ?? 'No informado',
     healthInsurance: insuranceLabel,
+    affiliateNumber: affiliateLabel,
     professionalName: options.professionalName,
     professionalDni: options.professionalDni,
     diagnosis: options.diagnosis?.trim() || 'No especificado',
