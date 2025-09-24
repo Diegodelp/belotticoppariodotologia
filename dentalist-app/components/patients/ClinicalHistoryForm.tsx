@@ -165,6 +165,15 @@ function stageHasValues(stage: ClinicalStage, values: ClinicalHistoryInput['stag
   return Object.values(stageValues).some((value) => typeof value === 'string' && value.trim().length > 0);
 }
 
+function stageHasValuesInHistory(stage: ClinicalStage, history: ClinicalHistory | null): boolean {
+  const stageValues = history?.stages?.[stage];
+  if (!stageValues) {
+    return false;
+  }
+
+  return Object.values(stageValues).some((value) => typeof value === 'string' && value.trim().length > 0);
+}
+
 function buildMedicalBackgroundState(
   source?: ClinicalHistory['medicalBackground'] | ClinicalHistoryInput['medicalBackground'],
 ): MedicalBackgroundState {
@@ -237,8 +246,20 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
     }
     return initial;
   });
+  const [stageOpenState, setStageOpenState] = useState<Record<ClinicalStage, boolean>>(() =>
+    STAGES.reduce<Record<ClinicalStage, boolean>>((accumulator, { key }) => {
+      accumulator[key] = key === 'baseline' || stageHasValuesInHistory(key, history);
+      return accumulator;
+    }, {} as Record<ClinicalStage, boolean>),
+  );
   const [odontogram, setOdontogram] = useState<OdontogramState>(() =>
     cloneOdontogram(history?.odontogram ?? null),
+  );
+  const [odontogramSectionsOpen, setOdontogramSectionsOpen] = useState<Record<string, boolean>>(() =>
+    ODONTOGRAM_QUADRANTS.reduce<Record<string, boolean>>((accumulator, quadrant) => {
+      accumulator[quadrant.label] = true;
+      return accumulator;
+    }, {} as Record<string, boolean>),
   );
   const [saving, setSaving] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
@@ -272,6 +293,12 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
     }
     setStages(nextStages);
     setOdontogram(cloneOdontogram(history?.odontogram ?? null));
+    setStageOpenState(
+      STAGES.reduce<Record<ClinicalStage, boolean>>((accumulator, { key }) => {
+        accumulator[key] = key === 'baseline' || stageHasValuesInHistory(key, history ?? null);
+        return accumulator;
+      }, {} as Record<ClinicalStage, boolean>),
+    );
   }, [history]);
 
   const lastUpdated = useMemo(() => {
@@ -538,11 +565,20 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
           <details
             key={stage.key}
             className="rounded-2xl border border-white/5 bg-white/5 p-4 shadow-sm shadow-cyan-500/5"
-            defaultOpen={stage.key === 'baseline' || stageHasValues(stage.key, stages)}
+            open={stageOpenState[stage.key] ?? false}
+            onToggle={(event) => {
+              const isOpen = event.currentTarget.open;
+              setStageOpenState((previous) => ({
+                ...previous,
+                [stage.key]: isOpen,
+              }));
+            }}
           >
             <summary className="flex cursor-pointer items-center justify-between gap-3 text-white">
               <span className="text-lg font-semibold">{stage.label}</span>
-              <span className="text-xs font-semibold uppercase tracking-wide text-cyan-200">Ver detalle</span>
+              <span className="text-xs font-semibold uppercase tracking-wide text-cyan-200">
+                {stageHasValues(stage.key, stages) ? 'Editar' : 'Completar'}
+              </span>
             </summary>
             <p className="mt-2 text-xs text-slate-300">{stage.description}</p>
             <div className="mt-4 grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -585,7 +621,14 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
             <details
               key={quadrant.label}
               className="rounded-xl border border-white/5 bg-slate-950/40 p-4"
-              defaultOpen
+              open={odontogramSectionsOpen[quadrant.label] ?? true}
+              onToggle={(event) => {
+                const isOpen = event.currentTarget.open;
+                setOdontogramSectionsOpen((previous) => ({
+                  ...previous,
+                  [quadrant.label]: isOpen,
+                }));
+              }}
             >
               <summary className="cursor-pointer text-sm font-semibold text-white">
                 {quadrant.label}
