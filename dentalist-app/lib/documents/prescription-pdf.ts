@@ -19,6 +19,7 @@ interface PngImage {
   width: number;
   height: number;
   data: Buffer;
+  alpha?: Buffer;
 }
 
 interface PdfContentOptions {
@@ -137,11 +138,13 @@ function parsePng(buffer: Buffer): PngImage {
   const bytesPerPixel = 4;
   const stride = width * bytesPerPixel;
   const rgbBytes = Buffer.alloc(width * height * 3);
+  const alphaBytes = Buffer.alloc(width * height);
   const decodedRow = Buffer.alloc(stride);
   const previousRow = Buffer.alloc(stride);
 
   let srcOffset = 0;
   let dstOffset = 0;
+  let alphaOffset = 0;
 
   const paethPredictor = (left: number, up: number, upLeft: number) => {
     const p = left + up - upLeft;
@@ -191,15 +194,12 @@ function parsePng(buffer: Buffer): PngImage {
       const r = decodedRow[x];
       const g = decodedRow[x + 1];
       const b = decodedRow[x + 2];
-      const a = decodedRow[x + 3] / 255;
+      const a = decodedRow[x + 3];
 
-      const outR = Math.round(r * a + 255 * (1 - a));
-      const outG = Math.round(g * a + 255 * (1 - a));
-      const outB = Math.round(b * a + 255 * (1 - a));
-
-      rgbBytes[dstOffset++] = outR;
-      rgbBytes[dstOffset++] = outG;
-      rgbBytes[dstOffset++] = outB;
+      rgbBytes[dstOffset++] = r;
+      rgbBytes[dstOffset++] = g;
+      rgbBytes[dstOffset++] = b;
+      alphaBytes[alphaOffset++] = a;
     }
 
     decodedRow.copy(previousRow);
@@ -207,7 +207,8 @@ function parsePng(buffer: Buffer): PngImage {
   }
 
   const recompressed = deflateSync(rgbBytes);
-  return { width, height, data: recompressed };
+  const alphaCompressed = deflateSync(alphaBytes);
+  return { width, height, data: recompressed, alpha: alphaCompressed };
 }
 
 function fontWidth(text: string, size: number): number {
@@ -303,8 +304,9 @@ function buildContentStream(options: PdfContentOptions, signature?: PngImage): B
     const scale = Math.min(maxWidth / signature.width, maxHeight / signature.height);
     const drawWidth = signature.width * scale;
     const drawHeight = signature.height * scale;
-    const positionX = signatureEndX - drawWidth;
-    const positionY = signatureLineY - drawHeight + 20;
+    const signatureAreaWidth = signatureEndX - signatureStartX;
+    const positionX = signatureStartX + (signatureAreaWidth - drawWidth) / 2;
+    const positionY = signatureLineY + 10;
 
     commands.push('q');
     commands.push(`${drawWidth} 0 0 ${drawHeight} ${positionX} ${positionY} cm`);
@@ -403,6 +405,7 @@ export async function generatePrescriptionPdf(options: PrescriptionPdfOptions): 
   const fontRegularId = idCounter++;
   const fontBoldId = idCounter++;
   const imageId = signature ? idCounter++ : null;
+  const maskId = signature?.alpha ? idCounter++ : null;
   const contentId = idCounter++;
 
   objects.push(createObject(catalogId, `<< /Type /Catalog /Pages ${pagesId} 0 R >>`));
@@ -434,6 +437,20 @@ export async function generatePrescriptionPdf(options: PrescriptionPdfOptions): 
   );
 
   if (signature && imageId) {
+    if (maskId && signature.alpha) {
+      objects.push(
+        createStreamObject(maskId, [
+          '/Type /XObject',
+          '/Subtype /Image',
+          `/Width ${signature.width}`,
+          `/Height ${signature.height}`,
+          '/ColorSpace /DeviceGray',
+          '/BitsPerComponent 8',
+          '/Filter /FlateDecode',
+        ], signature.alpha),
+      );
+    }
+
     objects.push(
       createStreamObject(imageId, [
         '/Type /XObject',
@@ -443,6 +460,7 @@ export async function generatePrescriptionPdf(options: PrescriptionPdfOptions): 
         '/ColorSpace /DeviceRGB',
         '/BitsPerComponent 8',
         '/Filter /FlateDecode',
+        ...(maskId ? [`/SMask ${maskId} 0 R`] : []),
       ], signature.data),
     );
   }
