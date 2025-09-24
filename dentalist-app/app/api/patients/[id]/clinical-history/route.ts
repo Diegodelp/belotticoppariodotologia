@@ -5,12 +5,28 @@ import {
   getPatientById,
   upsertClinicalHistory,
 } from '@/lib/db/supabase-repository';
-import { ClinicalHistoryInput, ClinicalStage } from '@/types';
+import { ClinicalHistoryInput, ClinicalStage, OdontogramCondition } from '@/types';
 
 const ALLOWED_STAGES: ClinicalStage[] = ['baseline', 'initial', 'intermediate', 'final'];
+const ODONTOGRAM_CONDITIONS: OdontogramCondition[] = [
+  'caries',
+  'extraction',
+  'sealant',
+  'crown',
+  'endodontic',
+];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function sanitizeString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function sanitizeInput(body: unknown): ClinicalHistoryInput {
@@ -42,9 +58,81 @@ function sanitizeInput(body: unknown): ClinicalHistoryInput {
     };
   }
 
+  const reasonForConsultation = sanitizeString(isBodyRecord ? body.reasonForConsultation : undefined);
+  const allergies = sanitizeString(isBodyRecord ? body.allergies : undefined);
+
+  const medicalBackgroundPayload =
+    isBodyRecord && isRecord(body.medicalBackground)
+      ? (body.medicalBackground as Record<string, unknown>)
+      : null;
+
+  const medicalBackground: ClinicalHistoryInput['medicalBackground'] | undefined = medicalBackgroundPayload
+    ? {
+        personalHistory: sanitizeString(medicalBackgroundPayload.personalHistory),
+        systemicConditions: sanitizeString(medicalBackgroundPayload.systemicConditions),
+        medications: sanitizeString(medicalBackgroundPayload.medications),
+        surgicalHistory: sanitizeString(medicalBackgroundPayload.surgicalHistory),
+        notes: sanitizeString(medicalBackgroundPayload.notes),
+      }
+    : undefined;
+
+  const hasMedicalBackground = medicalBackground
+    ? Object.values(medicalBackground).some((value) => typeof value === 'string' && value.length > 0)
+    : false;
+
+  const familyHistoryPayload =
+    isBodyRecord && isRecord(body.familyHistory)
+      ? (body.familyHistory as Record<string, unknown>)
+      : null;
+
+  const familyHistory: ClinicalHistoryInput['familyHistory'] | undefined = familyHistoryPayload
+    ? {
+        father: sanitizeString(familyHistoryPayload.father),
+        mother: sanitizeString(familyHistoryPayload.mother),
+        siblings: sanitizeString(familyHistoryPayload.siblings),
+        others: sanitizeString(familyHistoryPayload.others),
+      }
+    : undefined;
+
+  const hasFamilyHistory = familyHistory
+    ? Object.values(familyHistory).some((value) => typeof value === 'string' && value.length > 0)
+    : false;
+
+  const odontogramPayload =
+    isBodyRecord && isRecord(body.odontogram)
+      ? (body.odontogram as Record<string, unknown>)
+      : null;
+
+  const odontogramEntries: NonNullable<ClinicalHistoryInput['odontogram']> = {};
+
+  if (odontogramPayload) {
+    for (const [tooth, value] of Object.entries(odontogramPayload)) {
+      if (!isRecord(value)) {
+        continue;
+      }
+
+      const toothState: Record<OdontogramCondition, boolean> = {} as Record<OdontogramCondition, boolean>;
+
+      for (const condition of ODONTOGRAM_CONDITIONS) {
+        if (typeof value[condition] === 'boolean') {
+          toothState[condition] = value[condition] as boolean;
+        }
+      }
+
+      if (Object.keys(toothState).length > 0) {
+        odontogramEntries[tooth] = toothState;
+      }
+    }
+  }
+
   return {
     summary,
     stages,
+    reasonForConsultation,
+    allergies,
+    medicalBackground: hasMedicalBackground ? medicalBackground : undefined,
+    familyHistory: hasFamilyHistory ? familyHistory : undefined,
+    odontogram: Object.keys(odontogramEntries).length > 0 ? odontogramEntries : undefined,
   };
 }
 

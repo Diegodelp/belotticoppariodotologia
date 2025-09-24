@@ -70,10 +70,36 @@ export interface ClinicalHistoryStage extends CephalometricValues {
   recordedAt?: string;
 }
 
+export interface MedicalBackground {
+  personalHistory?: string;
+  systemicConditions?: string;
+  medications?: string;
+  surgicalHistory?: string;
+  notes?: string;
+}
+
+export interface FamilyHistory {
+  father?: string;
+  mother?: string;
+  siblings?: string;
+  others?: string;
+}
+
+export type OdontogramCondition = 'caries' | 'extraction' | 'sealant' | 'crown' | 'endodontic';
+
+export type OdontogramToothState = Partial<Record<OdontogramCondition, boolean>>;
+
+export type Odontogram = Record<string, OdontogramToothState>;
+
 export interface ClinicalHistory {
   id: string;
   patientId: string;
   summary: string | null;
+  reasonForConsultation: string | null;
+  medicalBackground: MedicalBackground | null;
+  familyHistory: FamilyHistory | null;
+  allergies: string | null;
+  odontogram: Odontogram | null;
   stages: Partial<Record<ClinicalStage, ClinicalHistoryStage>>;
   createdAt: string;
   updatedAt: string;
@@ -81,6 +107,11 @@ export interface ClinicalHistory {
 
 export interface ClinicalHistoryInput {
   summary?: string;
+  reasonForConsultation?: string;
+  medicalBackground?: MedicalBackground;
+  familyHistory?: FamilyHistory;
+  allergies?: string;
+  odontogram?: Odontogram;
   stages: Partial<Record<ClinicalStage, CephalometricValues>>;
 }
 

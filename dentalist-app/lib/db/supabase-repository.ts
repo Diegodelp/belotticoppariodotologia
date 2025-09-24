@@ -6,6 +6,10 @@ import {
   ClinicalHistory,
   ClinicalHistoryInput,
   ClinicalStage,
+  FamilyHistory,
+  MedicalBackground,
+  Odontogram,
+  OdontogramCondition,
   Patient,
   Payment,
   Prescription,
@@ -58,6 +62,26 @@ const SIGNATURES_BUCKET =
   'professional-signatures';
 
 const CLINICAL_STAGES: ClinicalStage[] = ['baseline', 'initial', 'intermediate', 'final'];
+const ODONTOGRAM_CONDITIONS: OdontogramCondition[] = [
+  'caries',
+  'extraction',
+  'sealant',
+  'crown',
+  'endodontic',
+];
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function getOptionalString(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
 
 function getClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -215,6 +239,11 @@ type AppClinicalHistoryRow = {
   patient_id: string;
   professional_id: string;
   summary: string | null;
+  reason_for_consultation: string | null;
+  medical_background: Record<string, unknown> | null;
+  family_history: Record<string, unknown> | null;
+  allergies: string | null;
+  odontogram: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
   cephalometric_records?: AppCephalometricRecordRow[] | null;
@@ -323,6 +352,157 @@ function mapPayment(record: AppPaymentRow): Payment {
   };
 }
 
+function mapMedicalBackground(value: unknown): MedicalBackground | null {
+  if (!isPlainRecord(value)) {
+    return null;
+  }
+
+  const background: MedicalBackground = {
+    personalHistory: getOptionalString(value['personal_history']),
+    systemicConditions: getOptionalString(value['systemic_conditions']),
+    medications: getOptionalString(value['medications']),
+    surgicalHistory: getOptionalString(value['surgical_history']),
+    notes: getOptionalString(value['notes']),
+  };
+
+  return Object.values(background).some((entry) => typeof entry === 'string' && entry.length > 0)
+    ? background
+    : null;
+}
+
+function mapFamilyHistory(value: unknown): FamilyHistory | null {
+  if (!isPlainRecord(value)) {
+    return null;
+  }
+
+  const family: FamilyHistory = {
+    father: getOptionalString(value['father']),
+    mother: getOptionalString(value['mother']),
+    siblings: getOptionalString(value['siblings']),
+    others: getOptionalString(value['others']),
+  };
+
+  return Object.values(family).some((entry) => typeof entry === 'string' && entry.length > 0) ? family : null;
+}
+
+function mapOdontogram(value: unknown): Odontogram | null {
+  if (!isPlainRecord(value)) {
+    return null;
+  }
+
+  const odontogram: Odontogram = {};
+
+  for (const [tooth, rawState] of Object.entries(value)) {
+    if (!isPlainRecord(rawState)) {
+      continue;
+    }
+
+    const toothState: Partial<Record<OdontogramCondition, boolean>> = {};
+
+    for (const condition of ODONTOGRAM_CONDITIONS) {
+      if (typeof rawState[condition] === 'boolean') {
+        toothState[condition] = rawState[condition] as boolean;
+      }
+    }
+
+    if (Object.keys(toothState).length > 0) {
+      odontogram[tooth] = toothState;
+    }
+  }
+
+  return Object.keys(odontogram).length > 0 ? odontogram : null;
+}
+
+function normalizeString(value: string | undefined): string | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeMedicalBackground(
+  input: ClinicalHistoryInput['medicalBackground'],
+): Record<string, string> | null {
+  if (!input) {
+    return null;
+  }
+
+  const normalized: Record<string, string> = {};
+
+  const personalHistory = normalizeString(input.personalHistory);
+  if (personalHistory) normalized.personal_history = personalHistory;
+
+  const systemicConditions = normalizeString(input.systemicConditions);
+  if (systemicConditions) normalized.systemic_conditions = systemicConditions;
+
+  const medications = normalizeString(input.medications);
+  if (medications) normalized.medications = medications;
+
+  const surgicalHistory = normalizeString(input.surgicalHistory);
+  if (surgicalHistory) normalized.surgical_history = surgicalHistory;
+
+  const notes = normalizeString(input.notes);
+  if (notes) normalized.notes = notes;
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+function normalizeFamilyHistory(
+  input: ClinicalHistoryInput['familyHistory'],
+): Record<string, string> | null {
+  if (!input) {
+    return null;
+  }
+
+  const normalized: Record<string, string> = {};
+
+  const father = normalizeString(input.father);
+  if (father) normalized.father = father;
+
+  const mother = normalizeString(input.mother);
+  if (mother) normalized.mother = mother;
+
+  const siblings = normalizeString(input.siblings);
+  if (siblings) normalized.siblings = siblings;
+
+  const others = normalizeString(input.others);
+  if (others) normalized.others = others;
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
+function normalizeOdontogram(
+  input: ClinicalHistoryInput['odontogram'],
+): Record<string, Record<OdontogramCondition, boolean>> | null {
+  if (!input) {
+    return null;
+  }
+
+  const normalized: Record<string, Record<OdontogramCondition, boolean>> = {};
+
+  for (const [tooth, state] of Object.entries(input)) {
+    if (!state) {
+      continue;
+    }
+
+    const toothState: Record<OdontogramCondition, boolean> = {} as Record<OdontogramCondition, boolean>;
+
+    for (const condition of ODONTOGRAM_CONDITIONS) {
+      if (state[condition]) {
+        toothState[condition] = true;
+      }
+    }
+
+    if (Object.keys(toothState).length > 0) {
+      normalized[tooth] = toothState;
+    }
+  }
+
+  return Object.keys(normalized).length > 0 ? normalized : null;
+}
+
 function mapClinicalHistory(row: AppClinicalHistoryRow): ClinicalHistory {
   const stages: ClinicalHistory['stages'] = {};
 
@@ -343,10 +523,19 @@ function mapClinicalHistory(row: AppClinicalHistoryRow): ClinicalHistory {
     };
   }
 
+  const medicalBackground = mapMedicalBackground(row.medical_background);
+  const familyHistory = mapFamilyHistory(row.family_history);
+  const odontogram = mapOdontogram(row.odontogram);
+
   return {
     id: row.id,
     patientId: row.patient_id,
     summary: row.summary,
+    reasonForConsultation: getOptionalString(row.reason_for_consultation) ?? null,
+    medicalBackground: medicalBackground ?? null,
+    familyHistory: familyHistory ?? null,
+    allergies: getOptionalString(row.allergies) ?? null,
+    odontogram: odontogram ?? null,
     stages,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -1012,6 +1201,12 @@ export async function upsertClinicalHistory(
   input: ClinicalHistoryInput,
 ): Promise<ClinicalHistory | null> {
   const client = getClient();
+  const summary = normalizeString(input.summary);
+  const reasonForConsultation = normalizeString(input.reasonForConsultation);
+  const allergies = normalizeString(input.allergies);
+  const medicalBackground = normalizeMedicalBackground(input.medicalBackground);
+  const familyHistory = normalizeFamilyHistory(input.familyHistory);
+  const odontogram = normalizeOdontogram(input.odontogram);
   const { data: existing, error: existingError } = await client
     .from(CLINICAL_HISTORIES_TABLE)
     .select('id')
@@ -1026,7 +1221,14 @@ export async function upsertClinicalHistory(
   if (existing) {
     const { error: updateError } = await client
       .from(CLINICAL_HISTORIES_TABLE)
-      .update({ summary: input.summary ?? null })
+      .update({
+        summary,
+        reason_for_consultation: reasonForConsultation,
+        allergies,
+        medical_background: medicalBackground,
+        family_history: familyHistory,
+        odontogram,
+      })
       .eq('id', existing.id);
     if (updateError) throw updateError;
     historyId = existing.id;
@@ -1036,7 +1238,12 @@ export async function upsertClinicalHistory(
       .insert({
         professional_id: professionalId,
         patient_id: patientId,
-        summary: input.summary ?? null,
+        summary,
+        reason_for_consultation: reasonForConsultation,
+        allergies,
+        medical_background: medicalBackground,
+        family_history: familyHistory,
+        odontogram,
       })
       .select('id')
       .single();
