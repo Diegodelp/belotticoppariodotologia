@@ -3,9 +3,13 @@ import bcrypt from 'bcryptjs';
 import { createClient } from '@supabase/supabase-js';
 import {
   Appointment,
+  Budget,
+  BudgetItem,
+  BudgetPractice,
   ClinicalHistory,
   ClinicalHistoryInput,
   ClinicalStage,
+  CreateBudgetInput,
   FamilyHistory,
   MedicalBackground,
   Odontogram,
@@ -13,9 +17,11 @@ import {
   OdontogramMarkStatus,
   OdontogramSurface,
   OdontogramSurfaceMark,
+  OrthodonticPlan,
   Patient,
   Payment,
   Prescription,
+  PatientOrthodonticPlan,
   Treatment,
   User,
   ProfessionalProfile,
@@ -59,6 +65,20 @@ const PROFESSIONAL_SIGNATURES_TABLE =
   process.env.SUPABASE_TABLE_PROFESSIONAL_SIGNATURES ?? 'professional_signatures';
 const PRESCRIPTIONS_TABLE =
   process.env.SUPABASE_TABLE_PRESCRIPTIONS ?? 'prescriptions';
+const ORTHODONTIC_PLANS_TABLE =
+  process.env.SUPABASE_TABLE_PLANES_ORTODONCIA ??
+  process.env.SUPABASE_TABLE_ORTHODONTIC_PLANS ??
+  'orthodontic_plans';
+const PATIENT_ORTHODONTIC_PLANS_TABLE =
+  process.env.SUPABASE_TABLE_PACIENTES_PLAN_ORTODONCIA ??
+  process.env.SUPABASE_TABLE_PATIENT_ORTHODONTIC_PLANS ??
+  'patient_orthodontic_plans';
+const BUDGETS_TABLE =
+  process.env.SUPABASE_TABLE_PRESUPUESTOS ?? process.env.SUPABASE_TABLE_BUDGETS ?? 'budgets';
+const BUDGET_ITEMS_TABLE =
+  process.env.SUPABASE_TABLE_ITEMS_PRESUPUESTO ??
+  process.env.SUPABASE_TABLE_BUDGET_ITEMS ??
+  'budget_items';
 const DOCUMENTS_BUCKET =
   process.env.SUPABASE_BUCKET_CLINICAL_DOCUMENTS ?? 'clinical-documents';
 const SIGNATURES_BUCKET =
@@ -317,6 +337,51 @@ type AppProfessionalSignatureRow = {
   file_size: number | null;
   updated_at: string;
   created_at: string;
+};
+
+type AppOrthodonticPlanRow = {
+  id: string;
+  professional_id: string;
+  name: string;
+  monthly_fee: number | string;
+  has_initial_fee: boolean;
+  initial_fee: number | string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type AppPatientOrthodonticPlanRow = {
+  id: string;
+  professional_id: string;
+  patient_id: string;
+  plan_id: string;
+  plan_name: string;
+  monthly_fee: number | string;
+  has_initial_fee: boolean;
+  initial_fee: number | string | null;
+  assigned_at: string;
+};
+
+type AppBudgetItemRow = {
+  id: string;
+  budget_id: string;
+  practice: string;
+  description: string | null;
+  amount: number | string | null;
+  created_at?: string | null;
+};
+
+type AppBudgetRow = {
+  id: string;
+  professional_id: string;
+  patient_id: string;
+  title: string;
+  notes: string | null;
+  total: number | string | null;
+  document_path: string | null;
+  created_at: string;
+  updated_at: string;
+  items?: AppBudgetItemRow[] | null;
 };
 
 function mapProfessionalProfile(row: AppProfessionalRow): ProfessionalProfile {
@@ -650,6 +715,58 @@ function mapPrescription(row: AppPrescriptionRow, pdfUrl: string): Prescription 
     pdfUrl,
     signaturePath: row.signature_path ?? undefined,
     createdAt: row.created_at,
+  };
+}
+
+function mapOrthodonticPlan(row: AppOrthodonticPlanRow): OrthodonticPlan {
+  return {
+    id: row.id,
+    professionalId: row.professional_id,
+    name: row.name,
+    monthlyFee: Number(row.monthly_fee ?? 0),
+    hasInitialFee: Boolean(row.has_initial_fee),
+    initialFee: row.initial_fee !== null && row.initial_fee !== undefined ? Number(row.initial_fee) : null,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapPatientOrthodonticPlan(row: AppPatientOrthodonticPlanRow): PatientOrthodonticPlan {
+  return {
+    id: row.id,
+    professionalId: row.professional_id,
+    patientId: row.patient_id,
+    planId: row.plan_id,
+    name: row.plan_name,
+    monthlyFee: Number(row.monthly_fee ?? 0),
+    hasInitialFee: Boolean(row.has_initial_fee),
+    initialFee: row.initial_fee !== null && row.initial_fee !== undefined ? Number(row.initial_fee) : null,
+    assignedAt: row.assigned_at,
+  };
+}
+
+function mapBudgetItem(row: AppBudgetItemRow): BudgetItem {
+  return {
+    id: row.id,
+    budgetId: row.budget_id,
+    practice: row.practice as BudgetPractice,
+    description: row.description ?? undefined,
+    amount: Number(row.amount ?? 0),
+  };
+}
+
+function mapBudget(row: AppBudgetRow, documentUrl?: string | null): Budget {
+  const items = (row.items ?? []).map(mapBudgetItem);
+  return {
+    id: row.id,
+    professionalId: row.professional_id,
+    patientId: row.patient_id,
+    title: row.title,
+    notes: row.notes ?? undefined,
+    total: Number(row.total ?? 0),
+    documentUrl: documentUrl ?? row.document_path ?? undefined,
+    createdAt: row.created_at,
+    items,
   };
 }
 
@@ -1093,6 +1210,293 @@ export async function removePatient(
     .eq('professional_id', professionalId);
   if (error) throw error;
   return true;
+}
+
+export async function listOrthodonticPlans(professionalId: string): Promise<OrthodonticPlan[]> {
+  const client = getClient();
+  const { data, error } = await client
+    .from(ORTHODONTIC_PLANS_TABLE)
+    .select('*')
+    .eq('professional_id', professionalId)
+    .order('name', { ascending: true });
+
+  if (error) throw error;
+
+  return (data ?? []).map((row) => mapOrthodonticPlan(row as AppOrthodonticPlanRow));
+}
+
+export async function createOrthodonticPlan(
+  professionalId: string,
+  plan: {
+    name: string;
+    monthlyFee: number;
+    hasInitialFee: boolean;
+    initialFee?: number | null;
+  },
+): Promise<OrthodonticPlan> {
+  const client = getClient();
+  const { data, error } = await client
+    .from(ORTHODONTIC_PLANS_TABLE)
+    .insert({
+      professional_id: professionalId,
+      name: plan.name,
+      monthly_fee: plan.monthlyFee,
+      has_initial_fee: plan.hasInitialFee,
+      initial_fee: plan.hasInitialFee ? plan.initialFee ?? 0 : null,
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+
+  return mapOrthodonticPlan(data as AppOrthodonticPlanRow);
+}
+
+export async function updateOrthodonticPlan(
+  professionalId: string,
+  planId: string,
+  updates: Partial<{
+    name: string;
+    monthlyFee: number;
+    hasInitialFee: boolean;
+    initialFee: number | null;
+  }>,
+): Promise<OrthodonticPlan | null> {
+  const client = getClient();
+  const payload: Record<string, unknown> = {};
+
+  if (updates.name !== undefined) {
+    payload['name'] = updates.name;
+  }
+  if (updates.monthlyFee !== undefined) {
+    payload['monthly_fee'] = updates.monthlyFee;
+  }
+  if (updates.hasInitialFee !== undefined) {
+    payload['has_initial_fee'] = updates.hasInitialFee;
+    if (!updates.hasInitialFee) {
+      payload['initial_fee'] = null;
+    } else if (updates.initialFee !== undefined) {
+      payload['initial_fee'] = updates.initialFee ?? 0;
+    }
+  }
+  if (updates.initialFee !== undefined && updates.hasInitialFee === undefined) {
+    payload['initial_fee'] = updates.initialFee;
+  }
+
+  if (Object.keys(payload).length === 0) {
+    const { data } = await client
+      .from(ORTHODONTIC_PLANS_TABLE)
+      .select('*')
+      .eq('professional_id', professionalId)
+      .eq('id', planId)
+      .maybeSingle();
+    return data ? mapOrthodonticPlan(data as AppOrthodonticPlanRow) : null;
+  }
+
+  const { data, error } = await client
+    .from(ORTHODONTIC_PLANS_TABLE)
+    .update(payload)
+    .eq('professional_id', professionalId)
+    .eq('id', planId)
+    .select('*')
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return data ? mapOrthodonticPlan(data as AppOrthodonticPlanRow) : null;
+}
+
+export async function deleteOrthodonticPlan(
+  professionalId: string,
+  planId: string,
+): Promise<void> {
+  const client = getClient();
+  const { error } = await client
+    .from(ORTHODONTIC_PLANS_TABLE)
+    .delete()
+    .eq('professional_id', professionalId)
+    .eq('id', planId);
+
+  if (error) throw error;
+}
+
+export async function assignOrthodonticPlanToPatient(
+  professionalId: string,
+  patientId: string,
+  planId: string,
+): Promise<PatientOrthodonticPlan> {
+  const client = getClient();
+
+  const { data: plan, error: planError } = await client
+    .from(ORTHODONTIC_PLANS_TABLE)
+    .select('*')
+    .eq('professional_id', professionalId)
+    .eq('id', planId)
+    .maybeSingle();
+
+  if (planError) throw planError;
+  if (!plan) {
+    throw new Error('Plan de ortodoncia no encontrado');
+  }
+
+  const initialFeeValue = (plan as AppOrthodonticPlanRow).has_initial_fee
+    ? (plan as AppOrthodonticPlanRow).initial_fee ?? 0
+    : null;
+
+  const { data, error } = await client
+    .from(PATIENT_ORTHODONTIC_PLANS_TABLE)
+    .upsert(
+      {
+        professional_id: professionalId,
+        patient_id: patientId,
+        plan_id: planId,
+        plan_name: (plan as AppOrthodonticPlanRow).name,
+        monthly_fee: (plan as AppOrthodonticPlanRow).monthly_fee,
+        has_initial_fee: (plan as AppOrthodonticPlanRow).has_initial_fee,
+        initial_fee: initialFeeValue,
+      },
+      { onConflict: 'patient_id' },
+    )
+    .select('*')
+    .single();
+
+  if (error) throw error;
+
+  return mapPatientOrthodonticPlan(data as AppPatientOrthodonticPlanRow);
+}
+
+export async function getPatientOrthodonticPlan(
+  professionalId: string,
+  patientId: string,
+): Promise<PatientOrthodonticPlan | null> {
+  const client = getClient();
+  const { data, error } = await client
+    .from(PATIENT_ORTHODONTIC_PLANS_TABLE)
+    .select('*')
+    .eq('professional_id', professionalId)
+    .eq('patient_id', patientId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  return data ? mapPatientOrthodonticPlan(data as AppPatientOrthodonticPlanRow) : null;
+}
+
+export async function removePatientOrthodonticPlan(
+  professionalId: string,
+  patientId: string,
+): Promise<void> {
+  const client = getClient();
+  const { error } = await client
+    .from(PATIENT_ORTHODONTIC_PLANS_TABLE)
+    .delete()
+    .eq('professional_id', professionalId)
+    .eq('patient_id', patientId);
+
+  if (error) throw error;
+}
+
+export async function listBudgets(
+  professionalId: string,
+  patientId: string,
+): Promise<Budget[]> {
+  const client = getClient();
+  const { data, error } = await client
+    .from(BUDGETS_TABLE)
+    .select('*, items:budget_items(*)')
+    .eq('professional_id', professionalId)
+    .eq('patient_id', patientId)
+    .order('created_at', { ascending: false });
+
+  if (error) throw error;
+
+  const rows = (data ?? []) as AppBudgetRow[];
+  const signedUrls = await Promise.all(
+    rows.map((row) =>
+      row.document_path
+        ? createSignedUrl(client, DOCUMENTS_BUCKET, row.document_path)
+        : Promise.resolve<string | null>(null),
+    ),
+  );
+
+  return rows.map((row, index) => mapBudget(row, signedUrls[index] ?? undefined));
+}
+
+export async function createBudgetRecord(
+  professionalId: string,
+  patientId: string,
+  payload: { budget: CreateBudgetInput; pdfBuffer: Buffer },
+): Promise<Budget> {
+  const client = getClient();
+  const total = payload.budget.items.reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+
+  const { data: inserted, error: insertError } = await client
+    .from(BUDGETS_TABLE)
+    .insert({
+      professional_id: professionalId,
+      patient_id: patientId,
+      title: payload.budget.title,
+      notes: payload.budget.notes ?? null,
+      total,
+    })
+    .select('*')
+    .single();
+
+  if (insertError || !inserted) {
+    throw insertError ?? new Error('No pudimos crear el presupuesto');
+  }
+
+  const budgetRow = inserted as AppBudgetRow;
+  const budgetId = budgetRow.id;
+
+  try {
+    if (payload.budget.items.length > 0) {
+      const { error: itemsError } = await client.from(BUDGET_ITEMS_TABLE).insert(
+        payload.budget.items.map((item) => ({
+          budget_id: budgetId,
+          practice: item.practice,
+          description: item.description ?? null,
+          amount: item.amount,
+        })),
+      );
+
+      if (itemsError) throw itemsError;
+    }
+
+    await ensureBucketExists(client, DOCUMENTS_BUCKET);
+    const storagePath = `${professionalId}/patients/${patientId}/budgets/${budgetId}.pdf`;
+
+    const { error: uploadError } = await client.storage
+      .from(DOCUMENTS_BUCKET)
+      .upload(storagePath, payload.pdfBuffer, {
+        contentType: 'application/pdf',
+        upsert: true,
+      });
+
+    if (uploadError) throw uploadError;
+
+    const { data: updated, error: updateError } = await client
+      .from(BUDGETS_TABLE)
+      .update({ document_path: storagePath, total })
+      .eq('professional_id', professionalId)
+      .eq('id', budgetId)
+      .select('*, items:budget_items(*)')
+      .single();
+
+    if (updateError || !updated) {
+      throw updateError ?? new Error('No pudimos guardar el documento del presupuesto');
+    }
+
+    const signedUrl = await createSignedUrl(client, DOCUMENTS_BUCKET, storagePath);
+    return mapBudget(updated as AppBudgetRow, signedUrl ?? undefined);
+  } catch (error) {
+    await client
+      .from(BUDGETS_TABLE)
+      .delete()
+      .eq('professional_id', professionalId)
+      .eq('id', budgetId);
+    throw error;
+  }
 }
 
 export async function listAppointments(professionalId: string, patientId?: string) {

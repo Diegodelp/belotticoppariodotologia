@@ -57,6 +57,29 @@ export interface Payment {
   notes?: string;
 }
 
+export interface OrthodonticPlan {
+  id: string;
+  professionalId: string;
+  name: string;
+  monthlyFee: number;
+  hasInitialFee: boolean;
+  initialFee?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PatientOrthodonticPlan {
+  id: string;
+  patientId: string;
+  planId: string;
+  professionalId: string;
+  name: string;
+  monthlyFee: number;
+  hasInitialFee: boolean;
+  initialFee?: number | null;
+  assignedAt: string;
+}
+
 export type ClinicalStage = 'baseline' | 'initial' | 'intermediate' | 'final';
 
 export interface CephalometricValues {
@@ -177,4 +200,45 @@ export interface CreatePrescriptionInput {
   signatureDataUrl?: string | null;
   useStoredSignature?: boolean;
   saveSignature?: boolean;
+}
+
+export type BudgetPractice =
+  | 'operatoria'
+  | 'exodoncia'
+  | 'limpieza'
+  | 'blanqueamiento'
+  | 'implante'
+  | 'corona'
+  | 'carilla'
+  | 'perno'
+  | 'endodoncia';
+
+export interface BudgetItem {
+  id: string;
+  budgetId: string;
+  practice: BudgetPractice;
+  description?: string | null;
+  amount: number;
+}
+
+export interface Budget {
+  id: string;
+  professionalId: string;
+  patientId: string;
+  title: string;
+  notes?: string | null;
+  total: number;
+  documentUrl?: string | null;
+  createdAt: string;
+  items: BudgetItem[];
+}
+
+export interface CreateBudgetInput {
+  title: string;
+  notes?: string;
+  items: Array<{
+    practice: BudgetPractice;
+    description?: string;
+    amount: number;
+  }>;
 }

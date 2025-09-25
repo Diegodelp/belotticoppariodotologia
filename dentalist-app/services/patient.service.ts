@@ -1,8 +1,11 @@
 import {
+  Budget,
   ClinicalHistory,
   ClinicalHistoryInput,
+  CreateBudgetInput,
   CreatePrescriptionInput,
   Patient,
+  PatientOrthodonticPlan,
   Prescription,
 } from '@/types';
 
@@ -137,6 +140,49 @@ export class PatientService {
         credentials: 'include',
       },
     );
+    return response.json();
+  }
+
+  static async assignOrthodonticPlan(
+    patientId: string,
+    planId: string,
+  ): Promise<{ success: boolean; plan: PatientOrthodonticPlan }> {
+    const response = await fetch(`/api/patients/${patientId}/orthodontic-plan`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ planId }),
+    });
+    return response.json();
+  }
+
+  static async removeOrthodonticPlan(patientId: string): Promise<{ success: boolean }> {
+    const response = await fetch(`/api/patients/${patientId}/orthodontic-plan`, {
+      method: 'DELETE',
+      headers: {
+        ...authHeaders(),
+      },
+      credentials: 'include',
+    });
+    return response.json();
+  }
+
+  static async createBudget(
+    patientId: string,
+    data: CreateBudgetInput,
+  ): Promise<{ success: boolean; budget: Budget }> {
+    const response = await fetch(`/api/patients/${patientId}/budgets`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify(data),
+    });
     return response.json();
   }
 

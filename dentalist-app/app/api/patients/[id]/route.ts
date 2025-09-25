@@ -3,7 +3,9 @@ import { getUserFromRequest } from '@/lib/auth/get-user';
 import {
   getPatientById,
   getClinicalHistory,
+  getPatientOrthodonticPlan,
   listAppointments,
+  listBudgets,
   listPrescriptions,
   listPayments,
   listTreatments,
@@ -25,12 +27,22 @@ export async function GET(
     return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
   }
 
-  const [appointments, treatments, payments, clinicalHistory, prescriptions] = await Promise.all([
+  const [
+    appointments,
+    treatments,
+    payments,
+    clinicalHistory,
+    prescriptions,
+    orthodonticPlan,
+    budgets,
+  ] = await Promise.all([
     listAppointments(user.id, patient.id),
     listTreatments(user.id, patient.id),
     listPayments(user.id, patient.id),
     getClinicalHistory(user.id, patient.id),
     listPrescriptions(user.id, patient.id),
+    getPatientOrthodonticPlan(user.id, patient.id),
+    listBudgets(user.id, patient.id),
   ]);
 
   return NextResponse.json({
@@ -40,6 +52,8 @@ export async function GET(
     payments,
     clinicalHistory,
     prescriptions,
+    orthodonticPlan,
+    budgets,
   });
 }
 
