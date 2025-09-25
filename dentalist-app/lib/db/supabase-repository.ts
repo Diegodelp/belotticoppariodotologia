@@ -208,7 +208,7 @@ type AppPatientRow = {
   email: string | null;
   phone: string | null;
   address: string | null;
-  obra_social: string | null;
+  health_insurance: string | null;
   afiliado: string | null;
   status: string;
 };
@@ -345,7 +345,7 @@ function mapPatient(record: AppPatientRow): Patient {
     email: record.email ?? '',
     phone: record.phone ?? '',
     address: record.address ?? '',
-    healthInsurance: record.obra_social ?? 'Particular',
+    healthInsurance: record.health_insurance ?? 'Particular',
     affiliateNumber: record.afiliado ?? undefined,
     status: (record.status as Patient['status']) ?? 'active',
   };
@@ -1029,7 +1029,7 @@ export async function createPatient(
       email: patient.email,
       phone: patient.phone,
       address: patient.address,
-      obra_social: patient.healthInsurance,
+      health_insurance: patient.healthInsurance,
       afiliado: patient.affiliateNumber,
       status: patient.status,
     })
@@ -1069,7 +1069,7 @@ export async function updatePatient(
       email: updates.email,
       phone: updates.phone,
       address: updates.address,
-      obra_social: updates.healthInsurance,
+      health_insurance: updates.healthInsurance,
       afiliado: updates.affiliateNumber,
       status: updates.status,
     })

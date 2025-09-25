@@ -31,6 +31,7 @@ interface PdfContentOptions {
   professionalName: string;
   professionalDni?: string;
   professionalLicense?: string;
+  professionalLocality?: string;
   diagnosis: string;
   medication: string;
   instructions: string;
