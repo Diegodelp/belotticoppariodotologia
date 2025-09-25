@@ -382,16 +382,20 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
         if (Number.isNaN(amount) || amount < 0) {
           return null;
         }
-        return {
-          practice: item.practice,
-          description: item.description?.trim() || undefined,
-          amount,
-        };
+        const description = item.description?.trim();
+        const sanitized: CreateBudgetInput['items'][number] = description
+          ? {
+              practice: item.practice,
+              description,
+              amount,
+            }
+          : {
+              practice: item.practice,
+              amount,
+            };
+        return sanitized;
       })
-      .filter(
-        (item): item is { practice: BudgetPractice; description?: string | undefined; amount: number } =>
-          item !== null,
-      );
+      .filter((item): item is CreateBudgetInput['items'][number] => item !== null);
 
     if (items.length === 0) {
       setBudgetAlert({
