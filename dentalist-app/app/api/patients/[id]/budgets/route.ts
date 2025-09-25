@@ -69,8 +69,14 @@ export async function POST(
       amount?: unknown;
     };
 
+    type NormalizedBudgetItem = {
+      practice: BudgetPractice;
+      description?: string;
+      amount: number;
+    };
+
     const items = (rawItems as RawBudgetItem[])
-      .map((item) => {
+      .map<NormalizedBudgetItem | null>((item) => {
         const practiceValue = typeof item.practice === 'string' ? item.practice : undefined;
         const practice: BudgetPractice | undefined = practiceValue && PRACTICES.includes(practiceValue as BudgetPractice)
           ? (practiceValue as BudgetPractice)
@@ -81,7 +87,7 @@ export async function POST(
           ? { practice, description, amount }
           : null;
       })
-      .filter((item): item is { practice: BudgetPractice; description?: string; amount: number } => item !== null);
+      .filter((item): item is NormalizedBudgetItem => item !== null);
 
     if (items.length === 0) {
       return NextResponse.json(
