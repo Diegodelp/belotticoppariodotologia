@@ -388,7 +388,10 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
           amount,
         };
       })
-      .filter((item): item is { practice: BudgetPractice; description?: string; amount: number } => item !== null);
+      .filter(
+        (item): item is { practice: BudgetPractice; description?: string | undefined; amount: number } =>
+          item !== null,
+      );
 
     if (items.length === 0) {
       setBudgetAlert({
