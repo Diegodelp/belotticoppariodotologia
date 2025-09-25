@@ -63,13 +63,20 @@ export async function POST(
       return NextResponse.json({ error: 'El título del presupuesto es obligatorio.' }, { status: 400 });
     }
 
-    const items = rawItems
+    type RawBudgetItem = {
+      practice?: unknown;
+      description?: unknown;
+      amount?: unknown;
+    };
+
+    const items = (rawItems as RawBudgetItem[])
       .map((item) => {
-        const practice: BudgetPractice | undefined = PRACTICES.includes(item?.practice)
-          ? (item.practice as BudgetPractice)
+        const practiceValue = typeof item.practice === 'string' ? item.practice : undefined;
+        const practice: BudgetPractice | undefined = practiceValue && PRACTICES.includes(practiceValue as BudgetPractice)
+          ? (practiceValue as BudgetPractice)
           : undefined;
-        const description = typeof item?.description === 'string' ? item.description.trim() : undefined;
-        const amount = Number(item?.amount ?? 0);
+        const description = typeof item.description === 'string' ? item.description.trim() : undefined;
+        const amount = Number(item.amount ?? 0);
         return practice && !Number.isNaN(amount) && amount >= 0
           ? { practice, description, amount }
           : null;
