@@ -284,7 +284,7 @@ function buildContentStream(options: PdfContentOptions, signature?: PngImage): B
       cursorY -= lineHeight;
     }
 
-    cursorY -= 12;
+    cursorY -= 24;
   }
 
   const signatureLineY = MARGIN + 140;
@@ -321,7 +321,9 @@ function buildContentStream(options: PdfContentOptions, signature?: PngImage): B
   if (options.professionalLicense) {
     professionalDetails.push(`Matrícula: ${options.professionalLicense}`);
   }
-  if (options.professionalDni) {
+  if (options.professionalLocality) {
+    professionalDetails.push(`Localidad: ${options.professionalLocality}`);
+  } else if (options.professionalDni) {
     professionalDetails.push(`DNI: ${options.professionalDni}`);
   }
 
@@ -361,6 +363,7 @@ export interface PrescriptionPdfOptions {
   professionalName: string;
   professionalDni?: string;
   professionalLicense?: string;
+  professionalLocality?: string;
   diagnosis?: string;
   medication: string;
   instructions: string;

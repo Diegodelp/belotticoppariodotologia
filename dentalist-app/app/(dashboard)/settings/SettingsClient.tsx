@@ -19,6 +19,9 @@ export function SettingsClient() {
     licenseNumber: '',
     phone: '',
     address: '',
+    country: '',
+    province: '',
+    locality: '',
   });
   const [notifications, setNotifications] = useState({
     whatsapp: true,
@@ -84,6 +87,9 @@ export function SettingsClient() {
           licenseNumber: response.profile.licenseNumber ?? '',
           phone: response.profile.phone ?? '',
           address: response.profile.address ?? '',
+          country: response.profile.country ?? '',
+          province: response.profile.province ?? '',
+          locality: response.profile.locality ?? '',
         });
         setProfileError(null);
       } catch (error) {
@@ -175,6 +181,9 @@ export function SettingsClient() {
         licenseNumber: form.licenseNumber,
         phone: form.phone,
         address: form.address,
+        country: form.country,
+        province: form.province,
+        locality: form.locality,
       });
       setProfile(response.profile);
       setForm({
@@ -183,6 +192,9 @@ export function SettingsClient() {
         licenseNumber: response.profile.licenseNumber ?? '',
         phone: response.profile.phone ?? '',
         address: response.profile.address ?? '',
+        country: response.profile.country ?? '',
+        province: response.profile.province ?? '',
+        locality: response.profile.locality ?? '',
       });
       setProfileError(null);
       setBanner({ type: 'success', text: 'Datos del profesional actualizados.' });
@@ -386,6 +398,48 @@ export function SettingsClient() {
               onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
               autoComplete="street-address"
+              disabled={profileLoading || savingProfile}
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-6 md:grid-cols-3">
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300" htmlFor="profile-country">
+              País
+            </label>
+            <input
+              id="profile-country"
+              value={form.country}
+              onChange={(event) => setForm((prev) => ({ ...prev, country: event.target.value }))}
+              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+              autoComplete="country-name"
+              disabled={profileLoading || savingProfile}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300" htmlFor="profile-province">
+              Provincia / Estado
+            </label>
+            <input
+              id="profile-province"
+              value={form.province}
+              onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))}
+              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+              autoComplete="address-level1"
+              disabled={profileLoading || savingProfile}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm text-slate-300" htmlFor="profile-locality">
+              Localidad
+            </label>
+            <input
+              id="profile-locality"
+              value={form.locality}
+              onChange={(event) => setForm((prev) => ({ ...prev, locality: event.target.value }))}
+              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+              autoComplete="address-level2"
               disabled={profileLoading || savingProfile}
             />
           </div>

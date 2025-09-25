@@ -323,6 +323,7 @@ export function PrescriptionManager({
                     width={112}
                     height={48}
                     className="h-full w-full object-contain"
+                    unoptimized
                   />
                 </span>
                 <div className="flex flex-wrap gap-2 text-xs text-slate-200">

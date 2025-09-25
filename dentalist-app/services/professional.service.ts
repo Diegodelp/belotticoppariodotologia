@@ -39,7 +39,12 @@ export class ProfessionalService {
   }
 
   static async updateProfile(
-    payload: Partial<Pick<ProfessionalProfile, 'fullName' | 'clinicName' | 'licenseNumber' | 'phone' | 'address'>>,
+    payload: Partial<
+      Pick<
+        ProfessionalProfile,
+        'fullName' | 'clinicName' | 'licenseNumber' | 'phone' | 'address' | 'country' | 'province' | 'locality'
+      >
+    >,
   ): Promise<{ profile: ProfessionalProfile }> {
     const response = await fetch('/api/professionals/me', {
       method: 'PUT',

@@ -56,6 +56,30 @@ function parseUpdates(input: unknown): ProfessionalProfileUpdate {
     updates.address = value as string | null;
   }
 
+  if ('country' in record) {
+    const value = record.country;
+    if (typeof value !== 'string' && value !== null) {
+      throw new Error('El país debe ser texto');
+    }
+    updates.country = value as string | null;
+  }
+
+  if ('province' in record) {
+    const value = record.province;
+    if (typeof value !== 'string' && value !== null) {
+      throw new Error('La provincia debe ser texto');
+    }
+    updates.province = value as string | null;
+  }
+
+  if ('locality' in record) {
+    const value = record.locality;
+    if (typeof value !== 'string' && value !== null) {
+      throw new Error('La localidad debe ser texto');
+    }
+    updates.locality = value as string | null;
+  }
+
   return updates;
 }
 

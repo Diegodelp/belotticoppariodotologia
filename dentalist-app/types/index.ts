@@ -8,6 +8,9 @@ export interface User {
   licenseNumber?: string | null;
   phone?: string | null;
   address?: string | null;
+  country?: string | null;
+  province?: string | null;
+  locality?: string | null;
 }
 
 export interface Patient {
@@ -159,6 +162,9 @@ export interface ProfessionalProfile {
   licenseNumber: string | null;
   phone: string | null;
   address: string | null;
+  country: string | null;
+  province: string | null;
+  locality: string | null;
   updatedAt: string | null;
 }
 

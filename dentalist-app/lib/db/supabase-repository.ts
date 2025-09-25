@@ -194,6 +194,9 @@ type AppProfessionalRow = {
   license_number: string | null;
   phone: string | null;
   address: string | null;
+  country: string | null;
+  province: string | null;
+  locality: string | null;
   updated_at: string | null;
 };
 
@@ -326,6 +329,9 @@ function mapProfessionalProfile(row: AppProfessionalRow): ProfessionalProfile {
     licenseNumber: row.license_number ?? null,
     phone: row.phone ?? null,
     address: row.address ?? null,
+    country: row.country ?? null,
+    province: row.province ?? null,
+    locality: row.locality ?? null,
     updatedAt: row.updated_at ?? null,
   };
 }
@@ -716,6 +722,9 @@ export async function registerProfessional(data: {
     licenseNumber: (inserted as { license_number?: string | null }).license_number ?? null,
     phone: (inserted as { phone?: string | null }).phone ?? null,
     address: (inserted as { address?: string | null }).address ?? null,
+    country: (inserted as { country?: string | null }).country ?? null,
+    province: (inserted as { province?: string | null }).province ?? null,
+    locality: (inserted as { locality?: string | null }).locality ?? null,
   };
 }
 
@@ -730,6 +739,9 @@ export type StoredAuthUser = {
   licenseNumber: string | null;
   phone: string | null;
   address: string | null;
+  country: string | null;
+  province: string | null;
+  locality: string | null;
 };
 
 export async function findUserByDni(
@@ -756,6 +768,9 @@ export async function findUserByDni(
       licenseNumber: data.license_number ?? null,
       phone: data.phone ?? null,
       address: data.address ?? null,
+      country: data.country ?? null,
+      province: data.province ?? null,
+      locality: data.locality ?? null,
     };
   }
 
@@ -777,6 +792,9 @@ export async function findUserByDni(
     licenseNumber: null,
     phone: null,
     address: null,
+    country: null,
+    province: null,
+    locality: null,
   };
 }
 
@@ -858,6 +876,9 @@ export type ProfessionalProfileUpdate = {
   licenseNumber?: string | null;
   phone?: string | null;
   address?: string | null;
+  country?: string | null;
+  province?: string | null;
+  locality?: string | null;
 };
 
 export async function getProfessionalProfile(professionalId: string): Promise<ProfessionalProfile | null> {
@@ -865,7 +886,9 @@ export async function getProfessionalProfile(professionalId: string): Promise<Pr
 
   const { data, error } = await client
     .from(PROFESSIONALS_TABLE)
-    .select('id, dni, full_name, email, clinic_name, license_number, phone, address, updated_at')
+    .select(
+      'id, dni, full_name, email, clinic_name, license_number, phone, address, country, province, locality, updated_at',
+    )
     .eq('id', professionalId)
     .maybeSingle<AppProfessionalRow>();
 
@@ -921,6 +944,21 @@ export async function updateProfessionalProfile(
     payload.address = address;
   }
 
+  const country = normalize(updates.country);
+  if (country !== undefined) {
+    payload.country = country;
+  }
+
+  const province = normalize(updates.province);
+  if (province !== undefined) {
+    payload.province = province;
+  }
+
+  const locality = normalize(updates.locality);
+  if (locality !== undefined) {
+    payload.locality = locality;
+  }
+
   if (Object.keys(payload).length === 0) {
     const existing = await getProfessionalProfile(professionalId);
     if (!existing) {
@@ -935,7 +973,9 @@ export async function updateProfessionalProfile(
     .from(PROFESSIONALS_TABLE)
     .update(payload)
     .eq('id', professionalId)
-    .select('id, dni, full_name, email, clinic_name, license_number, phone, address, updated_at')
+    .select(
+      'id, dni, full_name, email, clinic_name, license_number, phone, address, country, province, locality, updated_at',
+    )
     .maybeSingle<AppProfessionalRow>();
 
   if (error) throw error;
@@ -1734,6 +1774,9 @@ export function toPublicUser(user: {
   licenseNumber?: string | null;
   phone?: string | null;
   address?: string | null;
+  country?: string | null;
+  province?: string | null;
+  locality?: string | null;
 }): User {
   return {
     id: user.id,
@@ -1745,5 +1788,8 @@ export function toPublicUser(user: {
     licenseNumber: user.licenseNumber ?? null,
     phone: user.phone ?? null,
     address: user.address ?? null,
+    country: user.country ?? null,
+    province: user.province ?? null,
+    locality: user.locality ?? null,
   };
 }

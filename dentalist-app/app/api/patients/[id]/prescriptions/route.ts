@@ -107,6 +107,7 @@ export async function POST(
     const professionalName = professionalProfile?.fullName?.trim() || user.name;
     const professionalDni = professionalProfile?.dni ?? user.dni;
     const professionalLicense = professionalProfile?.licenseNumber ?? user.licenseNumber ?? undefined;
+    const professionalLocality = professionalProfile?.locality ?? user.locality ?? null;
 
     const pdfTitle = clinicTitle.length > 0 ? clinicTitle : 'Receta digital';
 
@@ -119,6 +120,7 @@ export async function POST(
       professionalName,
       professionalDni,
       professionalLicense,
+      professionalLocality: professionalLocality ?? undefined,
       diagnosis: body.diagnosis,
       medication: body.medication,
       instructions: body.instructions,
