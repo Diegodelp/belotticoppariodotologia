@@ -108,12 +108,22 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
   });
   const [budgetSaving, setBudgetSaving] = useState(false);
   const [budgetAlert, setBudgetAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
+  const [budgetDeletingId, setBudgetDeletingId] = useState<string | null>(null);
   const [assignedPlan, setAssignedPlan] = useState<PatientOrthodonticPlan | null>(null);
   const currencyFormatter = new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
     minimumFractionDigits: 2,
   });
+  const isEditingBudget = Boolean(editingBudgetId);
+  const budgetSubmitLabel = budgetSaving
+    ? isEditingBudget
+      ? 'Guardando…'
+      : 'Generando…'
+    : isEditingBudget
+      ? 'Guardar cambios'
+      : 'Generar presupuesto';
 
   useEffect(() => {
     const fetchData = async () => {
@@ -362,6 +372,79 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     });
   };
 
+  const resetBudgetForm = () => {
+    setBudgetForm({ title: '', notes: '', items: [createEmptyBudgetItem()] });
+  };
+
+  const handleBudgetEdit = (budget: Budget) => {
+    setBudgetAlert(null);
+    setEditingBudgetId(budget.id);
+    setBudgetForm({
+      title: budget.title,
+      notes: budget.notes ?? '',
+      items:
+        budget.items.length > 0
+          ? budget.items.map((item) => ({
+              practice: item.practice,
+              description: item.description ?? '',
+              amount: item.amount.toString(),
+            }))
+          : [createEmptyBudgetItem()],
+    });
+  };
+
+  const handleCancelBudgetEdit = () => {
+    setEditingBudgetId(null);
+    resetBudgetForm();
+  };
+
+  const handleDeleteBudget = async (budgetId: string) => {
+    if (!data?.patient) {
+      return;
+    }
+
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm('¿Seguro que querés eliminar este presupuesto?');
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    try {
+      setBudgetAlert(null);
+      setBudgetDeletingId(budgetId);
+      const response = await PatientService.deleteBudget(data.patient.id, budgetId);
+      if (!response?.success) {
+        throw new Error(response?.error ?? 'No pudimos eliminar el presupuesto.');
+      }
+
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              budgets: current.budgets.filter((budget) => budget.id !== budgetId),
+            }
+          : current,
+      );
+
+      if (editingBudgetId === budgetId) {
+        handleCancelBudgetEdit();
+      }
+
+      setBudgetAlert({ type: 'success', message: 'Presupuesto eliminado correctamente.' });
+    } catch (deleteError) {
+      setBudgetAlert({
+        type: 'error',
+        message:
+          deleteError instanceof Error
+            ? deleteError.message
+            : 'No pudimos eliminar el presupuesto. Intentá nuevamente.',
+      });
+    } finally {
+      setBudgetDeletingId(null);
+    }
+  };
+
   const handleBudgetSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!data?.patient) {
@@ -411,31 +494,55 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
       items,
     };
 
+    const currentEditingId = editingBudgetId;
+
     try {
       setBudgetSaving(true);
       setBudgetAlert(null);
-      const response = await PatientService.createBudget(data.patient.id, payload);
+
+      const response = currentEditingId
+        ? await PatientService.updateBudget(data.patient.id, currentEditingId, payload)
+        : await PatientService.createBudget(data.patient.id, payload);
+
       if (!response || !response.success || !response.budget) {
-        throw new Error((response as { error?: string })?.error ?? 'No pudimos crear el presupuesto.');
+        throw new Error((response as { error?: string })?.error ?? 'No pudimos guardar el presupuesto.');
       }
 
-      setData((current) =>
-        current
-          ? {
-              ...current,
-              budgets: [response.budget, ...(current.budgets ?? [])],
-            }
-          : current,
-      );
-      setBudgetForm({ title: '', notes: '', items: [createEmptyBudgetItem()] });
-      setBudgetAlert({ type: 'success', message: 'Presupuesto creado correctamente.' });
+      setData((current) => {
+        if (!current) {
+          return current;
+        }
+
+        if (currentEditingId) {
+          return {
+            ...current,
+            budgets: current.budgets.map((budget) =>
+              budget.id === response.budget.id ? response.budget : budget,
+            ),
+          };
+        }
+
+        return {
+          ...current,
+          budgets: [response.budget, ...(current.budgets ?? [])],
+        };
+      });
+
+      resetBudgetForm();
+      setEditingBudgetId(null);
+      setBudgetAlert({
+        type: 'success',
+        message: currentEditingId
+          ? 'Presupuesto actualizado correctamente.'
+          : 'Presupuesto creado correctamente.',
+      });
     } catch (error) {
       setBudgetAlert({
         type: 'error',
         message:
           error instanceof Error
             ? error.message
-            : 'No pudimos crear el presupuesto. Intentá nuevamente.',
+            : 'No pudimos guardar el presupuesto. Intentá nuevamente.',
       });
     } finally {
       setBudgetSaving(false);
@@ -1062,6 +1169,11 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
               onSubmit={handleBudgetSubmit}
               className="mt-4 space-y-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4"
             >
+              {isEditingBudget && (
+                <p className="rounded-2xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                  Estás editando un presupuesto existente. Guardá los cambios o cancelá la edición.
+                </p>
+              )}
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="md:col-span-2 text-xs font-semibold uppercase tracking-widest text-slate-300">
                   Título del presupuesto
@@ -1144,14 +1256,26 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
                 </button>
               </div>
 
-              <div className="flex justify-end gap-3">
-                <button
-                  type="submit"
-                  disabled={budgetSaving}
-                  className="rounded-full bg-cyan-500 px-6 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {budgetSaving ? 'Generando…' : 'Generar presupuesto'}
-                </button>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                {isEditingBudget && (
+                  <button
+                    type="button"
+                    onClick={handleCancelBudgetEdit}
+                    disabled={budgetSaving}
+                    className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-slate-200/60 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Cancelar edición
+                  </button>
+                )}
+                <div className="flex flex-1 justify-end gap-3">
+                  <button
+                    type="submit"
+                    disabled={budgetSaving}
+                    className="rounded-full bg-cyan-500 px-6 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {budgetSubmitLabel}
+                  </button>
+                </div>
               </div>
             </form>
 
@@ -1169,16 +1293,34 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
                         </p>
                         {budget.notes && <p className="mt-2 text-xs text-slate-300">{budget.notes}</p>}
                       </div>
-                      {budget.documentUrl && (
-                        <a
-                          href={budget.documentUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="rounded-full border border-cyan-400/60 px-3 py-1 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/10"
+                      <div className="flex flex-wrap items-center gap-2">
+                        {budget.documentUrl && (
+                          <a
+                            href={budget.documentUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded-full border border-cyan-400/60 px-3 py-1 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/10"
+                          >
+                            Descargar PDF
+                          </a>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleBudgetEdit(budget)}
+                          disabled={budgetSaving}
+                          className="rounded-full border border-cyan-400/60 px-3 py-1 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-60"
                         >
-                          Descargar PDF
-                        </a>
-                      )}
+                          {editingBudgetId === budget.id ? 'Editando' : 'Editar'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteBudget(budget.id)}
+                          disabled={budgetDeletingId === budget.id}
+                          className="rounded-full border border-rose-400/60 px-3 py-1 text-xs font-semibold text-rose-200 transition hover:border-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {budgetDeletingId === budget.id ? 'Eliminando…' : 'Eliminar'}
+                        </button>
+                      </div>
                     </div>
                     {budget.items.length > 0 && (
                       <ul className="mt-3 space-y-2 text-xs text-slate-300">

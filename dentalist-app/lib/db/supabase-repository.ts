@@ -1499,6 +1499,112 @@ export async function createBudgetRecord(
   }
 }
 
+export async function updateBudgetRecord(
+  professionalId: string,
+  patientId: string,
+  budgetId: string,
+  payload: { budget: CreateBudgetInput; pdfBuffer: Buffer },
+): Promise<Budget> {
+  const client = getClient();
+  const total = payload.budget.items.reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+
+  const { data: existing, error: fetchError } = await client
+    .from(BUDGETS_TABLE)
+    .select('id, patient_id, document_path')
+    .eq('professional_id', professionalId)
+    .eq('id', budgetId)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+  if (!existing || existing.patient_id !== patientId) {
+    throw new Error('Presupuesto no encontrado');
+  }
+
+  const documentPath = existing.document_path ?? `${professionalId}/patients/${patientId}/budgets/${budgetId}.pdf`;
+
+  const { error: updateError } = await client
+    .from(BUDGETS_TABLE)
+    .update({
+      title: payload.budget.title,
+      notes: payload.budget.notes ?? null,
+      total,
+    })
+    .eq('professional_id', professionalId)
+    .eq('id', budgetId);
+
+  if (updateError) throw updateError;
+
+  const { error: deleteItemsError } = await client.from(BUDGET_ITEMS_TABLE).delete().eq('budget_id', budgetId);
+  if (deleteItemsError) throw deleteItemsError;
+
+  if (payload.budget.items.length > 0) {
+    const { error: insertItemsError } = await client.from(BUDGET_ITEMS_TABLE).insert(
+      payload.budget.items.map((item) => ({
+        budget_id: budgetId,
+        practice: item.practice,
+        description: item.description ?? null,
+        amount: item.amount,
+      })),
+    );
+
+    if (insertItemsError) throw insertItemsError;
+  }
+
+  await ensureBucketExists(client, DOCUMENTS_BUCKET);
+  const { error: uploadError } = await client.storage
+    .from(DOCUMENTS_BUCKET)
+    .upload(documentPath, payload.pdfBuffer, {
+      contentType: 'application/pdf',
+      upsert: true,
+    });
+
+  if (uploadError) throw uploadError;
+
+  const { data: updatedRow, error: refreshedError } = await client
+    .from(BUDGETS_TABLE)
+    .select('*, items:budget_items(*)')
+    .eq('professional_id', professionalId)
+    .eq('id', budgetId)
+    .single();
+
+  if (refreshedError || !updatedRow) {
+    throw refreshedError ?? new Error('No pudimos obtener el presupuesto actualizado');
+  }
+
+  const signedUrl = await createSignedUrl(client, DOCUMENTS_BUCKET, documentPath);
+  return mapBudget(updatedRow as AppBudgetRow, signedUrl ?? undefined);
+}
+
+export async function deleteBudgetRecord(
+  professionalId: string,
+  patientId: string,
+  budgetId: string,
+): Promise<void> {
+  const client = getClient();
+  const { data: existing, error: fetchError } = await client
+    .from(BUDGETS_TABLE)
+    .select('id, patient_id, document_path')
+    .eq('professional_id', professionalId)
+    .eq('id', budgetId)
+    .maybeSingle();
+
+  if (fetchError) throw fetchError;
+  if (!existing || existing.patient_id !== patientId) {
+    throw new Error('Presupuesto no encontrado');
+  }
+
+  await client.from(BUDGET_ITEMS_TABLE).delete().eq('budget_id', budgetId);
+  await client
+    .from(BUDGETS_TABLE)
+    .delete()
+    .eq('professional_id', professionalId)
+    .eq('id', budgetId);
+
+  if (existing.document_path) {
+    await client.storage.from(DOCUMENTS_BUCKET).remove([existing.document_path]);
+  }
+}
+
 export async function listAppointments(professionalId: string, patientId?: string) {
   const client = getClient();
   let query = client

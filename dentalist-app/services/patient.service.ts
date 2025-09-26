@@ -186,6 +186,43 @@ export class PatientService {
     return response.json();
   }
 
+  static async updateBudget(
+    patientId: string,
+    budgetId: string,
+    data: CreateBudgetInput,
+  ): Promise<{ success: boolean; budget: Budget; error?: string }> {
+    const response = await fetch(
+      `/api/patients/${patientId}/budgets?budgetId=${encodeURIComponent(budgetId)}`,
+      {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders(),
+        },
+        credentials: 'include',
+        body: JSON.stringify(data),
+      },
+    );
+    return response.json();
+  }
+
+  static async deleteBudget(
+    patientId: string,
+    budgetId: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    const response = await fetch(
+      `/api/patients/${patientId}/budgets?budgetId=${encodeURIComponent(budgetId)}`,
+      {
+        method: 'DELETE',
+        headers: {
+          ...authHeaders(),
+        },
+        credentials: 'include',
+      },
+    );
+    return response.json();
+  }
+
   static async getProfessionalSignature(): Promise<{
     hasSignature: boolean;
     signatureUrl: string | null;

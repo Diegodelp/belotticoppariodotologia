@@ -144,15 +144,7 @@ function practiceLabel(practice: BudgetPractice): string {
 function buildContentStream(options: BudgetPdfOptions): Buffer {
   const commands: string[] = [];
 
-  commands.push('q');
-  commands.push(`${toPdfColor(COLORS.background)} rg`);
-  commands.push(`${toPdfColor(COLORS.border)} RG`);
-  commands.push('1 w');
-  commands.push(`${MARGIN} ${MARGIN} ${CONTENT_WIDTH} ${PAGE_HEIGHT - MARGIN * 2} re`);
-  commands.push('B');
-  commands.push('Q');
-
-  let cursorY = PAGE_HEIGHT - MARGIN - 40;
+  let cursorY = PAGE_HEIGHT - MARGIN - 32;
 
   const drawText = (
     font: 'F1' | 'F2',
@@ -170,95 +162,59 @@ function buildContentStream(options: BudgetPdfOptions): Buffer {
     commands.push('ET');
   };
 
-  const heading = options.professional.clinicName?.trim() || options.title;
-  drawText('F2', 26, COLORS.title, MARGIN + 20, cursorY, heading);
+  const heading = options.title?.trim() || 'Presupuesto';
+  drawText('F2', 26, COLORS.title, MARGIN, cursorY, heading);
   cursorY -= 32;
 
-  drawText('F2', 18, COLORS.subtitle, MARGIN + 20, cursorY, 'Datos del profesional');
-  cursorY -= 24;
+  drawText('F2', 16, COLORS.subtitle, MARGIN, cursorY, 'Profesional');
+  cursorY -= 22;
 
-  const professionalRows = [
-    ['Nombre', options.professional.name || ''],
-    options.professional.licenseNumber ? ['Matrícula', options.professional.licenseNumber] : null,
-    options.professional.phone ? ['Teléfono', options.professional.phone] : null,
-    options.professional.email ? ['Email', options.professional.email] : null,
-  ].filter((row): row is [string, string] => Array.isArray(row));
+  const professionalLines = [
+    options.professional.name ? `Nombre: ${options.professional.name}` : null,
+    options.professional.licenseNumber ? `Matrícula: ${options.professional.licenseNumber}` : null,
+    options.professional.phone ? `Teléfono: ${options.professional.phone}` : null,
+  ].filter((value): value is string => Boolean(value));
 
-  for (const [label, value] of professionalRows) {
-    drawText('F2', 12, COLORS.label, MARGIN + 20, cursorY, label);
-    drawText('F1', 13, COLORS.value, MARGIN + 140, cursorY, value);
+  for (const line of professionalLines) {
+    drawText('F1', 13, COLORS.value, MARGIN, cursorY, line);
     cursorY -= 18;
   }
 
   cursorY -= 6;
-  drawText('F2', 18, COLORS.subtitle, MARGIN + 20, cursorY, 'Datos del paciente');
-  cursorY -= 24;
+  drawText('F2', 16, COLORS.subtitle, MARGIN, cursorY, 'Paciente');
+  cursorY -= 22;
+  drawText('F1', 13, COLORS.value, MARGIN, cursorY, options.patient.name || '');
+  cursorY -= 28;
 
-  const patientRows = [
-    ['Nombre', options.patient.name],
-    ['DNI', options.patient.dni || 'No informado'],
-    ['Obra Social', options.patient.healthInsurance || 'Particular'],
-    ['N.º Afiliado', options.patient.affiliateNumber ?? 'No informado'],
-  ];
-
-  for (const [label, value] of patientRows) {
-    drawText('F2', 12, COLORS.label, MARGIN + 20, cursorY, label);
-    drawText('F1', 13, COLORS.value, MARGIN + 140, cursorY, value);
-    cursorY -= 18;
-  }
-
-  cursorY -= 10;
-  drawText('F2', 18, COLORS.subtitle, MARGIN + 20, cursorY, 'Detalle de prácticas');
+  drawText('F2', 16, COLORS.subtitle, MARGIN, cursorY, 'Detalle del presupuesto');
   cursorY -= 22;
 
-  const practiceColumnX = MARGIN + 20;
-  const descriptionColumnX = MARGIN + 150;
   const amountColumnX = MARGIN + CONTENT_WIDTH - 120;
-  const descriptionWidth = amountColumnX - descriptionColumnX - 10;
-
-  drawText('F2', 12, COLORS.label, practiceColumnX, cursorY, 'Práctica');
-  drawText('F2', 12, COLORS.label, descriptionColumnX, cursorY, 'Descripción');
-  drawText('F2', 12, COLORS.label, amountColumnX, cursorY, 'Importe');
-  cursorY -= 16;
+  const detailWidth = amountColumnX - MARGIN - 20;
 
   const total = options.items.reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
 
   for (const item of options.items) {
-    const description = item.description?.trim() || '-';
-    const descriptionLines = wrapText(description, 12, descriptionWidth, fontWidth);
     const practiceName = practiceLabel(item.practice);
-
-    drawText('F1', 12, COLORS.value, practiceColumnX, cursorY, practiceName);
+    drawText('F1', 12, COLORS.value, MARGIN, cursorY, `• ${practiceName}`);
     drawText('F1', 12, COLORS.value, amountColumnX, cursorY, formatCurrency(item.amount));
+    cursorY -= 16;
 
-    for (let index = 0; index < descriptionLines.length; index += 1) {
-      const line = descriptionLines[index];
-      drawText('F1', 12, COLORS.value, descriptionColumnX, cursorY, line);
-      if (index < descriptionLines.length - 1) {
+    if (item.description && item.description.trim().length > 0) {
+      const descriptionLines = wrapText(item.description.trim(), 11, detailWidth, fontWidth);
+      for (const line of descriptionLines) {
+        drawText('F1', 11, COLORS.muted, MARGIN + 18, cursorY, line);
         cursorY -= 14;
       }
     }
 
-    cursorY -= 18;
+    cursorY -= 6;
   }
 
-  cursorY -= 6;
-  drawText('F2', 14, COLORS.subtitle, amountColumnX, cursorY, `Total: ${formatCurrency(total)}`);
-  cursorY -= 24;
-
-  if (options.notes && options.notes.trim().length > 0) {
-    drawText('F2', 16, COLORS.subtitle, MARGIN + 20, cursorY, 'Notas');
-    cursorY -= 18;
-
-    const notesLines = wrapText(options.notes.trim(), 12, CONTENT_WIDTH - 40, fontWidth);
-    for (const line of notesLines) {
-      drawText('F1', 12, COLORS.value, MARGIN + 20, cursorY, line);
-      cursorY -= 14;
-    }
-    cursorY -= 8;
-  }
-
-  drawText('F2', 12, COLORS.label, MARGIN + 20, cursorY, `Fecha: ${formatDate(options.issuedAt)}`);
+  cursorY -= 10;
+  drawText('F2', 14, COLORS.subtitle, MARGIN, cursorY, `Total: ${formatCurrency(total)}`);
+  cursorY -= 22;
+  drawText('F2', 12, COLORS.label, MARGIN, cursorY, `Fecha: ${formatDate(options.issuedAt)}`);
 
   return Buffer.from(commands.join('\n') + '\n', 'latin1');
 }
