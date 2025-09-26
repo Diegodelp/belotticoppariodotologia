@@ -4,6 +4,7 @@ import {
   getPatientById,
   getClinicalHistory,
   getPatientOrthodonticPlan,
+  listPatientMedia,
   listAppointments,
   listBudgets,
   listPrescriptions,
@@ -35,6 +36,7 @@ export async function GET(
     prescriptions,
     orthodonticPlan,
     budgets,
+    media,
   ] = await Promise.all([
     listAppointments(user.id, patient.id),
     listTreatments(user.id, patient.id),
@@ -43,6 +45,7 @@ export async function GET(
     listPrescriptions(user.id, patient.id),
     getPatientOrthodonticPlan(user.id, patient.id),
     listBudgets(user.id, patient.id),
+    listPatientMedia(user.id, patient.id),
   ]);
 
   return NextResponse.json({
@@ -54,6 +57,7 @@ export async function GET(
     prescriptions,
     orthodonticPlan,
     budgets,
+    media,
   });
 }
 

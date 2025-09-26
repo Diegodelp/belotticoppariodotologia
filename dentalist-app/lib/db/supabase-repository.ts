@@ -8,6 +8,9 @@ import {
   BudgetPractice,
   ClinicalHistory,
   ClinicalHistoryInput,
+  ClinicalMedia,
+  ClinicalMediaCategory,
+  ClinicalMediaLabel,
   ClinicalStage,
   CreateBudgetInput,
   FamilyHistory,
@@ -81,6 +84,9 @@ const BUDGET_ITEMS_TABLE =
   'budget_items';
 const DOCUMENTS_BUCKET =
   process.env.SUPABASE_BUCKET_CLINICAL_DOCUMENTS ?? 'clinical-documents';
+const CLINICAL_MEDIA_TABLE =
+  process.env.SUPABASE_TABLE_CLINICAL_MEDIA ?? 'clinical_media';
+const MEDIA_BUCKET = process.env.SUPABASE_BUCKET_CLINICAL_MEDIA ?? 'clinical-media';
 const SIGNATURES_BUCKET =
   process.env.SUPABASE_BUCKET_PROFESSIONAL_SIGNATURES ??
   'professional-signatures';
@@ -115,6 +121,48 @@ function getOptionalString(value: unknown): string | undefined {
 
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function sanitizeFileName(fileName: string | null | undefined): string | null {
+  if (!fileName) {
+    return null;
+  }
+
+  const trimmed = fileName.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed
+    .replace(/[\\/:*?"<>|]+/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .slice(-128);
+}
+
+function resolveFileExtension(
+  fileName: string | null | undefined,
+  mimeType: string | null | undefined,
+): string {
+  const namePart = fileName?.split('.').pop();
+  if (namePart && /^[a-zA-Z0-9]+$/.test(namePart)) {
+    return namePart.toLowerCase();
+  }
+
+  if (!mimeType) {
+    return 'bin';
+  }
+
+  const normalized = mimeType.toLowerCase();
+  if (normalized.includes('png')) return 'png';
+  if (normalized.includes('jpeg') || normalized.includes('jpg')) return 'jpg';
+  if (normalized.includes('webp')) return 'webp';
+  if (normalized.includes('heic')) return 'heic';
+  if (normalized.includes('gif')) return 'gif';
+  if (normalized.includes('bmp')) return 'bmp';
+  if (normalized.includes('pdf')) return 'pdf';
+
+  return 'bin';
 }
 
 function getClient() {
@@ -337,6 +385,22 @@ type AppProfessionalSignatureRow = {
   file_size: number | null;
   updated_at: string;
   created_at: string;
+};
+
+type AppClinicalMediaRow = {
+  id: string;
+  patient_id: string;
+  professional_id: string;
+  category: string;
+  label: string;
+  storage_path: string;
+  file_name: string | null;
+  mime_type: string | null;
+  file_size: number | null;
+  uploaded_by: string | null;
+  uploaded_at: string;
+  valid_until: string | null;
+  notes: string | null;
 };
 
 type AppOrthodonticPlanRow = {
@@ -715,6 +779,44 @@ function mapPrescription(row: AppPrescriptionRow, pdfUrl: string): Prescription 
     pdfUrl,
     signaturePath: row.signature_path ?? undefined,
     createdAt: row.created_at,
+  };
+}
+
+const CLINICAL_MEDIA_CATEGORIES: ClinicalMediaCategory[] = ['photo', 'radiograph', 'document'];
+const CLINICAL_MEDIA_LABELS: ClinicalMediaLabel[] = [
+  'frente',
+  'perfil',
+  'derecho',
+  'izquierdo',
+  'panoramica',
+  'teleradiografia',
+  'inicial',
+  'final',
+  'otros',
+  'intraoral_superior',
+  'intraoral_inferior',
+];
+
+function mapClinicalMedia(row: AppClinicalMediaRow, signedUrl: string | null): ClinicalMedia {
+  const category = CLINICAL_MEDIA_CATEGORIES.includes(row.category as ClinicalMediaCategory)
+    ? (row.category as ClinicalMediaCategory)
+    : 'photo';
+  const label = CLINICAL_MEDIA_LABELS.includes(row.label as ClinicalMediaLabel)
+    ? (row.label as ClinicalMediaLabel)
+    : 'otros';
+
+  return {
+    id: row.id,
+    patientId: row.patient_id,
+    professionalId: row.professional_id,
+    category,
+    label,
+    fileName: row.file_name ?? null,
+    mimeType: row.mime_type ?? null,
+    fileSize: row.file_size ?? null,
+    url: signedUrl ?? '',
+    uploadedAt: row.uploaded_at,
+    validUntil: row.valid_until,
   };
 }
 
@@ -2060,6 +2162,121 @@ export async function upsertClinicalHistory(
   }
 
   return getClinicalHistory(professionalId, patientId);
+}
+
+export async function listPatientMedia(
+  professionalId: string,
+  patientId: string,
+): Promise<ClinicalMedia[]> {
+  const client = getClient();
+  const { data, error } = await client
+    .from(CLINICAL_MEDIA_TABLE)
+    .select('*')
+    .eq('professional_id', professionalId)
+    .eq('patient_id', patientId)
+    .order('category', { ascending: true })
+    .order('label', { ascending: true })
+    .order('uploaded_at', { ascending: false });
+
+  if (error) throw error;
+
+  const rows = (data ?? []) as AppClinicalMediaRow[];
+  const signedUrls = await Promise.all(
+    rows.map((row) => createSignedUrl(client, MEDIA_BUCKET, row.storage_path, 900)),
+  );
+
+  return rows.map((row, index) => mapClinicalMedia(row, signedUrls[index] ?? null));
+}
+
+export async function savePatientMedia(
+  professionalId: string,
+  patientId: string,
+  payload: {
+    buffer: Buffer;
+    fileName?: string | null;
+    mimeType?: string | null;
+    category: ClinicalMediaCategory;
+    label: ClinicalMediaLabel;
+    validUntil?: string | null;
+    notes?: string | null;
+  },
+): Promise<ClinicalMedia> {
+  const client = getClient();
+  const sanitizedOriginalName = sanitizeFileName(payload.fileName);
+  const extension = resolveFileExtension(payload.fileName ?? null, payload.mimeType ?? null);
+  const storageFileName = `${payload.label}-${Date.now()}-${crypto.randomUUID()}.${extension}`;
+  const storagePath = `${professionalId}/patients/${patientId}/${payload.category}/${storageFileName}`;
+
+  const { data: existingRowsData, error: existingError } = await client
+    .from(CLINICAL_MEDIA_TABLE)
+    .select('id, storage_path')
+    .eq('professional_id', professionalId)
+    .eq('patient_id', patientId)
+    .eq('category', payload.category)
+    .eq('label', payload.label);
+
+  if (existingError) throw existingError;
+
+  await ensureBucketExists(client, MEDIA_BUCKET);
+
+  const { error: uploadError } = await client.storage
+    .from(MEDIA_BUCKET)
+    .upload(storagePath, payload.buffer, {
+      contentType: payload.mimeType ?? 'application/octet-stream',
+      upsert: true,
+    });
+
+  if (uploadError) throw uploadError;
+
+  const { data, error } = await client
+    .from(CLINICAL_MEDIA_TABLE)
+    .insert({
+      patient_id: patientId,
+      professional_id: professionalId,
+      category: payload.category,
+      label: payload.label,
+      storage_path: storagePath,
+      file_name: sanitizedOriginalName ?? storageFileName,
+      mime_type: payload.mimeType ?? 'application/octet-stream',
+      file_size: payload.buffer.byteLength,
+      uploaded_by: professionalId,
+      valid_until: payload.validUntil ?? null,
+      notes: payload.notes ?? null,
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+
+  const existingRows = (existingRowsData ?? []) as Array<{ id: string; storage_path: string | null }>;
+
+  if (existingRows.length > 0) {
+    const previousIds = existingRows.map((row) => row.id);
+    const previousPaths = existingRows
+      .map((row) => row.storage_path)
+      .filter((path): path is string => Boolean(path));
+
+    if (previousIds.length > 0) {
+      const { error: deleteRowsError } = await client
+        .from(CLINICAL_MEDIA_TABLE)
+        .delete()
+        .in('id', previousIds);
+
+      if (deleteRowsError) {
+        console.warn('No se pudieron eliminar las imágenes anteriores', deleteRowsError);
+      }
+    }
+
+    if (previousPaths.length > 0) {
+      const { error: removeError } = await client.storage.from(MEDIA_BUCKET).remove(previousPaths);
+      if (removeError) {
+        console.warn('No se pudieron eliminar los archivos anteriores del storage', removeError);
+      }
+    }
+  }
+
+  const signedUrl = await createSignedUrl(client, MEDIA_BUCKET, storagePath, 900);
+  return mapClinicalMedia(data as AppClinicalMediaRow, signedUrl ?? null);
 }
 
 export async function listPrescriptions(

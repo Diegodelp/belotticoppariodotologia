@@ -38,6 +38,35 @@ export interface Appointment {
   googleEventId?: string;
 }
 
+export type ClinicalMediaCategory = 'photo' | 'radiograph' | 'document';
+
+export type ClinicalMediaLabel =
+  | 'frente'
+  | 'perfil'
+  | 'derecho'
+  | 'izquierdo'
+  | 'panoramica'
+  | 'teleradiografia'
+  | 'inicial'
+  | 'final'
+  | 'otros'
+  | 'intraoral_superior'
+  | 'intraoral_inferior';
+
+export interface ClinicalMedia {
+  id: string;
+  patientId: string;
+  professionalId: string;
+  category: ClinicalMediaCategory;
+  label: ClinicalMediaLabel;
+  fileName: string | null;
+  mimeType: string | null;
+  fileSize?: number | null;
+  url: string;
+  uploadedAt: string;
+  validUntil?: string | null;
+}
+
 export interface Treatment {
   id: string;
   patientId: string;

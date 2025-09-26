@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { AppointmentForm } from '@/components/appointments/AppointmentForm';
 import { ClinicalHistoryForm } from '@/components/patients/ClinicalHistoryForm';
+import { PatientMediaManager } from '@/components/patients/PatientMediaManager';
 import { PrescriptionManager } from '@/components/patients/PrescriptionManager';
 import { PatientService } from '@/services/patient.service';
 import { TreatmentService } from '@/services/treatment.service';
@@ -14,6 +15,7 @@ import {
   BudgetPractice,
   ClinicalHistory,
   ClinicalHistoryInput,
+  ClinicalMedia,
   CreateBudgetInput,
   CreatePrescriptionInput,
   OrthodonticPlan,
@@ -60,6 +62,7 @@ interface PatientDetailResponse {
   prescriptions: Prescription[];
   budgets: Budget[];
   orthodonticPlan: PatientOrthodonticPlan | null;
+  media: ClinicalMedia[];
 }
 
 export default function PatientDetailPage({ params: routeParams }: { params: { id: string } }) {
@@ -140,6 +143,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
             prescriptions: response.prescriptions ?? [],
             budgets: response.budgets ?? [],
             orthodonticPlan: response.orthodonticPlan ?? null,
+            media: response.media ?? [],
           };
           setData(normalized);
           setAssignedPlan(normalized.orthodonticPlan);
@@ -818,6 +822,26 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     }
   };
 
+  const handleMediaUpdated = (asset: ClinicalMedia) => {
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            media: [
+              asset,
+              ...current.media.filter(
+                (item) => !(item.category === asset.category && item.label === asset.label),
+              ),
+            ],
+          }
+        : current,
+    );
+  };
+
+  const handleMediaRefreshed = (assets: ClinicalMedia[]) => {
+    setData((current) => (current ? { ...current, media: assets } : current));
+  };
+
   if (loading) {
     return <p className="px-8 py-6 text-sm text-slate-300">Cargando información del paciente...</p>;
   }
@@ -836,7 +860,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     );
   }
 
-  const { patient, appointments, treatments, payments, clinicalHistory, prescriptions, budgets } = data;
+  const { patient, appointments, treatments, payments, clinicalHistory, prescriptions, budgets, media } = data;
 
   return (
     <section className="space-y-8">
@@ -1149,6 +1173,13 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
               )}
             </div>
           </div>
+
+          <PatientMediaManager
+            patientId={patient.id}
+            media={media}
+            onMediaUpdated={handleMediaUpdated}
+            onMediaRefreshed={handleMediaRefreshed}
+          />
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
             <h2 className="text-lg font-semibold text-white">Presupuestos</h2>

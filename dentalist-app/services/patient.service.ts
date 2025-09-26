@@ -2,6 +2,7 @@ import {
   Budget,
   ClinicalHistory,
   ClinicalHistoryInput,
+  ClinicalMedia,
   CreateBudgetInput,
   CreatePrescriptionInput,
   Patient,
@@ -167,6 +168,33 @@ export class PatientService {
       },
       credentials: 'include',
     });
+    return response.json();
+  }
+
+  static async listMedia(patientId: string): Promise<{ media: ClinicalMedia[] }> {
+    const response = await fetch(`/api/patients/${patientId}/media`, {
+      headers: {
+        ...authHeaders(),
+      },
+      credentials: 'include',
+    });
+
+    return response.json();
+  }
+
+  static async uploadMedia(
+    patientId: string,
+    formData: FormData,
+  ): Promise<{ success: boolean; media?: ClinicalMedia; error?: string }> {
+    const response = await fetch(`/api/patients/${patientId}/media`, {
+      method: 'POST',
+      headers: {
+        ...authHeaders(),
+      },
+      credentials: 'include',
+      body: formData,
+    });
+
     return response.json();
   }
 
