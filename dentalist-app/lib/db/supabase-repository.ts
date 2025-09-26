@@ -2279,6 +2279,46 @@ export async function savePatientMedia(
   return mapClinicalMedia(data as AppClinicalMediaRow, signedUrl ?? null);
 }
 
+export async function deletePatientMedia(
+  professionalId: string,
+  patientId: string,
+  mediaId: string,
+): Promise<void> {
+  const client = getClient();
+
+  const { data, error } = await client
+    .from(CLINICAL_MEDIA_TABLE)
+    .select('id, storage_path')
+    .eq('id', mediaId)
+    .eq('professional_id', professionalId)
+    .eq('patient_id', patientId)
+    .maybeSingle();
+
+  if (error) throw error;
+
+  if (!data) {
+    throw new Error('Archivo clínico no encontrado');
+  }
+
+  const { error: deleteError } = await client
+    .from(CLINICAL_MEDIA_TABLE)
+    .delete()
+    .eq('id', mediaId)
+    .eq('professional_id', professionalId)
+    .eq('patient_id', patientId);
+
+  if (deleteError) throw deleteError;
+
+  const storagePath = (data as { storage_path: string | null }).storage_path;
+
+  if (storagePath) {
+    const { error: storageError } = await client.storage.from(MEDIA_BUCKET).remove([storagePath]);
+    if (storageError) {
+      console.warn('No se pudo eliminar el archivo clínico del storage', storageError);
+    }
+  }
+}
+
 export async function listPrescriptions(
   professionalId: string,
   patientId: string,

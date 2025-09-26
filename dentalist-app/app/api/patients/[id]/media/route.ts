@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getUserFromRequest } from '@/lib/auth/get-user';
 import {
+  deletePatientMedia,
   getPatientById,
   listPatientMedia,
   savePatientMedia,
@@ -131,5 +132,40 @@ export async function POST(
   } catch (error) {
     console.error('Error al subir media clínica', error);
     return NextResponse.json({ error: 'No pudimos subir el archivo. Intentá nuevamente.' }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  context: { params: Promise<{ id: string }> },
+) {
+  const user = getUserFromRequest(request);
+  if (!user) {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  }
+
+  const params = await context.params;
+  const patient = await getPatientById(user.id, params.id);
+
+  if (!patient) {
+    return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
+  }
+
+  const mediaId = request.nextUrl.searchParams.get('mediaId');
+
+  if (!mediaId) {
+    return NextResponse.json({ error: 'Falta el identificador del archivo clínico.' }, { status: 400 });
+  }
+
+  try {
+    await deletePatientMedia(user.id, patient.id, mediaId);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    if (error instanceof Error && error.message === 'Archivo clínico no encontrado') {
+      return NextResponse.json({ error: error.message }, { status: 404 });
+    }
+
+    console.error('Error al eliminar media clínica', error);
+    return NextResponse.json({ error: 'No pudimos eliminar el archivo.' }, { status: 500 });
   }
 }

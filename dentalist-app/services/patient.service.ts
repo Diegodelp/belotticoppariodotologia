@@ -278,4 +278,22 @@ export class PatientService {
 
     return response.json();
   }
+
+  static async deleteMedia(
+    patientId: string,
+    mediaId: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    const response = await fetch(
+      `/api/patients/${patientId}/media?mediaId=${encodeURIComponent(mediaId)}`,
+      {
+        method: 'DELETE',
+        headers: {
+          ...authHeaders(),
+        },
+        credentials: 'include',
+      },
+    );
+
+    return response.json();
+  }
 }

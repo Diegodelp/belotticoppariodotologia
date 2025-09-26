@@ -10,6 +10,7 @@ interface PatientMediaManagerProps {
   media: ClinicalMedia[];
   onMediaUpdated: (media: ClinicalMedia) => void;
   onMediaRefreshed?: (media: ClinicalMedia[]) => void;
+  onMediaDeleted?: (mediaId: string) => void;
 }
 
 type MediaSlot = {
@@ -93,10 +94,13 @@ export function PatientMediaManager({
   media,
   onMediaUpdated,
   onMediaRefreshed,
+  onMediaDeleted,
 }: PatientMediaManagerProps) {
   const [uploadingSlot, setUploadingSlot] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [previewAsset, setPreviewAsset] = useState<ClinicalMedia | null>(null);
 
   const mediaBySlot = useMemo(() => {
     const map = new Map<string, ClinicalMedia>();
@@ -174,11 +178,42 @@ export function PatientMediaManager({
     }
   };
 
+  const handleDelete = async (asset: ClinicalMedia) => {
+    const confirmation = typeof window === 'undefined' ? true : window.confirm('¿Eliminar este archivo?');
+
+    if (!confirmation) {
+      return;
+    }
+
+    setError(null);
+    setDeletingId(asset.id);
+
+    try {
+      const response = await PatientService.deleteMedia(patientId, asset.id);
+      if (!response?.success) {
+        throw new Error(response?.error ?? 'No pudimos eliminar el archivo.');
+      }
+
+      onMediaDeleted?.(asset.id);
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : 'Ocurrió un error al eliminar el archivo. Intentá nuevamente.',
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const renderSlot = (slot: MediaSlot) => {
     const key = slotKey(slot);
     const asset = mediaBySlot.get(key);
     const isUploading = uploadingSlot === key;
+    const isDeleting = asset ? deletingId === asset.id : false;
+    const uploadDisabled = isUploading || isDeleting;
     const previewIsImage = asset ? isImage(asset.mimeType) : false;
+    const uploadLabel = isUploading ? 'Subiendo…' : asset ? 'Cambiar archivo' : 'Subir archivo';
 
     return (
       <div
@@ -210,14 +245,21 @@ export function PatientMediaManager({
         <div className="mt-4 rounded-2xl border border-dashed border-white/10 bg-slate-950/60 p-3 text-center">
           {asset ? (
             previewIsImage ? (
-              // El contenido proviene de URLs firmadas y cambiantes, por lo que Next/Image
-              // no es práctico aquí. Desactivamos la regla para esta vista previa controlada.
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img
-                src={asset.url}
-                alt={`${slot.title} del paciente`}
-                className="mx-auto h-40 w-auto rounded-xl object-cover"
-              />
+              <button
+                type="button"
+                onClick={() => setPreviewAsset(asset)}
+                className="group mx-auto block w-full rounded-xl border border-transparent p-1 transition hover:border-cyan-300"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={asset.url}
+                  alt={`${slot.title} del paciente`}
+                  className="mx-auto h-40 w-auto rounded-lg object-cover"
+                />
+                <span className="mt-2 block text-[11px] font-semibold uppercase tracking-widest text-cyan-200 opacity-0 transition group-hover:opacity-100">
+                  Ver en grande
+                </span>
+              </button>
             ) : (
               <p className="text-xs text-slate-300">
                 Archivo disponible ({asset.mimeType ?? 'formato desconocido'}). Usá “Ver archivo” para abrirlo.
@@ -228,16 +270,34 @@ export function PatientMediaManager({
           )}
         </div>
 
-        <label className="mt-4 inline-flex items-center justify-center rounded-full border border-cyan-400/60 px-4 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/10 cursor-pointer">
-          {isUploading ? 'Subiendo…' : 'Subir archivo'}
-          <input
-            type="file"
-            accept={slot.accept}
-            className="sr-only"
-            onChange={(event) => handleFileChange(slot, event)}
-            disabled={isUploading}
-          />
-        </label>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <label
+            className={`inline-flex items-center justify-center rounded-full border border-cyan-400/60 px-4 py-2 text-xs font-semibold text-cyan-200 transition ${
+              uploadDisabled
+                ? 'cursor-not-allowed opacity-60'
+                : 'cursor-pointer hover:border-cyan-300 hover:bg-cyan-500/10'
+            }`}
+          >
+            {uploadLabel}
+            <input
+              type="file"
+              accept={slot.accept}
+              className="sr-only"
+              onChange={(event) => handleFileChange(slot, event)}
+              disabled={uploadDisabled}
+            />
+          </label>
+          {asset && (
+            <button
+              type="button"
+              onClick={() => handleDelete(asset)}
+              disabled={isDeleting}
+              className="inline-flex items-center justify-center rounded-full border border-rose-400/60 px-4 py-2 text-xs font-semibold text-rose-200 transition hover:border-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isDeleting ? 'Eliminando…' : 'Eliminar archivo'}
+            </button>
+          )}
+        </div>
       </div>
     );
   };
@@ -278,6 +338,35 @@ export function PatientMediaManager({
           <div className="mt-3 grid gap-4 md:grid-cols-2">{RADIOGRAPH_SLOTS.map(renderSlot)}</div>
         </section>
       </div>
+
+      {previewAsset && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-6"
+          onClick={() => setPreviewAsset(null)}
+        >
+          <div
+            className="relative max-h-full max-w-4xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setPreviewAsset(null)}
+              className="absolute -right-3 -top-3 rounded-full bg-slate-900/90 px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-slate-950/70 transition hover:bg-slate-800"
+            >
+              Cerrar
+            </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={previewAsset.url}
+              alt={previewAsset.fileName ?? 'Vista ampliada'}
+              className="max-h-[80vh] w-auto rounded-3xl border border-white/10 object-contain"
+            />
+            {previewAsset.fileName && (
+              <p className="mt-3 text-center text-xs text-slate-200">{previewAsset.fileName}</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

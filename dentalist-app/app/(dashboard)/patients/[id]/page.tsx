@@ -842,6 +842,17 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     setData((current) => (current ? { ...current, media: assets } : current));
   };
 
+  const handleMediaDeleted = (mediaId: string) => {
+    setData((current) =>
+      current
+        ? {
+            ...current,
+            media: current.media.filter((item) => item.id !== mediaId),
+          }
+        : current,
+    );
+  };
+
   if (loading) {
     return <p className="px-8 py-6 text-sm text-slate-300">Cargando información del paciente...</p>;
   }
@@ -1179,6 +1190,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
             media={media}
             onMediaUpdated={handleMediaUpdated}
             onMediaRefreshed={handleMediaRefreshed}
+            onMediaDeleted={handleMediaDeleted}
           />
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
