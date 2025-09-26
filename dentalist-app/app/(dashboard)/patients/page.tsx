@@ -236,7 +236,8 @@ export default function PatientsPage() {
                 <span className="max-w-full truncate font-mono text-[13px] text-white/90">
                   {inviteLink}
                 </span>
-                {typeof navigator !== 'undefined' && navigator.clipboard?.writeText && (
+                {typeof navigator !== 'undefined' &&
+                  typeof navigator.clipboard?.writeText === 'function' && (
                   <button
                     type="button"
                     onClick={handleCopyInviteLink}
