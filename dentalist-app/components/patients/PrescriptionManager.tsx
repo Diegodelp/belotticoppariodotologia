@@ -24,6 +24,7 @@ interface PrescriptionManagerProps {
     signatureUrl?: string | null;
     error?: string;
   }>;
+  showHistory?: boolean;
 }
 
 export function PrescriptionManager({
@@ -33,6 +34,7 @@ export function PrescriptionManager({
   savedSignatureUrl = null,
   onDelete,
   onUpdateSignature,
+  showHistory = true,
 }: PrescriptionManagerProps) {
   const [title, setTitle] = useState('Receta digital');
   const [diagnosis, setDiagnosis] = useState('');
@@ -428,63 +430,65 @@ export function PrescriptionManager({
         </div>
       </form>
 
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-white">Recetas emitidas</h3>
-          <span className="text-xs text-slate-400">{sortedPrescriptions.length} documento(s)</span>
-        </div>
-        {sortedPrescriptions.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-300">
-            Todavía no emitiste recetas para este paciente.
-          </p>
-        ) : (
-          <div className="grid gap-4 md:grid-cols-2">
-            {sortedPrescriptions.map((prescription) => {
-              const issued = new Date(prescription.createdAt).toLocaleString('es-AR', {
-                day: '2-digit',
-                month: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              });
-              return (
-                <article
-                  key={prescription.id}
-                  className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-sm shadow-cyan-500/5"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <h4 className="text-sm font-semibold text-white">{prescription.title}</h4>
-                      <p className="text-xs text-slate-400">Emitida el {issued}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDeletePrescription(prescription.id)}
-                      disabled={deletingId === prescription.id}
-                      title="Eliminar receta"
-                      aria-label="Eliminar receta"
-                      className="rounded-full border border-white/10 p-1.5 text-slate-200 transition hover:border-rose-300/60 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                  <p className="text-xs text-slate-200 line-clamp-2">
-                    {prescription.instructions || 'Sin indicaciones registradas'}
-                  </p>
-                  <a
-                    href={prescription.pdfUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-200/60 hover:text-cyan-100"
-                  >
-                    Descargar PDF
-                  </a>
-                </article>
-              );
-            })}
+      {showHistory && (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-white">Recetas emitidas</h3>
+            <span className="text-xs text-slate-400">{sortedPrescriptions.length} documento(s)</span>
           </div>
-        )}
-      </section>
+          {sortedPrescriptions.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-300">
+              Todavía no emitiste recetas para este paciente.
+            </p>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {sortedPrescriptions.map((prescription) => {
+                const issued = new Date(prescription.createdAt).toLocaleString('es-AR', {
+                  day: '2-digit',
+                  month: '2-digit',
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                });
+                return (
+                  <article
+                    key={prescription.id}
+                    className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-sm shadow-cyan-500/5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <h4 className="text-sm font-semibold text-white">{prescription.title}</h4>
+                        <p className="text-xs text-slate-400">Emitida el {issued}</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleDeletePrescription(prescription.id)}
+                        disabled={deletingId === prescription.id}
+                        title="Eliminar receta"
+                        aria-label="Eliminar receta"
+                        className="rounded-full border border-white/10 p-1.5 text-slate-200 transition hover:border-rose-300/60 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <p className="text-xs text-slate-200 line-clamp-2">
+                      {prescription.instructions || 'Sin indicaciones registradas'}
+                    </p>
+                    <a
+                      href={prescription.pdfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-200/60 hover:text-cyan-100"
+                    >
+                      Descargar PDF
+                    </a>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

@@ -1781,8 +1781,8 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
       )}
 
       {isPrescriptionModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-8">
-          <div className="w-full max-w-4xl overflow-y-auto rounded-3xl border border-white/10 bg-slate-900/90 p-6 text-white shadow-xl shadow-cyan-500/20 backdrop-blur">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-6 sm:py-12">
+          <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900/90 p-6 text-white shadow-xl shadow-cyan-500/20 backdrop-blur sm:rounded-3xl sm:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-xl font-semibold text-white">Emitir receta digital</h2>
@@ -1804,6 +1804,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
                 savedSignatureUrl={signatureInfo.signatureUrl}
                 onDelete={deletePrescription}
                 onUpdateSignature={handleUpdateSignature}
+                showHistory={false}
               />
             </div>
           </div>
