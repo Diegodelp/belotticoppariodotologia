@@ -13,6 +13,7 @@ import {
   ClinicalMediaLabel,
   ClinicalStage,
   CreateBudgetInput,
+  PatientInvite,
   FamilyHistory,
   MedicalBackground,
   Odontogram,
@@ -90,6 +91,10 @@ const MEDIA_BUCKET = process.env.SUPABASE_BUCKET_CLINICAL_MEDIA ?? 'clinical-med
 const SIGNATURES_BUCKET =
   process.env.SUPABASE_BUCKET_PROFESSIONAL_SIGNATURES ??
   'professional-signatures';
+const PATIENT_INVITES_TABLE =
+  process.env.SUPABASE_TABLE_PACIENTE_INVITACIONES ??
+  process.env.SUPABASE_TABLE_PATIENT_INVITES ??
+  'patient_invites';
 
 const CLINICAL_STAGES: ClinicalStage[] = ['baseline', 'initial', 'intermediate', 'final'];
 const ODONTOGRAM_CONDITIONS: OdontogramCondition[] = [
@@ -318,6 +323,15 @@ type AppPaymentRow = {
   notes: string | null;
 };
 
+type AppPatientInviteRow = {
+  id: string;
+  professional_id: string;
+  token_hash: string;
+  expires_at: string;
+  created_at: string;
+  used_at: string | null;
+};
+
 type AppGoogleCredentialRow = {
   professional_id: string;
   google_user_id: string;
@@ -524,6 +538,16 @@ function mapPayment(record: AppPaymentRow): Payment {
     status: (record.status as Payment['status']) ?? 'completed',
     date: new Date(rawDate).toISOString(),
     notes: record.notes ?? undefined,
+  };
+}
+
+function mapPatientInvite(row: AppPatientInviteRow): PatientInvite {
+  return {
+    id: row.id,
+    professionalId: row.professional_id,
+    expiresAt: row.expires_at,
+    createdAt: row.created_at,
+    usedAt: row.used_at ?? null,
   };
 }
 
@@ -1312,6 +1336,32 @@ export async function removePatient(
     .eq('professional_id', professionalId);
   if (error) throw error;
   return true;
+}
+
+export async function createPatientInvite(
+  professionalId: string,
+  expiresAt: Date,
+): Promise<{ invite: PatientInvite; token: string }> {
+  const client = getClient();
+  const token = crypto.randomBytes(24).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  const { data, error } = await client
+    .from(PATIENT_INVITES_TABLE)
+    .insert({
+      professional_id: professionalId,
+      token_hash: tokenHash,
+      expires_at: expiresAt.toISOString(),
+    })
+    .select('*')
+    .single();
+
+  if (error) throw error;
+
+  return {
+    invite: mapPatientInvite(data as AppPatientInviteRow),
+    token,
+  };
 }
 
 export async function listOrthodonticPlans(professionalId: string): Promise<OrthodonticPlan[]> {

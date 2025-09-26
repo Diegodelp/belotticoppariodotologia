@@ -296,4 +296,17 @@ export class PatientService {
 
     return response.json();
   }
+
+  static async createInvite() {
+    const response = await fetch('/api/patients/invite', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+      credentials: 'include',
+    });
+
+    return response.json();
+  }
 }

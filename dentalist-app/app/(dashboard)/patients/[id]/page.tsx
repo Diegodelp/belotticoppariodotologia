@@ -54,6 +54,26 @@ const createEmptyBudgetItem = () => ({
 
 type BudgetFormItemState = ReturnType<typeof createEmptyBudgetItem>;
 
+const PATIENT_SECTION_OPTIONS = [
+  {
+    key: 'overview',
+    label: 'Principal',
+    description: 'Detalles, turnos y documentos',
+  },
+  {
+    key: 'clinicalHistory',
+    label: 'Historia clínica',
+    description: 'Odontograma y antecedentes',
+  },
+  {
+    key: 'media',
+    label: 'Fotos y RX',
+    description: 'Registros fotográficos y radiografías',
+  },
+] as const;
+
+type PatientSectionKey = (typeof PATIENT_SECTION_OPTIONS)[number]['key'];
+
 interface PatientDetailResponse {
   patient: Patient;
   appointments: Appointment[];
@@ -119,6 +139,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
   const [assignedPlan, setAssignedPlan] = useState<PatientOrthodonticPlan | null>(null);
+  const [activeSection, setActiveSection] = useState<PatientSectionKey>('overview');
   const currencyFormatter = new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
@@ -989,7 +1010,35 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
         </p>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
+      <div className="grid gap-2 rounded-3xl border border-white/10 bg-white/5 p-2 text-xs text-slate-300 sm:grid-cols-3">
+        {PATIENT_SECTION_OPTIONS.map((section) => {
+          const isActive = activeSection === section.key;
+          return (
+            <button
+              key={section.key}
+              type="button"
+              onClick={() => setActiveSection(section.key)}
+              className={`flex flex-col gap-1 rounded-2xl px-4 py-3 text-left transition ${
+                isActive
+                  ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30'
+                  : 'text-slate-300 hover:bg-white/10 hover:text-white'
+              }`}
+            >
+              <span className="text-sm font-semibold">{section.label}</span>
+              <span
+                className={`text-[11px] font-medium sm:text-xs ${
+                  isActive ? 'text-slate-900/80' : 'text-slate-400'
+                }`}
+              >
+                {section.description}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {activeSection === 'overview' && (
+        <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
         <div className="space-y-6">
           {isEditing && (
             <form
@@ -1155,12 +1204,6 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
             </dl>
           </div>
 
-          <ClinicalHistoryForm
-            history={clinicalHistory}
-            onSubmit={handleClinicalHistorySubmit}
-            loading={clinicalSaving}
-          />
-
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="text-lg font-semibold text-white">Plan de ortodoncia</h2>
@@ -1247,14 +1290,6 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
               )}
             </div>
           </div>
-
-          <PatientMediaManager
-            patientId={patient.id}
-            media={media}
-            onMediaUpdated={handleMediaUpdated}
-            onMediaRefreshed={handleMediaRefreshed}
-            onMediaDeleted={handleMediaDeleted}
-          />
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1630,6 +1665,29 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
           </div>
         </aside>
       </div>
+      )}
+
+      {activeSection === 'clinicalHistory' && (
+        <div className="space-y-6">
+          <ClinicalHistoryForm
+            history={clinicalHistory}
+            onSubmit={handleClinicalHistorySubmit}
+            loading={clinicalSaving}
+          />
+        </div>
+      )}
+
+      {activeSection === 'media' && (
+        <div className="space-y-6">
+          <PatientMediaManager
+            patientId={patient.id}
+            media={media}
+            onMediaUpdated={handleMediaUpdated}
+            onMediaRefreshed={handleMediaRefreshed}
+            onMediaDeleted={handleMediaDeleted}
+          />
+        </div>
+      )}
     </section>
 
       {isBudgetModalOpen && (

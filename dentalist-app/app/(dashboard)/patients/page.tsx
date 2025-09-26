@@ -12,6 +12,12 @@ export default function PatientsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [inviteAlert, setInviteAlert] = useState<
+    { type: 'success' | 'error'; message: string } | null
+  >(null);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [inviteExpiry, setInviteExpiry] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchPatients = async () => {
@@ -71,6 +77,74 @@ export default function PatientsPage() {
     }
   };
 
+  const handleGenerateInvite = async () => {
+    setInviteLoading(true);
+    setInviteAlert(null);
+    setInviteLink(null);
+    setInviteExpiry(null);
+
+    try {
+      const response = await PatientService.createInvite();
+      if (!response?.success || !response.inviteUrl) {
+        throw new Error(response?.error ?? 'No pudimos generar el enlace de registro.');
+      }
+
+      const link: string = response.inviteUrl;
+      const expiresAt: string | null = response.invite?.expiresAt ?? null;
+
+      setInviteLink(link);
+      setInviteExpiry(expiresAt);
+
+      const expiryText = expiresAt
+        ? ` Caduca el ${new Date(expiresAt).toLocaleString('es-AR')}.`
+        : '';
+
+      let successMessage = `Enlace generado correctamente.${expiryText}`;
+
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        try {
+          await navigator.clipboard.writeText(link);
+          successMessage = `Enlace generado y copiado al portapapeles.${expiryText}`;
+        } catch {
+          successMessage = `Enlace generado. Copiá el enlace manualmente.${expiryText}`;
+        }
+      }
+
+      setInviteAlert({ type: 'success', message: successMessage });
+    } catch (generateError) {
+      setInviteAlert({
+        type: 'error',
+        message:
+          generateError instanceof Error
+            ? generateError.message
+            : 'No pudimos generar el enlace de registro.',
+      });
+      setInviteLink(null);
+      setInviteExpiry(null);
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const handleCopyInviteLink = async () => {
+    if (!inviteLink || typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      const expiryText = inviteExpiry
+        ? ` Caduca el ${new Date(inviteExpiry).toLocaleString('es-AR')}.`
+        : '';
+      setInviteAlert({ type: 'success', message: `Enlace copiado al portapapeles.${expiryText}` });
+    } catch {
+      setInviteAlert({
+        type: 'error',
+        message: 'No pudimos copiar el enlace automáticamente. Copialo manualmente.',
+      });
+    }
+  };
+
   return (
     <section className="space-y-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -105,39 +179,76 @@ export default function PatientsPage() {
             onChange={(event) => setSearch(event.target.value)}
             className="w-full rounded-full border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white placeholder:text-slate-400 focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40 md:w-80"
           />
-          <div className="flex items-center gap-2 text-xs text-slate-300">
-            <label className="flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/60 px-3 py-2">
-              <input
-                type="radio"
-                name="status"
-                value="all"
-                checked={status === 'all'}
-                onChange={() => setStatus('all')}
-              />
-              Todos
-            </label>
-            <label className="flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-2">
-              <input
-                type="radio"
-                name="status"
-                value="active"
-                checked={status === 'active'}
-                onChange={() => setStatus('active')}
-              />
-              Activos
-            </label>
-            <label className="flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-2">
-              <input
-                type="radio"
-                name="status"
-                value="inactive"
-                checked={status === 'inactive'}
-                onChange={() => setStatus('inactive')}
-              />
-              Inactivos
-            </label>
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-3">
+            <div className="flex items-center gap-2 text-xs text-slate-300">
+              <label className="flex items-center gap-2 rounded-full border border-white/10 bg-slate-900/60 px-3 py-2">
+                <input
+                  type="radio"
+                  name="status"
+                  value="all"
+                  checked={status === 'all'}
+                  onChange={() => setStatus('all')}
+                />
+                Todos
+              </label>
+              <label className="flex items-center gap-2 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-3 py-2">
+                <input
+                  type="radio"
+                  name="status"
+                  value="active"
+                  checked={status === 'active'}
+                  onChange={() => setStatus('active')}
+                />
+                Activos
+              </label>
+              <label className="flex items-center gap-2 rounded-full border border-amber-400/40 bg-amber-400/10 px-3 py-2">
+                <input
+                  type="radio"
+                  name="status"
+                  value="inactive"
+                  checked={status === 'inactive'}
+                  onChange={() => setStatus('inactive')}
+                />
+                Inactivos
+              </label>
+            </div>
+            <button
+              type="button"
+              onClick={handleGenerateInvite}
+              disabled={inviteLoading}
+              className="w-full rounded-full border border-cyan-400/60 px-4 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-60 md:w-auto"
+            >
+              {inviteLoading ? 'Generando enlace…' : 'Generar enlace de registro'}
+            </button>
           </div>
         </div>
+        {inviteAlert && (
+          <div
+            className={`rounded-2xl border px-4 py-3 text-xs ${
+              inviteAlert.type === 'success'
+                ? 'border-cyan-400/40 bg-cyan-500/10 text-cyan-100'
+                : 'border-rose-400/40 bg-rose-500/10 text-rose-100'
+            }`}
+          >
+            <p>{inviteAlert.message}</p>
+            {inviteLink && (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="max-w-full truncate font-mono text-[13px] text-white/90">
+                  {inviteLink}
+                </span>
+                {typeof navigator !== 'undefined' && navigator.clipboard?.writeText && (
+                  <button
+                    type="button"
+                    onClick={handleCopyInviteLink}
+                    className="rounded-full border border-white/20 px-3 py-1 text-[11px] font-semibold text-white/80 transition hover:border-white/40 hover:text-white"
+                  >
+                    Copiar enlace
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         {loading && <p className="text-sm text-slate-300">Cargando pacientes...</p>}
         {error && (
           <p className="rounded-2xl bg-rose-500/10 px-4 py-3 text-sm text-rose-200">

@@ -26,6 +26,14 @@ export interface Patient {
   status: 'active' | 'inactive';
 }
 
+export interface PatientInvite {
+  id: string;
+  professionalId: string;
+  expiresAt: string;
+  createdAt: string;
+  usedAt?: string | null;
+}
+
 export interface Appointment {
   id: string;
   patientId: string;
