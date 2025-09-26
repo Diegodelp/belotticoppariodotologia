@@ -1,7 +1,8 @@
 'use client';
-import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { Trash2 } from 'lucide-react';
 import { AppointmentForm } from '@/components/appointments/AppointmentForm';
 import { ClinicalHistoryForm } from '@/components/patients/ClinicalHistoryForm';
 import { PatientMediaManager } from '@/components/patients/PatientMediaManager';
@@ -95,6 +96,8 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
       signatureUrl: null,
     },
   );
+  const [prescriptionAlert, setPrescriptionAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [deletingPrescriptionId, setDeletingPrescriptionId] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -113,6 +116,8 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
   const [budgetAlert, setBudgetAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
   const [budgetDeletingId, setBudgetDeletingId] = useState<string | null>(null);
+  const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+  const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
   const [assignedPlan, setAssignedPlan] = useState<PatientOrthodonticPlan | null>(null);
   const currencyFormatter = new Intl.NumberFormat('es-AR', {
     style: 'currency',
@@ -127,6 +132,11 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     : isEditingBudget
       ? 'Guardar cambios'
       : 'Generar presupuesto';
+
+  const sortedPrescriptions = useMemo(() => {
+    const list = data?.prescriptions ?? [];
+    return [...list].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+  }, [data?.prescriptions]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -380,6 +390,22 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     setBudgetForm({ title: '', notes: '', items: [createEmptyBudgetItem()] });
   };
 
+  const openBudgetModalForNew = () => {
+    setBudgetAlert(null);
+    setEditingBudgetId(null);
+    resetBudgetForm();
+    setIsBudgetModalOpen(true);
+  };
+
+  const closeBudgetModal = (preserveAlert = false) => {
+    if (!preserveAlert) {
+      setBudgetAlert(null);
+    }
+    setIsBudgetModalOpen(false);
+    setEditingBudgetId(null);
+    resetBudgetForm();
+  };
+
   const handleBudgetEdit = (budget: Budget) => {
     setBudgetAlert(null);
     setEditingBudgetId(budget.id);
@@ -395,11 +421,21 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
             }))
           : [createEmptyBudgetItem()],
     });
+    setIsBudgetModalOpen(true);
   };
 
   const handleCancelBudgetEdit = () => {
     setEditingBudgetId(null);
     resetBudgetForm();
+  };
+
+  const openPrescriptionModal = () => {
+    setPrescriptionAlert(null);
+    setIsPrescriptionModalOpen(true);
+  };
+
+  const closePrescriptionModal = () => {
+    setIsPrescriptionModalOpen(false);
   };
 
   const handleDeleteBudget = async (budgetId: string) => {
@@ -532,14 +568,13 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
         };
       });
 
-      resetBudgetForm();
-      setEditingBudgetId(null);
       setBudgetAlert({
         type: 'success',
         message: currentEditingId
           ? 'Presupuesto actualizado correctamente.'
           : 'Presupuesto creado correctamente.',
       });
+      closeBudgetModal(true);
     } catch (error) {
       setBudgetAlert({
         type: 'error',
@@ -688,6 +723,8 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
         });
       }
 
+      setPrescriptionAlert({ type: 'success', message: 'Receta generada correctamente.' });
+
       return { success: true, prescription: response.prescription as Prescription };
     } catch (creationError) {
       return {
@@ -700,7 +737,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     }
   };
 
-  const handleDeletePrescription = async (prescriptionId: string) => {
+  const deletePrescription = async (prescriptionId: string) => {
     if (!data?.patient) {
       return { success: false, error: 'Paciente no disponible' };
     }
@@ -733,6 +770,31 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
             : 'No pudimos eliminar la receta',
       };
     }
+  };
+
+  const handleSummaryDeletePrescription = async (prescriptionId: string) => {
+    if (typeof window !== 'undefined') {
+      const confirmed = window.confirm('¿Seguro que querés eliminar esta receta?');
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setPrescriptionAlert(null);
+    setDeletingPrescriptionId(prescriptionId);
+
+    const result = await deletePrescription(prescriptionId);
+
+    if (result.success) {
+      setPrescriptionAlert({ type: 'success', message: 'Receta eliminada correctamente.' });
+    } else {
+      setPrescriptionAlert({
+        type: 'error',
+        message: result.error ?? 'No pudimos eliminar la receta. Intentá nuevamente.',
+      });
+    }
+
+    setDeletingPrescriptionId(null);
   };
 
   const handleUpdateSignature = async (signatureDataUrl: string) => {
@@ -874,7 +936,8 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
   const { patient, appointments, treatments, payments, clinicalHistory, prescriptions, budgets, media } = data;
 
   return (
-    <section className="space-y-8">
+    <>
+      <section className="space-y-8">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="text-3xl font-semibold text-white">
@@ -1194,11 +1257,23 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
           />
 
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
-            <h2 className="text-lg font-semibold text-white">Presupuestos</h2>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Presupuestos</h2>
+                <p className="text-xs text-slate-300">Documentos emitidos para el paciente.</p>
+              </div>
+              <button
+                type="button"
+                onClick={openBudgetModalForNew}
+                className="rounded-full bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400"
+              >
+                Generar presupuesto
+              </button>
+            </div>
 
-            {budgetAlert && (
+            {budgetAlert && !isBudgetModalOpen && (
               <p
-                className={`mt-3 rounded-2xl border px-3 py-2 text-xs ${
+                className={`mt-4 rounded-2xl border px-3 py-2 text-xs ${
                   budgetAlert.type === 'success'
                     ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
                     : 'border-rose-400/40 bg-rose-500/10 text-rose-100'
@@ -1208,121 +1283,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
               </p>
             )}
 
-            <form
-              onSubmit={handleBudgetSubmit}
-              className="mt-4 space-y-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4"
-            >
-              {isEditingBudget && (
-                <p className="rounded-2xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
-                  Estás editando un presupuesto existente. Guardá los cambios o cancelá la edición.
-                </p>
-              )}
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="md:col-span-2 text-xs font-semibold uppercase tracking-widest text-slate-300">
-                  Título del presupuesto
-                  <input
-                    name="title"
-                    value={budgetForm.title}
-                    onChange={handleBudgetFieldChange}
-                    placeholder="Ej: Tratamiento integral"
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                  />
-                </label>
-                <label className="md:col-span-2 text-xs font-semibold uppercase tracking-widest text-slate-300">
-                  Notas para el paciente
-                  <textarea
-                    name="notes"
-                    value={budgetForm.notes}
-                    onChange={handleBudgetFieldChange}
-                    rows={3}
-                    placeholder="Detalles adicionales o condiciones"
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                  />
-                </label>
-              </div>
-
-              <div className="space-y-4">
-                {budgetForm.items.map((item, index) => (
-                  <div key={index} className="grid gap-3 rounded-2xl border border-white/10 bg-slate-900/40 p-4 md:grid-cols-4">
-                    <label className="text-xs font-semibold uppercase tracking-widest text-slate-300 md:col-span-1">
-                      Práctica
-                      <select
-                        value={item.practice}
-                        onChange={(event) => handleBudgetItemChange(index, 'practice', event.target.value)}
-                        className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                      >
-                        {BUDGET_PRACTICES.map((practice) => (
-                          <option key={practice.value} value={practice.value}>
-                            {practice.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="text-xs font-semibold uppercase tracking-widest text-slate-300 md:col-span-2">
-                      Descripción
-                      <input
-                        value={item.description}
-                        onChange={(event) => handleBudgetItemChange(index, 'description', event.target.value)}
-                        placeholder="Detalles de la práctica"
-                        className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                      />
-                    </label>
-                    <label className="text-xs font-semibold uppercase tracking-widest text-slate-300 md:col-span-1">
-                      Importe
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={item.amount}
-                        onChange={(event) => handleBudgetItemChange(index, 'amount', event.target.value)}
-                        placeholder="Ej: 60000"
-                        className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                      />
-                    </label>
-                    <div className="md:col-span-4 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => removeBudgetItem(index)}
-                        className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-rose-300 hover:text-rose-200"
-                      >
-                        Quitar
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                <button
-                  type="button"
-                  onClick={addBudgetItem}
-                  className="w-full rounded-full border border-cyan-400/60 px-4 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/10"
-                >
-                  Añadir práctica
-                </button>
-              </div>
-
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                {isEditingBudget && (
-                  <button
-                    type="button"
-                    onClick={handleCancelBudgetEdit}
-                    disabled={budgetSaving}
-                    className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-slate-200/60 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Cancelar edición
-                  </button>
-                )}
-                <div className="flex flex-1 justify-end gap-3">
-                  <button
-                    type="submit"
-                    disabled={budgetSaving}
-                    className="rounded-full bg-cyan-500 px-6 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {budgetSubmitLabel}
-                  </button>
-                </div>
-              </div>
-            </form>
-
-            <div className="mt-6 space-y-3 text-sm text-slate-200">
+            <div className="mt-4 space-y-3 text-sm text-slate-200">
               {budgets.length === 0 ? (
                 <p className="text-slate-400">Todavía no se generaron presupuestos para este paciente.</p>
               ) : (
@@ -1532,14 +1493,85 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
             </div>
           </div>
 
-          <PrescriptionManager
-            prescriptions={prescriptions}
-            onCreate={handleCreatePrescription}
-            hasSavedSignature={signatureInfo.hasSignature}
-            savedSignatureUrl={signatureInfo.signatureUrl}
-            onDelete={handleDeletePrescription}
-            onUpdateSignature={handleUpdateSignature}
-          />
+          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-white">Recetas digitales</h2>
+                <p className="text-xs text-slate-300">Documentos firmados disponibles para el paciente.</p>
+              </div>
+              <button
+                type="button"
+                onClick={openPrescriptionModal}
+                className="rounded-full bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400"
+              >
+                Emitir receta
+              </button>
+            </div>
+
+            {prescriptionAlert && !isPrescriptionModalOpen && (
+              <p
+                className={`mt-4 rounded-2xl border px-3 py-2 text-xs ${
+                  prescriptionAlert.type === 'success'
+                    ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
+                    : 'border-rose-400/40 bg-rose-500/10 text-rose-100'
+                }`}
+              >
+                {prescriptionAlert.message}
+              </p>
+            )}
+
+            {sortedPrescriptions.length === 0 ? (
+              <p className="mt-4 rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-300">
+                Todavía no emitiste recetas para este paciente.
+              </p>
+            ) : (
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                {sortedPrescriptions.map((prescription) => {
+                  const issued = new Date(prescription.createdAt).toLocaleString('es-AR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  });
+                  return (
+                    <article
+                      key={prescription.id}
+                      className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-sm shadow-cyan-500/5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <h3 className="text-sm font-semibold text-white">{prescription.title}</h3>
+                          <p className="text-xs text-slate-400">Emitida el {issued}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleSummaryDeletePrescription(prescription.id)}
+                          disabled={deletingPrescriptionId === prescription.id}
+                          title="Eliminar receta"
+                          aria-label="Eliminar receta"
+                          className="rounded-full border border-white/10 p-1.5 text-slate-200 transition hover:border-rose-300/60 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <p className="text-xs text-slate-200 line-clamp-2">
+                        {prescription.instructions || 'Sin indicaciones registradas'}
+                      </p>
+                      <a
+                        href={prescription.pdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-200/60 hover:text-cyan-100"
+                      >
+                        Descargar PDF
+                      </a>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         <aside className="space-y-6">
@@ -1599,5 +1631,184 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
         </aside>
       </div>
     </section>
+
+      {isBudgetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-8">
+          <div className="w-full max-w-3xl overflow-y-auto rounded-3xl border border-white/10 bg-slate-900/90 p-6 text-white shadow-xl shadow-cyan-500/20 backdrop-blur">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-white">
+                  {isEditingBudget ? 'Editar presupuesto' : 'Nuevo presupuesto'}
+                </h2>
+                <p className="text-sm text-slate-300">Completá los datos para generar el documento en PDF.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => closeBudgetModal()}
+                className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-white/40 hover:bg-white/10"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            {budgetAlert && (
+              <p
+                className={`mt-4 rounded-2xl border px-3 py-2 text-xs ${
+                  budgetAlert.type === 'success'
+                    ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
+                    : 'border-rose-400/40 bg-rose-500/10 text-rose-100'
+                }`}
+              >
+                {budgetAlert.message}
+              </p>
+            )}
+
+            <form
+              onSubmit={handleBudgetSubmit}
+              className="mt-6 space-y-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4"
+            >
+              {isEditingBudget && (
+                <p className="rounded-2xl border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                  Estás editando un presupuesto existente. Guardá los cambios o cancelá la edición.
+                </p>
+              )}
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="md:col-span-2 text-xs font-semibold uppercase tracking-widest text-slate-300">
+                  Título del presupuesto
+                  <input
+                    name="title"
+                    value={budgetForm.title}
+                    onChange={handleBudgetFieldChange}
+                    placeholder="Ej: Tratamiento integral"
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                  />
+                </label>
+                <label className="md:col-span-2 text-xs font-semibold uppercase tracking-widest text-slate-300">
+                  Notas para el paciente
+                  <textarea
+                    name="notes"
+                    value={budgetForm.notes}
+                    onChange={handleBudgetFieldChange}
+                    rows={3}
+                    placeholder="Detalles adicionales o condiciones"
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                  />
+                </label>
+              </div>
+
+              <div className="space-y-4">
+                {budgetForm.items.map((item, index) => (
+                  <div key={index} className="grid gap-3 rounded-2xl border border-white/10 bg-slate-900/40 p-4 md:grid-cols-4">
+                    <label className="text-xs font-semibold uppercase tracking-widest text-slate-300 md:col-span-1">
+                      Práctica
+                      <select
+                        value={item.practice}
+                        onChange={(event) => handleBudgetItemChange(index, 'practice', event.target.value)}
+                        className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                      >
+                        {BUDGET_PRACTICES.map((practice) => (
+                          <option key={practice.value} value={practice.value}>
+                            {practice.label}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="text-xs font-semibold uppercase tracking-widest text-slate-300 md:col-span-2">
+                      Descripción
+                      <input
+                        value={item.description}
+                        onChange={(event) => handleBudgetItemChange(index, 'description', event.target.value)}
+                        placeholder="Detalles de la práctica"
+                        className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                      />
+                    </label>
+                    <label className="text-xs font-semibold uppercase tracking-widest text-slate-300 md:col-span-1">
+                      Importe
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={item.amount}
+                        onChange={(event) => handleBudgetItemChange(index, 'amount', event.target.value)}
+                        placeholder="Ej: 60000"
+                        className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                      />
+                    </label>
+                    <div className="md:col-span-4 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => removeBudgetItem(index)}
+                        className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-rose-300 hover:text-rose-200"
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addBudgetItem}
+                  className="w-full rounded-full border border-cyan-400/60 px-4 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/10"
+                >
+                  Añadir práctica
+                </button>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                {isEditingBudget && (
+                  <button
+                    type="button"
+                    onClick={handleCancelBudgetEdit}
+                    disabled={budgetSaving}
+                    className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-slate-200/60 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Cancelar edición
+                  </button>
+                )}
+                <div className="flex flex-1 justify-end gap-3">
+                  <button
+                    type="submit"
+                    disabled={budgetSaving}
+                    className="rounded-full bg-cyan-500 px-6 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {budgetSubmitLabel}
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isPrescriptionModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-8">
+          <div className="w-full max-w-4xl overflow-y-auto rounded-3xl border border-white/10 bg-slate-900/90 p-6 text-white shadow-xl shadow-cyan-500/20 backdrop-blur">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-white">Emitir receta digital</h2>
+                <p className="text-sm text-slate-300">Generá, firmá y guardá la receta en la historia clínica.</p>
+              </div>
+              <button
+                type="button"
+                onClick={closePrescriptionModal}
+                className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-white/40 hover:bg-white/10"
+              >
+                Cerrar
+              </button>
+            </div>
+            <div className="mt-6">
+              <PrescriptionManager
+                prescriptions={prescriptions}
+                onCreate={handleCreatePrescription}
+                hasSavedSignature={signatureInfo.hasSignature}
+                savedSignatureUrl={signatureInfo.signatureUrl}
+                onDelete={deletePrescription}
+                onUpdateSignature={handleUpdateSignature}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
