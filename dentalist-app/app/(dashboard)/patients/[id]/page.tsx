@@ -120,6 +120,8 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
   const [treatmentForm, setTreatmentForm] = useState(() => createEmptyTreatmentForm());
   const [treatmentSaving, setTreatmentSaving] = useState(false);
   const [treatmentError, setTreatmentError] = useState<string | null>(null);
+  const [editingTreatmentId, setEditingTreatmentId] = useState<string | null>(null);
+  const [treatmentDeletingId, setTreatmentDeletingId] = useState<string | null>(null);
   const [signatureInfo, setSignatureInfo] = useState<{ hasSignature: boolean; signatureUrl: string | null }>(
     {
       hasSignature: false,
@@ -329,6 +331,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     setShowTreatmentForm(false);
     setTreatmentForm(createEmptyTreatmentForm());
     setTreatmentError(null);
+    setEditingTreatmentId(null);
   };
 
   const handlePlanSelectionChange = (event: ChangeEvent<HTMLSelectElement>) => {
@@ -982,34 +985,65 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     setPageAlert(null);
 
     try {
-      const response = await TreatmentService.create({
-        patientId: data.patient.id,
-        type: trimmedType,
-        description: trimmedDescription,
-        date: treatmentForm.date,
-        cost: costValue,
-      });
+      if (editingTreatmentId) {
+        const response = await TreatmentService.update({
+          id: editingTreatmentId,
+          type: trimmedType,
+          description: trimmedDescription,
+          date: treatmentForm.date,
+          cost: costValue,
+        });
 
-      if (!response?.success || !response.treatment) {
-        throw new Error(response?.error ?? 'No pudimos registrar el tratamiento.');
+        if (!response?.success || !response.treatment) {
+          throw new Error(response?.error ?? 'No pudimos actualizar el tratamiento.');
+        }
+
+        setData((current) =>
+          current
+            ? {
+                ...current,
+                treatments: current.treatments.map((item) =>
+                  item.id === response.treatment!.id ? (response.treatment as Treatment) : item,
+                ),
+              }
+            : current,
+        );
+
+        setPageAlert({
+          type: 'success',
+          message: 'Tratamiento actualizado correctamente.',
+        });
+      } else {
+        const response = await TreatmentService.create({
+          patientId: data.patient.id,
+          type: trimmedType,
+          description: trimmedDescription,
+          date: treatmentForm.date,
+          cost: costValue,
+        });
+
+        if (!response?.success || !response.treatment) {
+          throw new Error(response?.error ?? 'No pudimos registrar el tratamiento.');
+        }
+
+        setData((current) =>
+          current
+            ? {
+                ...current,
+                treatments: [response.treatment as Treatment, ...current.treatments],
+              }
+            : current,
+        );
+
+        setPageAlert({
+          type: 'success',
+          message: 'Tratamiento registrado correctamente.',
+        });
       }
-
-      setData((current) =>
-        current
-          ? {
-              ...current,
-              treatments: [response.treatment as Treatment, ...current.treatments],
-            }
-          : current,
-      );
-
-      setPageAlert({
-        type: 'success',
-        message: 'Tratamiento registrado correctamente.',
-      });
 
       setTreatmentForm(createEmptyTreatmentForm());
       setShowTreatmentForm(false);
+      setEditingTreatmentId(null);
     } catch (submitError) {
       setTreatmentError(
         submitError instanceof Error
@@ -1018,6 +1052,57 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
       );
     } finally {
       setTreatmentSaving(false);
+    }
+  };
+
+  const handleTreatmentEdit = (treatment: Treatment) => {
+    setShowTreatmentForm(true);
+    setEditingTreatmentId(treatment.id);
+    setTreatmentForm({
+      type: treatment.type,
+      description: treatment.description,
+      cost: treatment.cost.toString(),
+      date: treatment.date,
+    });
+    setTreatmentError(null);
+  };
+
+  const handleTreatmentDelete = async (treatment: Treatment) => {
+    if (!window.confirm('¿Querés eliminar este tratamiento del historial?')) {
+      return;
+    }
+
+    try {
+      setTreatmentDeletingId(treatment.id);
+      const response = await TreatmentService.remove(treatment.id);
+      if (!response?.success) {
+        throw new Error(response?.error ?? 'No pudimos eliminar el tratamiento.');
+      }
+
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              treatments: current.treatments.filter((item) => item.id !== treatment.id),
+            }
+          : current,
+      );
+
+      if (editingTreatmentId === treatment.id) {
+        setEditingTreatmentId(null);
+        setTreatmentForm(createEmptyTreatmentForm());
+        setShowTreatmentForm(false);
+      }
+
+      setPageAlert({ type: 'success', message: 'Tratamiento eliminado correctamente.' });
+    } catch (error) {
+      console.error('Error al eliminar tratamiento', error);
+      setPageAlert({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'No pudimos eliminar el tratamiento.',
+      });
+    } finally {
+      setTreatmentDeletingId(null);
     }
   };
 
@@ -1622,8 +1707,14 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
                 if (showTreatmentForm) {
                   setTreatmentForm(createEmptyTreatmentForm());
                   setTreatmentError(null);
+                  setEditingTreatmentId(null);
+                  setShowTreatmentForm(false);
+                } else {
+                  setTreatmentForm(createEmptyTreatmentForm());
+                  setTreatmentError(null);
+                  setEditingTreatmentId(null);
+                  setShowTreatmentForm(true);
                 }
-                setShowTreatmentForm((current) => !current);
               }}
               className="rounded-full border border-cyan-400/60 px-4 py-1 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/10"
             >
@@ -1701,7 +1792,11 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
                 disabled={treatmentSaving}
                 className="rounded-full bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {treatmentSaving ? 'Guardando...' : 'Guardar tratamiento'}
+                {treatmentSaving
+                  ? 'Guardando...'
+                  : editingTreatmentId
+                    ? 'Actualizar tratamiento'
+                    : 'Guardar tratamiento'}
               </button>
             </div>
           </form>
@@ -1719,6 +1814,23 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
               <p className="mt-2 text-xs text-emerald-300">
                 Monto: {treatment.cost.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}
               </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+                <button
+                  type="button"
+                  onClick={() => handleTreatmentEdit(treatment)}
+                  className="rounded-full border border-white/10 px-3 py-1 font-semibold text-slate-200 transition hover:border-cyan-300 hover:text-cyan-200"
+                >
+                  Editar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleTreatmentDelete(treatment)}
+                  disabled={treatmentDeletingId === treatment.id}
+                  className="rounded-full border border-rose-400/40 px-3 py-1 font-semibold text-rose-200 transition hover:border-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {treatmentDeletingId === treatment.id ? 'Eliminando…' : 'Eliminar'}
+                </button>
+              </div>
             </div>
           ))}
         </div>

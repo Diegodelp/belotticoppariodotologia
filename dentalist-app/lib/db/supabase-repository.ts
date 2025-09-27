@@ -91,6 +91,8 @@ const MEDIA_BUCKET = process.env.SUPABASE_BUCKET_CLINICAL_MEDIA ?? 'clinical-med
 const SIGNATURES_BUCKET =
   process.env.SUPABASE_BUCKET_PROFESSIONAL_SIGNATURES ??
   'professional-signatures';
+const PROFESSIONAL_LOGOS_BUCKET =
+  process.env.SUPABASE_BUCKET_PROFESSIONAL_LOGOS ?? 'professional-logos';
 const PATIENT_INVITES_TABLE =
   process.env.SUPABASE_TABLE_PACIENTE_INVITACIONES ??
   process.env.SUPABASE_TABLE_PATIENT_INVITES ??
@@ -270,6 +272,7 @@ type AppProfessionalRow = {
   country: string | null;
   province: string | null;
   locality: string | null;
+  logo_path: string | null;
   updated_at: string | null;
 };
 
@@ -475,6 +478,8 @@ function mapProfessionalProfile(row: AppProfessionalRow): ProfessionalProfile {
     country: row.country ?? null,
     province: row.province ?? null,
     locality: row.locality ?? null,
+    logoPath: row.logo_path ?? null,
+    logoUrl: null,
     updatedAt: row.updated_at ?? null,
   };
 }
@@ -1130,7 +1135,7 @@ export async function getProfessionalProfile(professionalId: string): Promise<Pr
   const { data, error } = await client
     .from(PROFESSIONALS_TABLE)
     .select(
-      'id, dni, full_name, email, clinic_name, license_number, phone, address, country, province, locality, updated_at',
+      'id, dni, full_name, email, clinic_name, license_number, phone, address, country, province, locality, logo_path, updated_at',
     )
     .eq('id', professionalId)
     .maybeSingle<AppProfessionalRow>();
@@ -1140,7 +1145,14 @@ export async function getProfessionalProfile(professionalId: string): Promise<Pr
     return null;
   }
 
-  return mapProfessionalProfile(data);
+  const profile = mapProfessionalProfile(data);
+  if (profile.logoPath) {
+    profile.logoUrl =
+      (await createSignedUrl(client, PROFESSIONAL_LOGOS_BUCKET, profile.logoPath)) ?? null;
+  } else {
+    profile.logoUrl = null;
+  }
+  return profile;
 }
 
 export async function updateProfessionalProfile(
@@ -1217,7 +1229,7 @@ export async function updateProfessionalProfile(
     .update(payload)
     .eq('id', professionalId)
     .select(
-      'id, dni, full_name, email, clinic_name, license_number, phone, address, country, province, locality, updated_at',
+      'id, dni, full_name, email, clinic_name, license_number, phone, address, country, province, locality, logo_path, updated_at',
     )
     .maybeSingle<AppProfessionalRow>();
 
@@ -1226,7 +1238,14 @@ export async function updateProfessionalProfile(
     throw new Error('Profesional no encontrado');
   }
 
-  return mapProfessionalProfile(data);
+  const profile = mapProfessionalProfile(data);
+  if (profile.logoPath) {
+    profile.logoUrl =
+      (await createSignedUrl(client, PROFESSIONAL_LOGOS_BUCKET, profile.logoPath)) ?? null;
+  } else {
+    profile.logoUrl = null;
+  }
+  return profile;
 }
 
 export async function listPatients(
@@ -2035,6 +2054,44 @@ export async function createTreatment(
   return mapTreatment(data as AppTreatmentRow);
 }
 
+export async function updateTreatment(
+  professionalId: string,
+  treatmentId: string,
+  updates: { type: string; description: string; cost: number; date: string },
+): Promise<Treatment> {
+  const client = getClient();
+  const { data, error } = await client
+    .from(TREATMENTS_TABLE)
+    .update({
+      title: updates.type,
+      description: updates.description,
+      cost: updates.cost,
+      start_date: updates.date,
+    })
+    .eq('professional_id', professionalId)
+    .eq('id', treatmentId)
+    .select('*')
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    throw new Error('Tratamiento no encontrado');
+  }
+
+  return mapTreatment(data as AppTreatmentRow);
+}
+
+export async function deleteTreatment(professionalId: string, treatmentId: string): Promise<void> {
+  const client = getClient();
+  const { error } = await client
+    .from(TREATMENTS_TABLE)
+    .delete()
+    .eq('professional_id', professionalId)
+    .eq('id', treatmentId);
+
+  if (error) throw error;
+}
+
 export async function listPayments(
   professionalId: string,
   patientId?: string,
@@ -2075,6 +2132,45 @@ export async function createPayment(
     .single();
   if (error) throw error;
   return mapPayment(data as AppPaymentRow);
+}
+
+export async function updatePayment(
+  professionalId: string,
+  paymentId: string,
+  updates: { amount: number; method: Payment['method']; status: Payment['status']; date: string; notes?: string | null },
+): Promise<Payment> {
+  const client = getClient();
+  const { data, error } = await client
+    .from(PAYMENTS_TABLE)
+    .update({
+      amount: updates.amount,
+      method: updates.method,
+      status: updates.status,
+      paid_at: updates.date,
+      notes: updates.notes ?? null,
+    })
+    .eq('professional_id', professionalId)
+    .eq('id', paymentId)
+    .select('*')
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    throw new Error('Pago no encontrado');
+  }
+
+  return mapPayment(data as AppPaymentRow);
+}
+
+export async function deletePayment(professionalId: string, paymentId: string): Promise<void> {
+  const client = getClient();
+  const { error } = await client
+    .from(PAYMENTS_TABLE)
+    .delete()
+    .eq('professional_id', professionalId)
+    .eq('id', paymentId);
+
+  if (error) throw error;
 }
 
 export async function getClinicalHistory(
@@ -2483,6 +2579,131 @@ export async function deletePrescriptionRecord(
   }
 }
 
+export async function getProfessionalLogo(
+  professionalId: string,
+  options: { signedUrlExpiresIn?: number } = {},
+): Promise<{ storagePath: string; signedUrl: string | null; updatedAt: string | null } | null> {
+  const client = getClient();
+
+  const { data, error } = await client
+    .from(PROFESSIONALS_TABLE)
+    .select('logo_path, updated_at')
+    .eq('id', professionalId)
+    .maybeSingle();
+
+  if (error) throw error;
+  const record = data as { logo_path: string | null; updated_at: string | null } | null;
+  if (!record || !record.logo_path) {
+    return null;
+  }
+
+  const signedUrl = await createSignedUrl(
+    client,
+    PROFESSIONAL_LOGOS_BUCKET,
+    record.logo_path,
+    options.signedUrlExpiresIn ?? 3600,
+  );
+
+  return {
+    storagePath: record.logo_path,
+    signedUrl,
+    updatedAt: record.updated_at ?? null,
+  };
+}
+
+export async function saveProfessionalLogo(
+  professionalId: string,
+  file: { buffer: Buffer; mimeType: string },
+): Promise<{ storagePath: string; signedUrl: string | null }> {
+  const client = getClient();
+  const mimeType = file.mimeType?.startsWith('image/') ? file.mimeType : 'image/png';
+  if (mimeType !== 'image/png') {
+    throw new Error('El logo debe estar en formato PNG.');
+  }
+
+  const storagePath = `${professionalId}/logo.png`;
+
+  await ensureBucketExists(client, PROFESSIONAL_LOGOS_BUCKET);
+
+  const { error: uploadError } = await client.storage
+    .from(PROFESSIONAL_LOGOS_BUCKET)
+    .upload(storagePath, file.buffer, {
+      contentType: mimeType,
+      upsert: true,
+    });
+
+  if (uploadError) throw uploadError;
+
+  const { error: updateError } = await client
+    .from(PROFESSIONALS_TABLE)
+    .update({ logo_path: storagePath, updated_at: new Date().toISOString() })
+    .eq('id', professionalId);
+
+  if (updateError) throw updateError;
+
+  const signedUrl = await createSignedUrl(client, PROFESSIONAL_LOGOS_BUCKET, storagePath);
+  return { storagePath, signedUrl };
+}
+
+export async function deleteProfessionalLogo(professionalId: string): Promise<void> {
+  const client = getClient();
+
+  const { data, error } = await client
+    .from(PROFESSIONALS_TABLE)
+    .select('logo_path')
+    .eq('id', professionalId)
+    .maybeSingle();
+
+  if (error) throw error;
+  const record = data as { logo_path: string | null } | null;
+  const storagePath = record?.logo_path ?? null;
+
+  const { error: updateError } = await client
+    .from(PROFESSIONALS_TABLE)
+    .update({ logo_path: null, updated_at: new Date().toISOString() })
+    .eq('id', professionalId);
+
+  if (updateError) throw updateError;
+
+  if (storagePath) {
+    await ensureBucketExists(client, PROFESSIONAL_LOGOS_BUCKET);
+    const { error: removeError } = await client.storage
+      .from(PROFESSIONAL_LOGOS_BUCKET)
+      .remove([storagePath]);
+    if (removeError) {
+      console.warn('No se pudo eliminar el logo del profesional del storage', removeError);
+    }
+  }
+}
+
+export async function downloadProfessionalLogo(
+  professionalId: string,
+): Promise<{ buffer: Buffer; mimeType: string; storagePath: string } | null> {
+  const client = getClient();
+  const logo = await getProfessionalLogo(professionalId);
+  if (!logo?.storagePath) {
+    return null;
+  }
+
+  await ensureBucketExists(client, PROFESSIONAL_LOGOS_BUCKET);
+
+  const { data, error } = await client.storage
+    .from(PROFESSIONAL_LOGOS_BUCKET)
+    .download(logo.storagePath);
+
+  if (error) throw error;
+  if (!data) {
+    return null;
+  }
+
+  const arrayBuffer = await data.arrayBuffer();
+  return {
+    buffer: Buffer.from(arrayBuffer),
+    mimeType: 'image/png',
+    storagePath: logo.storagePath,
+  };
+}
+
 export async function getProfessionalSignature(
   professionalId: string,
   options: { signedUrlExpiresIn?: number } = {},
@@ -2594,6 +2815,7 @@ export function toPublicUser(user: {
   country?: string | null;
   province?: string | null;
   locality?: string | null;
+  logoUrl?: string | null;
 }): User {
   return {
     id: user.id,
@@ -2608,5 +2830,6 @@ export function toPublicUser(user: {
     country: user.country ?? null,
     province: user.province ?? null,
     locality: user.locality ?? null,
+    logoUrl: user.logoUrl ?? null,
   };
 }

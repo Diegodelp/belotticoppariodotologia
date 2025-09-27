@@ -1,3 +1,4 @@
+import type { PngImage } from './png';
 import { BudgetPractice } from '@/types';
 
 const PAGE_WIDTH = 595;
@@ -43,6 +44,7 @@ interface BudgetPdfOptions {
   professional: BudgetPdfProfessional;
   patient: BudgetPdfPatient;
   items: BudgetPdfItem[];
+  logo?: PngImage;
 }
 
 function formatDate(date: Date): string {
@@ -147,7 +149,7 @@ function practiceLabel(practice: BudgetPractice): string {
   }
 }
 
-function buildContentStream(options: BudgetPdfOptions): Buffer {
+function buildContentStream(options: BudgetPdfOptions, logo?: { image: PngImage; name: string }): Buffer {
   const commands: string[] = [];
 
   let cursorY = PAGE_HEIGHT - MARGIN - 32;
@@ -168,9 +170,50 @@ function buildContentStream(options: BudgetPdfOptions): Buffer {
     commands.push('ET');
   };
 
-  const heading = options.title?.trim() || 'Presupuesto';
-  drawText('F2', 26, COLORS.title, MARGIN, cursorY, heading);
-  cursorY -= 32;
+  const primaryHeading =
+    options.professional.clinicName?.trim() || options.professional.name || options.title?.trim() || 'Presupuesto';
+  const secondaryHeading = (() => {
+    const title = options.title?.trim();
+    if (!title) {
+      return '';
+    }
+    if (title.toLowerCase() === (primaryHeading ?? '').toLowerCase()) {
+      return '';
+    }
+    return title;
+  })();
+
+  let headingX = MARGIN;
+  let logoBottomY = cursorY;
+
+  if (logo) {
+    const { image, name } = logo;
+    const maxWidth = 110;
+    const maxHeight = 100;
+    const scale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
+    const drawWidth = image.width * scale;
+    const drawHeight = image.height * scale;
+    const positionX = MARGIN;
+    const positionY = cursorY - drawHeight + 6;
+
+    commands.push('q');
+    commands.push(`${drawWidth} 0 0 ${drawHeight} ${positionX} ${positionY} cm`);
+    commands.push(`/${name} Do`);
+    commands.push('Q');
+
+    headingX = positionX + drawWidth + 18;
+    logoBottomY = positionY - 12;
+  }
+
+  drawText('F2', 26, COLORS.title, headingX, cursorY, primaryHeading);
+  cursorY -= secondaryHeading ? 26 : 32;
+
+  if (secondaryHeading) {
+    drawText('F1', 14, COLORS.value, headingX, cursorY, secondaryHeading);
+    cursorY -= 24;
+  }
+
+  cursorY = Math.min(cursorY, logoBottomY);
 
   drawText('F2', 16, COLORS.subtitle, MARGIN, cursorY, 'Profesional');
   cursorY -= 22;
@@ -243,7 +286,8 @@ function createStreamObject(id: number, dictionary: string[], stream: Buffer): P
 }
 
 export function generateBudgetPdf(options: BudgetPdfOptions): Buffer {
-  const contentStream = buildContentStream(options);
+  const logoAsset = options.logo ? { image: options.logo, name: 'ImLogo' } : undefined;
+  const contentStream = buildContentStream(options, logoAsset);
 
   const objects: PdfObject[] = [];
   let idCounter = 1;
@@ -253,12 +297,17 @@ export function generateBudgetPdf(options: BudgetPdfOptions): Buffer {
   const pageId = idCounter++;
   const fontRegularId = idCounter++;
   const fontBoldId = idCounter++;
+  const logoImageId = logoAsset ? idCounter++ : null;
+  const logoMaskId = logoAsset?.image.alpha ? idCounter++ : null;
   const contentId = idCounter++;
 
   objects.push(createObject(catalogId, `<< /Type /Catalog /Pages ${pagesId} 0 R >>`));
   objects.push(createObject(pagesId, `<< /Type /Pages /Kids [${pageId} 0 R] /Count 1 >>`));
 
   const resourceEntries = [`/Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >>`];
+  if (logoImageId && logoAsset) {
+    resourceEntries.push(`/XObject << /${logoAsset.name} ${logoImageId} 0 R >>`);
+  }
 
   objects.push(
     createObject(
@@ -279,6 +328,35 @@ export function generateBudgetPdf(options: BudgetPdfOptions): Buffer {
       '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>',
     ),
   );
+
+  if (logoAsset && logoImageId) {
+    if (logoMaskId && logoAsset.image.alpha) {
+      objects.push(
+        createStreamObject(logoMaskId, [
+          '/Type /XObject',
+          '/Subtype /Image',
+          `/Width ${logoAsset.image.width}`,
+          `/Height ${logoAsset.image.height}`,
+          '/ColorSpace /DeviceGray',
+          '/BitsPerComponent 8',
+          '/Filter /FlateDecode',
+        ], logoAsset.image.alpha),
+      );
+    }
+
+    objects.push(
+      createStreamObject(logoImageId, [
+        '/Type /XObject',
+        '/Subtype /Image',
+        `/Width ${logoAsset.image.width}`,
+        `/Height ${logoAsset.image.height}`,
+        '/ColorSpace /DeviceRGB',
+        '/BitsPerComponent 8',
+        '/Filter /FlateDecode',
+        ...(logoMaskId ? [`/SMask ${logoMaskId} 0 R`] : []),
+      ], logoAsset.image.data),
+    );
+  }
 
   objects.push(createStreamObject(contentId, [], contentStream));
 

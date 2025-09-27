@@ -4,6 +4,8 @@ import {
   createTreatment,
   listPatients,
   listTreatments,
+  updateTreatment,
+  deleteTreatment,
 } from '@/lib/db/supabase-repository';
 import { Treatment, Patient } from '@/types';
 
@@ -75,6 +77,65 @@ export async function POST(request: NextRequest) {
     console.error('Error al registrar tratamiento', error);
     return NextResponse.json(
       { error: 'No pudimos registrar el tratamiento' },
+      { status: 500 },
+    );
+  }
+}
+
+export async function PUT(request: NextRequest) {
+  try {
+    const user = getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
+
+    const body = await request.json();
+    const { id, type, description, cost, date } = body ?? {};
+
+    if (!id || !type || !description || !date || Number.isNaN(Number(cost))) {
+      return NextResponse.json(
+        { error: 'Debés indicar tratamiento, descripción, fecha y monto válidos.' },
+        { status: 400 },
+      );
+    }
+
+    const treatment = await updateTreatment(user.id, id, {
+      type: String(type),
+      description: String(description),
+      cost: Number(cost),
+      date: new Date(date).toISOString(),
+    });
+
+    return NextResponse.json({ success: true, treatment });
+  } catch (error) {
+    console.error('Error al actualizar tratamiento', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'No pudimos actualizar el tratamiento' },
+      { status: 500 },
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const user = getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const treatmentId = searchParams.get('treatmentId') ?? searchParams.get('id');
+
+    if (!treatmentId) {
+      return NextResponse.json({ error: 'Identificador de tratamiento inválido.' }, { status: 400 });
+    }
+
+    await deleteTreatment(user.id, treatmentId);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Error al eliminar tratamiento', error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'No pudimos eliminar el tratamiento' },
       { status: 500 },
     );
   }

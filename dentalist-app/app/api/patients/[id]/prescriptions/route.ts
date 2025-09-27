@@ -3,6 +3,7 @@ import { getUserFromRequest } from '@/lib/auth/get-user';
 import {
   createPrescriptionRecord,
   deletePrescriptionRecord,
+  downloadProfessionalLogo,
   downloadProfessionalSignature,
   getPatientById,
   getProfessionalProfile,
@@ -11,6 +12,7 @@ import {
   saveProfessionalSignature,
 } from '@/lib/db/supabase-repository';
 import { generatePrescriptionPdf } from '@/lib/documents/prescription-pdf';
+import { parsePng } from '@/lib/documents/png';
 import { sendPrescriptionIssuedEmail } from '@/lib/email/mailer';
 import { parseSignatureDataUrl } from '@/lib/utils/signature';
 import { CreatePrescriptionInput } from '@/types';
@@ -102,7 +104,10 @@ export async function POST(
       );
     }
 
-    const professionalProfile = await getProfessionalProfile(user.id);
+    const [professionalProfile, logoAsset] = await Promise.all([
+      getProfessionalProfile(user.id),
+      downloadProfessionalLogo(user.id),
+    ]);
     const clinicTitle =
       professionalProfile?.clinicName?.trim() || user.clinicName?.trim() || '';
     const professionalName = professionalProfile?.fullName?.trim() || user.name;
@@ -111,6 +116,15 @@ export async function POST(
     const professionalLocality = professionalProfile?.locality ?? user.locality ?? null;
 
     const pdfTitle = clinicTitle.length > 0 ? clinicTitle : 'Receta digital';
+
+    let logoImage;
+    if (logoAsset?.buffer) {
+      try {
+        logoImage = parsePng(logoAsset.buffer);
+      } catch (error) {
+        console.warn('No pudimos procesar el logo del profesional para la receta', error);
+      }
+    }
 
     const pdfBuffer = await generatePrescriptionPdf({
       title: pdfTitle,
@@ -128,6 +142,7 @@ export async function POST(
       notes: body.notes,
       issuedAt: new Date(),
       signatureDataUrl,
+      logo: logoImage,
     });
 
     const prescription = await createPrescriptionRecord(user.id, patient.id, {

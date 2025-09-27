@@ -64,4 +64,48 @@ export class ProfessionalService {
     const data = (await response.json()) as { profile: ProfessionalProfile };
     return data;
   }
+
+  static async getLogo(): Promise<{ hasLogo: boolean; logoUrl: string | null }> {
+    const response = await fetch('/api/professionals/logo', {
+      headers: {
+        ...authHeaders(),
+      },
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      const data = await parseJson(response);
+      throw new Error((data as { error?: string } | null)?.error ?? 'No pudimos obtener el logo.');
+    }
+
+    return (await response.json()) as { hasLogo: boolean; logoUrl: string | null };
+  }
+
+  static async uploadLogo(file: File): Promise<{ success?: boolean; logoUrl?: string; error?: string }> {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const response = await fetch('/api/professionals/logo', {
+      method: 'PUT',
+      headers: {
+        ...authHeaders(),
+      },
+      body: formData,
+      credentials: 'include',
+    });
+
+    return response.json();
+  }
+
+  static async deleteLogo(): Promise<{ success?: boolean; error?: string }> {
+    const response = await fetch('/api/professionals/logo', {
+      method: 'DELETE',
+      headers: {
+        ...authHeaders(),
+      },
+      credentials: 'include',
+    });
+
+    return response.json();
+  }
 }

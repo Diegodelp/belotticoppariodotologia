@@ -1,6 +1,6 @@
 'use client';
 
-import { ChangeEvent, FormEvent, useEffect, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { GoogleCalendarService, GoogleCalendarStatus } from '@/services/google-calendar.service';
 import { ProfessionalService } from '@/services/professional.service';
@@ -47,6 +47,11 @@ export function SettingsClient() {
   });
   const [planEditingId, setPlanEditingId] = useState<string | null>(null);
   const [planSaving, setPlanSaving] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoDeleting, setLogoDeleting] = useState(false);
+  const [logoError, setLogoError] = useState<string | null>(null);
+  const logoInputRef = useRef<HTMLInputElement | null>(null);
   const currencyFormatter = new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
@@ -108,6 +113,7 @@ export function SettingsClient() {
           province: response.profile.province ?? '',
           locality: response.profile.locality ?? '',
         });
+        setLogoUrl(response.profile.logoUrl ?? null);
         setProfileError(null);
       } catch (error) {
         console.error('Error al cargar el perfil profesional', error);
@@ -333,6 +339,124 @@ export function SettingsClient() {
     }
   };
 
+  const resetLogoInput = () => {
+    if (logoInputRef.current) {
+      logoInputRef.current.value = '';
+    }
+  };
+
+  const normalizeLogoFile = async (file: File): Promise<File> => {
+    if (file.type === 'image/png') {
+      return file;
+    }
+
+    const dataUrl = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = () => reject(new Error('No pudimos leer el archivo del logo.'));
+      reader.readAsDataURL(file);
+    });
+
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error('No pudimos procesar la imagen seleccionada.'));
+      img.src = dataUrl;
+    });
+
+    const maxDimension = 600;
+    let { width, height } = image;
+    const largest = Math.max(width, height);
+    if (largest > maxDimension) {
+      const scale = maxDimension / largest;
+      width = Math.round(width * scale);
+      height = Math.round(height * scale);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      throw new Error('No pudimos preparar el lienzo para el logo.');
+    }
+    context.clearRect(0, 0, width, height);
+    context.drawImage(image, 0, 0, width, height);
+
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    if (!blob) {
+      throw new Error('No pudimos convertir el logo a PNG.');
+    }
+
+    return new File([blob], 'logo.png', { type: 'image/png' });
+  };
+
+  const handleLogoChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    setLogoUploading(true);
+    setLogoError(null);
+    setBanner(null);
+
+    try {
+      const normalized = await normalizeLogoFile(file);
+      const response = await ProfessionalService.uploadLogo(normalized);
+
+      if (!response?.success) {
+        throw new Error(response?.error ?? 'No pudimos actualizar el logo.');
+      }
+
+      const url = response.logoUrl ?? null;
+      setLogoUrl(url);
+      setProfile((previous) => (previous ? { ...previous, logoUrl: url } : previous));
+      setBanner({ type: 'success', text: 'Logo actualizado correctamente.' });
+      await refreshUser();
+    } catch (error) {
+      console.error('Error al subir logo', error);
+      setLogoError(
+        error instanceof Error ? error.message : 'No pudimos actualizar el logo. Intentá nuevamente.',
+      );
+    } finally {
+      setLogoUploading(false);
+      resetLogoInput();
+    }
+  };
+
+  const handleLogoDelete = async () => {
+    if (!window.confirm('¿Seguro que querés eliminar el logo de la clínica?')) {
+      return;
+    }
+
+    setLogoDeleting(true);
+    setLogoError(null);
+    setBanner(null);
+
+    try {
+      const response = await ProfessionalService.deleteLogo();
+      if (!response?.success) {
+        throw new Error(response?.error ?? 'No pudimos eliminar el logo.');
+      }
+      setLogoUrl(null);
+      setProfile((previous) => (previous ? { ...previous, logoUrl: null, logoPath: null } : previous));
+      setBanner({ type: 'success', text: 'Logo eliminado correctamente.' });
+      await refreshUser();
+    } catch (error) {
+      console.error('Error al eliminar logo', error);
+      setLogoError(error instanceof Error ? error.message : 'No pudimos eliminar el logo.');
+    } finally {
+      setLogoDeleting(false);
+      resetLogoInput();
+    }
+  };
+
+  const openLogoPicker = () => {
+    setLogoError(null);
+    logoInputRef.current?.click();
+  };
+
   const handleProfileSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setBanner(null);
@@ -359,6 +483,7 @@ export function SettingsClient() {
         province: response.profile.province ?? '',
         locality: response.profile.locality ?? '',
       });
+      setLogoUrl(response.profile.logoUrl ?? null);
       setProfileError(null);
       setBanner({ type: 'success', text: 'Datos del profesional actualizados.' });
       await refreshUser();
@@ -493,6 +618,55 @@ export function SettingsClient() {
             {profileError}
           </p>
         )}
+
+        <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-slate-900/50 p-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60">
+              {logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={logoUrl} alt="Logo del consultorio" className="h-full w-full object-contain" />
+              ) : (
+                <span className="px-3 text-center text-[11px] uppercase tracking-wide text-slate-500">Sin logo</span>
+              )}
+            </div>
+            <div className="text-xs text-slate-300">
+              <p className="font-semibold text-slate-100">Logo del consultorio</p>
+              <p className="text-slate-400">
+                Mostramos este logo en tus presupuestos y recetas digitales junto al nombre de tu clínica.
+              </p>
+              {logoError && (
+                <p className="mt-2 rounded-xl bg-rose-500/10 px-3 py-2 text-rose-200">{logoError}</p>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={openLogoPicker}
+              disabled={logoUploading || profileLoading}
+              className="rounded-full bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {logoUploading ? 'Subiendo logo…' : logoUrl ? 'Actualizar logo' : 'Subir logo'}
+            </button>
+            {logoUrl && (
+              <button
+                type="button"
+                onClick={handleLogoDelete}
+                disabled={logoDeleting}
+                className="rounded-full border border-rose-500/40 px-4 py-2 text-xs font-semibold text-rose-200 transition hover:border-rose-400 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {logoDeleting ? 'Eliminando…' : 'Eliminar logo'}
+              </button>
+            )}
+          </div>
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleLogoChange}
+          />
+        </div>
 
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-2">

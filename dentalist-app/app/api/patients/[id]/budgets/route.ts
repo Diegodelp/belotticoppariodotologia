@@ -7,8 +7,10 @@ import {
   getProfessionalProfile,
   listBudgets,
   updateBudgetRecord,
+  downloadProfessionalLogo,
 } from '@/lib/db/supabase-repository';
 import { generateBudgetPdf } from '@/lib/documents/budget-pdf';
+import { parsePng } from '@/lib/documents/png';
 import { BudgetPractice } from '@/types';
 
 const PRACTICES: BudgetPractice[] = [
@@ -121,9 +123,10 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       );
     }
 
-    const [patient, professional] = await Promise.all([
+    const [patient, professional, logo] = await Promise.all([
       getPatientById(user.id, params.id),
       getProfessionalProfile(user.id),
+      downloadProfessionalLogo(user.id),
     ]);
 
     if (!patient) {
@@ -135,6 +138,15 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         { error: 'No pudimos obtener los datos del profesional para generar el presupuesto.' },
         { status: 400 },
       );
+    }
+
+    let logoImage;
+    if (logo?.buffer) {
+      try {
+        logoImage = parsePng(logo.buffer);
+      } catch (error) {
+        console.warn('No pudimos procesar el logo del profesional para el presupuesto', error);
+      }
     }
 
     const pdfBuffer = generateBudgetPdf({
@@ -155,6 +167,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         affiliateNumber: patient.affiliateNumber,
       },
       items: parsed.items,
+      logo: logoImage,
     });
 
     const budget = await createBudgetRecord(user.id, patient.id, {
@@ -203,9 +216,10 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
       );
     }
 
-    const [patient, professional] = await Promise.all([
+    const [patient, professional, logo] = await Promise.all([
       getPatientById(user.id, params.id),
       getProfessionalProfile(user.id),
+      downloadProfessionalLogo(user.id),
     ]);
 
     if (!patient) {
@@ -217,6 +231,15 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         { error: 'No pudimos obtener los datos del profesional para generar el presupuesto.' },
         { status: 400 },
       );
+    }
+
+    let logoImage;
+    if (logo?.buffer) {
+      try {
+        logoImage = parsePng(logo.buffer);
+      } catch (error) {
+        console.warn('No pudimos procesar el logo del profesional para el presupuesto', error);
+      }
     }
 
     const pdfBuffer = generateBudgetPdf({
@@ -237,6 +260,7 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         affiliateNumber: patient.affiliateNumber,
       },
       items: parsed.items,
+      logo: logoImage,
     });
 
     const budget = await updateBudgetRecord(user.id, patient.id, budgetId, {
