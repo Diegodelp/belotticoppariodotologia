@@ -25,6 +25,7 @@ interface PrescriptionManagerProps {
     error?: string;
   }>;
   showHistory?: boolean;
+  mode?: 'create' | 'history' | 'combined';
 }
 
 export function PrescriptionManager({
@@ -35,6 +36,7 @@ export function PrescriptionManager({
   onDelete,
   onUpdateSignature,
   showHistory = true,
+  mode = 'combined',
 }: PrescriptionManagerProps) {
   const [title, setTitle] = useState('Receta digital');
   const [diagnosis, setDiagnosis] = useState('');
@@ -75,6 +77,14 @@ export function PrescriptionManager({
     () => [...prescriptions].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1)),
     [prescriptions],
   );
+
+  const shouldRenderForm = mode !== 'history';
+  const shouldRenderHistory = showHistory && mode !== 'create';
+  const formTitle = mode === 'combined' ? 'Recetas digitales' : 'Generar receta digital';
+  const formSubtitle =
+    mode === 'combined'
+      ? 'Generá recetas con firma digital y guardalas automáticamente en la historia del paciente.'
+      : 'Completá los datos para emitir una receta firmada.';
 
   const resetForm = () => {
     setTitle('Receta digital');
@@ -227,18 +237,18 @@ export function PrescriptionManager({
     }
   };
 
+
   return (
     <div className="space-y-6">
-      <form
-        onSubmit={handleSubmit}
-        className="space-y-6 rounded-3xl border border-white/10 bg-slate-900/40 p-6 shadow-inner shadow-cyan-500/10"
-      >
+      {shouldRenderForm && (
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-6 rounded-3xl border border-white/10 bg-slate-900/40 p-6 shadow-inner shadow-cyan-500/10"
+        >
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-xl font-semibold text-white">Recetas digitales</h2>
-            <p className="text-sm text-slate-300">
-              Generá recetas con firma digital y guardalas automáticamente en la historia del paciente.
-            </p>
+            <h2 className="text-xl font-semibold text-white">{formTitle}</h2>
+            <p className="text-sm text-slate-300">{formSubtitle}</p>
           </div>
         </div>
 
@@ -401,17 +411,6 @@ export function PrescriptionManager({
           )}
         </div>
 
-        {feedback && (
-          <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-            {feedback}
-          </div>
-        )}
-        {error && (
-          <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
-            {error}
-          </div>
-        )}
-
         <div className="flex items-center justify-end gap-3">
           <button
             type="button"
@@ -429,66 +428,82 @@ export function PrescriptionManager({
           </button>
         </div>
       </form>
+    )}
 
-      {showHistory && (
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold text-white">Recetas emitidas</h3>
-            <span className="text-xs text-slate-400">{sortedPrescriptions.length} documento(s)</span>
+    {(feedback || error) && (
+      <div className="space-y-3">
+        {feedback && (
+          <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+            {feedback}
           </div>
-          {sortedPrescriptions.length === 0 ? (
-            <p className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-300">
-              Todavía no emitiste recetas para este paciente.
-            </p>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2">
-              {sortedPrescriptions.map((prescription) => {
-                const issued = new Date(prescription.createdAt).toLocaleString('es-AR', {
-                  day: '2-digit',
-                  month: '2-digit',
-                  year: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                });
-                return (
-                  <article
-                    key={prescription.id}
-                    className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-sm shadow-cyan-500/5"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h4 className="text-sm font-semibold text-white">{prescription.title}</h4>
-                        <p className="text-xs text-slate-400">Emitida el {issued}</p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleDeletePrescription(prescription.id)}
-                        disabled={deletingId === prescription.id}
-                        title="Eliminar receta"
-                        aria-label="Eliminar receta"
-                        className="rounded-full border border-white/10 p-1.5 text-slate-200 transition hover:border-rose-300/60 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+        )}
+        {error && (
+          <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+            {error}
+          </div>
+        )}
+      </div>
+    )}
+
+    {shouldRenderHistory && (
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-white">Recetas emitidas</h3>
+          <span className="text-xs text-slate-400">{sortedPrescriptions.length} documento(s)</span>
+        </div>
+        {sortedPrescriptions.length === 0 ? (
+          <p className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-300">
+            Todavía no emitiste recetas para este paciente.
+          </p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {sortedPrescriptions.map((prescription) => {
+              const issued = new Date(prescription.createdAt).toLocaleString('es-AR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              });
+              return (
+                <article
+                  key={prescription.id}
+                  className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-sm shadow-cyan-500/5"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h4 className="text-sm font-semibold text-white">{prescription.title}</h4>
+                      <p className="text-xs text-slate-400">Emitida el {issued}</p>
                     </div>
-                    <p className="text-xs text-slate-200 line-clamp-2">
-                      {prescription.instructions || 'Sin indicaciones registradas'}
-                    </p>
-                    <a
-                      href={prescription.pdfUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-200/60 hover:text-cyan-100"
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePrescription(prescription.id)}
+                      disabled={deletingId === prescription.id}
+                      title="Eliminar receta"
+                      aria-label="Eliminar receta"
+                      className="rounded-full border border-white/10 p-1.5 text-slate-200 transition hover:border-rose-300/60 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
                     >
-                      Descargar PDF
-                    </a>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      )}
-    </div>
-  );
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-200 line-clamp-2">
+                    {prescription.instructions || 'Sin indicaciones registradas'}
+                  </p>
+                  <a
+                    href={prescription.pdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-200/60 hover:text-cyan-100"
+                  >
+                    Descargar PDF
+                  </a>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    )}
+  </div>
+);
 }

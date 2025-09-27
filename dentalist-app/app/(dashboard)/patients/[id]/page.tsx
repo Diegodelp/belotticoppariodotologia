@@ -2,7 +2,6 @@
 import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Trash2 } from 'lucide-react';
 import { AppointmentForm } from '@/components/appointments/AppointmentForm';
 import { ClinicalHistoryForm } from '@/components/patients/ClinicalHistoryForm';
 import { PatientMediaManager } from '@/components/patients/PatientMediaManager';
@@ -117,7 +116,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     },
   );
   const [prescriptionAlert, setPrescriptionAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
-  const [deletingPrescriptionId, setDeletingPrescriptionId] = useState<string | null>(null);
+  const [prescriptionModalTab, setPrescriptionModalTab] = useState<'history' | 'create'>('history');
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -452,6 +451,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
 
   const openPrescriptionModal = () => {
     setPrescriptionAlert(null);
+    setPrescriptionModalTab('history');
     setIsPrescriptionModalOpen(true);
   };
 
@@ -781,8 +781,18 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
           : current,
       );
 
+      setPrescriptionAlert({ type: 'success', message: 'Receta eliminada correctamente.' });
+
       return { success: true };
     } catch (deleteError) {
+      setPrescriptionAlert({
+        type: 'error',
+        message:
+          deleteError instanceof Error
+            ? deleteError.message
+            : 'No pudimos eliminar la receta. Intentá nuevamente.',
+      });
+
       return {
         success: false,
         error:
@@ -791,31 +801,6 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
             : 'No pudimos eliminar la receta',
       };
     }
-  };
-
-  const handleSummaryDeletePrescription = async (prescriptionId: string) => {
-    if (typeof window !== 'undefined') {
-      const confirmed = window.confirm('¿Seguro que querés eliminar esta receta?');
-      if (!confirmed) {
-        return;
-      }
-    }
-
-    setPrescriptionAlert(null);
-    setDeletingPrescriptionId(prescriptionId);
-
-    const result = await deletePrescription(prescriptionId);
-
-    if (result.success) {
-      setPrescriptionAlert({ type: 'success', message: 'Receta eliminada correctamente.' });
-    } else {
-      setPrescriptionAlert({
-        type: 'error',
-        message: result.error ?? 'No pudimos eliminar la receta. Intentá nuevamente.',
-      });
-    }
-
-    setDeletingPrescriptionId(null);
   };
 
   const handleUpdateSignature = async (signatureDataUrl: string) => {
@@ -984,6 +969,13 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
             {deleting ? 'Eliminando...' : 'Eliminar paciente'}
           </button>
           <button
+            type="button"
+            onClick={openPrescriptionModal}
+            className="rounded-full border border-white/10 px-5 py-2 text-sm font-semibold text-slate-100 transition hover:border-cyan-300 hover:text-cyan-200"
+          >
+            Receta
+          </button>
+          <button
             onClick={() => setShowAppointmentForm((previous) => !previous)}
             className="rounded-full bg-cyan-500 px-5 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400"
           >
@@ -1007,6 +999,18 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
           }`}
         >
           {pageAlert.message}
+        </p>
+      )}
+
+      {prescriptionAlert && !isPrescriptionModalOpen && (
+        <p
+          className={`rounded-2xl border px-4 py-3 text-sm ${
+            prescriptionAlert.type === 'success'
+              ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
+              : 'border-rose-400/40 bg-rose-500/10 text-rose-100'
+          }`}
+        >
+          {prescriptionAlert.message}
         </p>
       )}
 
@@ -1037,635 +1041,588 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
         })}
       </div>
 
-      {activeSection === 'overview' && (
-        <div className="grid gap-6 lg:grid-cols-[2fr,1fr]">
-        <div className="space-y-6">
-          {isEditing && (
-            <form
-              onSubmit={handleSubmit}
-              className="space-y-6 rounded-3xl border border-cyan-300/40 bg-slate-900/60 p-6 shadow-lg shadow-cyan-500/20"
+
+{activeSection === 'overview' && (
+  <div className="space-y-6">
+    {isEditing && (
+      <form
+        onSubmit={handleSubmit}
+        className="space-y-6 rounded-3xl border border-cyan-300/40 bg-slate-900/60 p-6 shadow-lg shadow-cyan-500/20"
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">Editar datos del paciente</h2>
+          <button
+            type="button"
+            onClick={exitEditing}
+            className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-cyan-300 hover:text-cyan-200"
+          >
+            Cancelar edición
+          </button>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+            Nombre
+            <input
+              required
+              name="name"
+              value={formState.name}
+              onChange={handleFieldChange}
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+            />
+          </label>
+          <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+            Apellido
+            <input
+              required
+              name="lastName"
+              value={formState.lastName}
+              onChange={handleFieldChange}
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+            />
+          </label>
+          <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+            DNI
+            <input
+              required
+              name="dni"
+              value={formState.dni}
+              onChange={handleFieldChange}
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+            />
+          </label>
+          <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+            Email
+            <input
+              required
+              name="email"
+              type="email"
+              value={formState.email}
+              onChange={handleFieldChange}
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+            />
+          </label>
+          <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+            Teléfono
+            <input
+              name="phone"
+              value={formState.phone}
+              onChange={handleFieldChange}
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+            />
+          </label>
+          <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+            Dirección
+            <input
+              name="address"
+              value={formState.address}
+              onChange={handleFieldChange}
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+            />
+          </label>
+          <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+            Cobertura médica
+            <input
+              name="healthInsurance"
+              value={formState.healthInsurance}
+              onChange={handleFieldChange}
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+            />
+          </label>
+          <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+            N.º de afiliado
+            <input
+              name="affiliateNumber"
+              value={formState.affiliateNumber}
+              onChange={handleFieldChange}
+              placeholder="Ej: 12345678/90"
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+            />
+          </label>
+          <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+            Estado
+            <select
+              name="status"
+              value={formState.status}
+              onChange={handleFieldChange}
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
             >
-              <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-white">Editar datos del paciente</h2>
-                <button
-                  type="button"
-                  onClick={exitEditing}
-                  className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-cyan-300 hover:text-cyan-200"
-                >
-                  Cancelar edición
-                </button>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
-                  Nombre
-                  <input
-                    required
-                    name="name"
-                    value={formState.name}
-                    onChange={handleFieldChange}
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                  />
-                </label>
-                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
-                  Apellido
-                  <input
-                    required
-                    name="lastName"
-                    value={formState.lastName}
-                    onChange={handleFieldChange}
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                  />
-                </label>
-                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
-                  DNI
-                  <input
-                    required
-                    name="dni"
-                    value={formState.dni}
-                    onChange={handleFieldChange}
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                  />
-                </label>
-                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
-                  Email
-                  <input
-                    required
-                    name="email"
-                    type="email"
-                    value={formState.email}
-                    onChange={handleFieldChange}
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                  />
-                </label>
-                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
-                  Teléfono
-                  <input
-                    name="phone"
-                    value={formState.phone}
-                    onChange={handleFieldChange}
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                  />
-                </label>
-                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
-                  Dirección
-                  <input
-                    name="address"
-                    value={formState.address}
-                    onChange={handleFieldChange}
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                  />
-                </label>
-                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
-                  Cobertura médica
-                  <input
-                    name="healthInsurance"
-                    value={formState.healthInsurance}
-                    onChange={handleFieldChange}
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                  />
-                </label>
-                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
-                  N.º de afiliado
-                  <input
-                    name="affiliateNumber"
-                    value={formState.affiliateNumber}
-                    onChange={handleFieldChange}
-                    placeholder="Ej: 12345678/90"
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                  />
-                </label>
-                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
-                  Estado
-                  <select
-                    name="status"
-                    value={formState.status}
-                    onChange={handleFieldChange}
-                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                  >
-                    <option value="active">Activo</option>
-                    <option value="inactive">Inactivo</option>
-                  </select>
-                </label>
-              </div>
+              <option value="active">Activo</option>
+              <option value="inactive">Inactivo</option>
+            </select>
+          </label>
+        </div>
 
-              {formError && (
-                <p className="rounded-2xl bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{formError}</p>
-              )}
+        {formError && (
+          <p className="rounded-2xl bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{formError}</p>
+        )}
 
-              <div className="flex flex-wrap items-center justify-end gap-3">
-                <button
-                  type="button"
-                  onClick={exitEditing}
-                  className="rounded-full border border-white/10 px-6 py-2 text-sm font-semibold text-slate-200 transition hover:border-slate-100/60"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="rounded-full bg-cyan-500 px-6 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {saving ? 'Guardando...' : 'Guardar cambios'}
-                </button>
-              </div>
-            </form>
-          )}
+        <div className="flex flex-wrap items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={exitEditing}
+            className="rounded-full border border-white/10 px-6 py-2 text-sm font-semibold text-slate-200 transition hover:border-slate-100/60"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="rounded-full bg-cyan-500 px-6 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? 'Guardando...' : 'Guardar cambios'}
+          </button>
+        </div>
+      </form>
+    )}
 
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
-            <h2 className="text-lg font-semibold text-white">Datos de contacto</h2>
-            <dl className="mt-4 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
-              <div>
-                <dt className="text-slate-400">Email</dt>
-                <dd>{patient.email || 'Sin correo registrado'}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-400">Teléfono</dt>
-                <dd>{patient.phone || 'Sin teléfono cargado'}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-400">Dirección</dt>
-                <dd>{patient.address || 'Sin dirección'}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-400">Cobertura médica</dt>
-                <dd>
-                  {patient.healthInsurance || 'Particular'}
-                  {patient.affiliateNumber ? ` • Afiliado ${patient.affiliateNumber}` : ''}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-slate-400">Estado</dt>
-                <dd>
-                  <span className={`rounded-full px-3 py-1 text-xs ${patient.status === 'active' ? 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/40' : 'bg-amber-500/10 text-amber-200 border border-amber-400/40'}`}>
-                    {patient.status === 'active' ? 'Activo en seguimiento' : 'Seguimiento pausado'}
-                  </span>
-                </dd>
-              </div>
-            </dl>
+    {showAppointmentForm && (
+      <div className="rounded-3xl border border-cyan-300/40 bg-slate-900/60 p-6 shadow-lg shadow-cyan-500/20">
+        <h2 className="text-lg font-semibold text-white">Agendar nuevo turno</h2>
+        <p className="mt-1 text-xs text-slate-300">
+          El turno se sincroniza automáticamente con Google Calendar del profesional.
+        </p>
+        <div className="mt-4">
+          <AppointmentForm
+            patients={[patient]}
+            defaultPatientId={patient.id}
+            onCreated={(appointment) => {
+              setData((currentData) =>
+                currentData
+                  ? {
+                      ...currentData,
+                      appointments: [...currentData.appointments, { ...appointment, patient }],
+                    }
+                  : currentData,
+              );
+              setShowAppointmentForm(false);
+            }}
+          />
+        </div>
+      </div>
+    )}
+
+    <div className="grid gap-6 lg:grid-cols-2">
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
+        <h2 className="text-lg font-semibold text-white">Datos de contacto</h2>
+        <dl className="mt-4 grid gap-3 text-sm text-slate-300 md:grid-cols-2">
+          <div>
+            <dt className="text-slate-400">Email</dt>
+            <dd>{patient.email || 'Sin correo registrado'}</dd>
           </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-white">Plan de ortodoncia</h2>
-              <Link href="/settings" className="text-xs text-cyan-200 hover:underline">
-                Gestionar planes
-              </Link>
-            </div>
-
-            {planAlert && (
-              <p
-                className={`mt-3 rounded-2xl border px-3 py-2 text-xs ${
-                  planAlert.type === 'success'
-                    ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
-                    : 'border-rose-400/40 bg-rose-500/10 text-rose-100'
+          <div>
+            <dt className="text-slate-400">Teléfono</dt>
+            <dd>{patient.phone || 'Sin teléfono cargado'}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-400">Dirección</dt>
+            <dd>{patient.address || 'Sin dirección'}</dd>
+          </div>
+          <div>
+            <dt className="text-slate-400">Cobertura médica</dt>
+            <dd>
+              {patient.healthInsurance || 'Particular'}
+              {patient.affiliateNumber ? ` • Afiliado ${patient.affiliateNumber}` : ''}
+            </dd>
+          </div>
+          <div>
+            <dt className="text-slate-400">Estado</dt>
+            <dd>
+              <span
+                className={`rounded-full px-3 py-1 text-xs ${
+                  patient.status === 'active'
+                    ? 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/40'
+                    : 'bg-amber-500/10 text-amber-200 border border-amber-400/40'
                 }`}
               >
-                {planAlert.message}
-              </p>
-            )}
-
-            <div className="mt-4 space-y-4 text-sm text-slate-200">
-              {planOptionsLoading ? (
-                <p className="text-slate-400">Cargando planes disponibles…</p>
-              ) : assignedPlan ? (
-                <div className="rounded-2xl bg-slate-900/60 p-4">
-                  <p className="text-base font-semibold text-white">{assignedPlan.name}</p>
-                  <dl className="mt-3 grid gap-2 text-xs text-slate-300 md:grid-cols-2">
-                    <div>
-                      <dt className="text-slate-400">Cuota mensual</dt>
-                      <dd>{currencyFormatter.format(assignedPlan.monthlyFee)}</dd>
-                    </div>
-                    <div>
-                      <dt className="text-slate-400">Entrega inicial</dt>
-                      <dd>
-                        {assignedPlan.hasInitialFee
-                          ? currencyFormatter.format(assignedPlan.initialFee ?? 0)
-                          : 'No requiere entrega'}
-                      </dd>
-                    </div>
-                    <div className="md:col-span-2">
-                      <dt className="text-slate-400">Asignado el</dt>
-                      <dd>{new Date(assignedPlan.assignedAt).toLocaleDateString('es-AR')}</dd>
-                    </div>
-                  </dl>
-                  <button
-                    type="button"
-                    onClick={handleRemovePlan}
-                    disabled={assigningPlan}
-                    className="mt-4 rounded-full border border-rose-400/60 px-4 py-2 text-xs font-semibold text-rose-200 transition hover:border-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {assigningPlan ? 'Quitando plan…' : 'Quitar plan del paciente'}
-                  </button>
-                </div>
-              ) : planOptions.length === 0 ? (
-                <p className="text-slate-400">
-                  Todavía no creaste planes de ortodoncia. Podés configurarlos desde la sección de ajustes.
-                </p>
-              ) : (
-                <div className="rounded-2xl bg-slate-900/60 p-4">
-                  <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
-                    Seleccioná un plan
-                    <select
-                      className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                      value={selectedPlanId}
-                      onChange={handlePlanSelectionChange}
-                    >
-                      <option value="">Elegí un plan…</option>
-                      {planOptions.map((plan) => (
-                        <option key={plan.id} value={plan.id}>
-                          {plan.name} — {currencyFormatter.format(plan.monthlyFee)}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={handleAssignPlan}
-                    disabled={assigningPlan || !selectedPlanId}
-                    className="mt-4 w-full rounded-full bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {assigningPlan ? 'Asignando…' : 'Asignar plan'}
-                  </button>
-                </div>
-              )}
-            </div>
+                {patient.status === 'active' ? 'Activo en seguimiento' : 'Seguimiento pausado'}
+              </span>
+            </dd>
           </div>
+        </dl>
+      </div>
 
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Presupuestos</h2>
-                <p className="text-xs text-slate-300">Documentos emitidos para el paciente.</p>
-              </div>
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">Próximos turnos</h2>
+          <span className="text-xs text-slate-400">{appointments.length} turno(s)</span>
+        </div>
+        <div className="mt-4 space-y-3 text-sm text-slate-200">
+          {appointments.length === 0 && (
+            <p className="text-slate-400">No hay turnos programados.</p>
+          )}
+          {appointments.map((appointment) => (
+            <div key={appointment.id} className="rounded-2xl bg-slate-900/60 px-4 py-3">
+              <p className="font-medium text-white">{appointment.type}</p>
+              <p className="text-xs text-slate-400">
+                {appointment.date} • {appointment.time}
+              </p>
+              <p className="mt-2 text-xs text-cyan-200 capitalize">Estado: {appointment.status}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <div className="grid gap-6 lg:grid-cols-2">
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-white">Plan de ortodoncia</h2>
+          <Link href="/settings" className="text-xs text-cyan-200 hover:underline">
+            Gestionar planes
+          </Link>
+        </div>
+
+        {planAlert && (
+          <p
+            className={`mt-3 rounded-2xl border px-3 py-2 text-xs ${
+              planAlert.type === 'success'
+                ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
+                : 'border-rose-400/40 bg-rose-500/10 text-rose-100'
+            }`}
+          >
+            {planAlert.message}
+          </p>
+        )}
+
+        <div className="mt-4 space-y-4 text-sm text-slate-200">
+          {planOptionsLoading ? (
+            <p className="text-slate-400">Cargando planes disponibles…</p>
+          ) : assignedPlan ? (
+            <div className="rounded-2xl bg-slate-900/60 p-4">
+              <p className="text-base font-semibold text-white">{assignedPlan.name}</p>
+              <dl className="mt-3 grid gap-2 text-xs text-slate-300 md:grid-cols-2">
+                <div>
+                  <dt className="text-slate-400">Cuota mensual</dt>
+                  <dd>{currencyFormatter.format(assignedPlan.monthlyFee)}</dd>
+                </div>
+                <div>
+                  <dt className="text-slate-400">Entrega inicial</dt>
+                  <dd>
+                    {assignedPlan.hasInitialFee
+                      ? currencyFormatter.format(assignedPlan.initialFee ?? 0)
+                      : 'No requiere entrega'}
+                  </dd>
+                </div>
+                <div className="md:col-span-2">
+                  <dt className="text-slate-400">Asignado el</dt>
+                  <dd>{new Date(assignedPlan.assignedAt).toLocaleDateString('es-AR')}</dd>
+                </div>
+              </dl>
               <button
                 type="button"
-                onClick={openBudgetModalForNew}
-                className="rounded-full bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400"
+                onClick={handleRemovePlan}
+                disabled={assigningPlan}
+                className="mt-4 rounded-full border border-rose-400/60 px-4 py-2 text-xs font-semibold text-rose-200 transition hover:border-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Generar presupuesto
+                {assigningPlan ? 'Quitando plan…' : 'Quitar plan del paciente'}
               </button>
             </div>
-
-            {budgetAlert && !isBudgetModalOpen && (
-              <p
-                className={`mt-4 rounded-2xl border px-3 py-2 text-xs ${
-                  budgetAlert.type === 'success'
-                    ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
-                    : 'border-rose-400/40 bg-rose-500/10 text-rose-100'
-                }`}
-              >
-                {budgetAlert.message}
-              </p>
-            )}
-
-            <div className="mt-4 space-y-3 text-sm text-slate-200">
-              {budgets.length === 0 ? (
-                <p className="text-slate-400">Todavía no se generaron presupuestos para este paciente.</p>
-              ) : (
-                budgets.map((budget) => (
-                  <div key={budget.id} className="rounded-2xl bg-slate-900/60 p-4">
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div>
-                        <p className="text-base font-semibold text-white">{budget.title}</p>
-                        <p className="text-xs text-slate-400">
-                          {new Date(budget.createdAt).toLocaleDateString('es-AR')} • Total {currencyFormatter.format(budget.total)}
-                        </p>
-                        {budget.notes && <p className="mt-2 text-xs text-slate-300">{budget.notes}</p>}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        {budget.documentUrl && (
-                          <a
-                            href={budget.documentUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="rounded-full border border-cyan-400/60 px-3 py-1 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/10"
-                          >
-                            Descargar PDF
-                          </a>
-                        )}
-                        <button
-                          type="button"
-                          onClick={() => handleBudgetEdit(budget)}
-                          disabled={budgetSaving}
-                          className="rounded-full border border-cyan-400/60 px-3 py-1 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {editingBudgetId === budget.id ? 'Editando' : 'Editar'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteBudget(budget.id)}
-                          disabled={budgetDeletingId === budget.id}
-                          className="rounded-full border border-rose-400/60 px-3 py-1 text-xs font-semibold text-rose-200 transition hover:border-rose-300 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                          {budgetDeletingId === budget.id ? 'Eliminando…' : 'Eliminar'}
-                        </button>
-                      </div>
-                    </div>
-                    {budget.items.length > 0 && (
-                      <ul className="mt-3 space-y-2 text-xs text-slate-300">
-                        {budget.items.map((item) => (
-                          <li key={item.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2">
-                            <div>
-                              <p className="font-semibold text-white">{BUDGET_PRACTICES.find((practice) => practice.value === item.practice)?.label ?? item.practice}</p>
-                              {item.description && <p className="text-[11px] text-slate-400">{item.description}</p>}
-                            </div>
-                            <span className="text-emerald-300">{currencyFormatter.format(item.amount)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h2 className="text-lg font-semibold text-white">Historial de tratamientos</h2>
-              <div className="flex items-center gap-3">
-                <Link href={`/treatments?patientId=${patient.id}`} className="text-xs text-cyan-200 hover:underline">
-                  Ver todo
-                </Link>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (showTreatmentForm) {
-                      setTreatmentForm(createEmptyTreatmentForm());
-                      setTreatmentError(null);
-                    }
-                    setShowTreatmentForm((current) => !current);
-                  }}
-                  className="rounded-full border border-cyan-400/60 px-4 py-1 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/10"
+          ) : planOptions.length === 0 ? (
+            <p className="text-slate-400">
+              Todavía no creaste planes de ortodoncia. Podés configurarlos desde la sección de ajustes.
+            </p>
+          ) : (
+            <div className="rounded-2xl bg-slate-900/60 p-4">
+              <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                Seleccioná un plan
+                <select
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                  value={selectedPlanId}
+                  onChange={handlePlanSelectionChange}
                 >
-                  {showTreatmentForm ? 'Cerrar formulario' : 'Registrar tratamiento'}
-                </button>
-              </div>
-            </div>
-
-            {showTreatmentForm && (
-              <form
-                onSubmit={handleTreatmentSubmit}
-                className="mt-4 space-y-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+                  <option value="">Elegí un plan…</option>
+                  {planOptions.map((plan) => (
+                    <option key={plan.id} value={plan.id}>
+                      {plan.name} — {currencyFormatter.format(plan.monthlyFee)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={handleAssignPlan}
+                disabled={assigningPlan || !selectedPlanId}
+                className="mt-4 w-full rounded-full bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                <div className="grid gap-4 md:grid-cols-2">
-                  <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
-                    Tipo de tratamiento
-                    <input
-                      name="type"
-                      value={treatmentForm.type}
-                      onChange={handleTreatmentFieldChange}
-                      placeholder="Ej: Ortodoncia"
-                      className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                    />
-                  </label>
-                  <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
-                    Fecha
-                    <input
-                      type="date"
-                      name="date"
-                      value={treatmentForm.date}
-                      onChange={handleTreatmentFieldChange}
-                      className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                    />
-                  </label>
-                  <label className="md:col-span-2 text-xs font-semibold uppercase tracking-widest text-slate-300">
-                    Descripción
-                    <textarea
-                      name="description"
-                      value={treatmentForm.description}
-                      onChange={handleTreatmentFieldChange}
-                      rows={3}
-                      placeholder="Detalles del procedimiento realizado"
-                      className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                    />
-                  </label>
-                  <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
-                    Monto
-                    <input
-                      type="number"
-                      name="cost"
-                      min="0"
-                      step="0.01"
-                      value={treatmentForm.cost}
-                      onChange={handleTreatmentFieldChange}
-                      placeholder="Ej: 55000"
-                      className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
-                    />
-                  </label>
+                {assigningPlan ? 'Asignando…' : 'Asignar plan'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Presupuestos</h2>
+            <p className="text-xs text-slate-300">Documentos emitidos para el paciente.</p>
+          </div>
+          <button
+            type="button"
+            onClick={openBudgetModalForNew}
+            className="rounded-full bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400"
+          >
+            Generar presupuesto
+          </button>
+        </div>
+
+        {budgetAlert && !isBudgetModalOpen && (
+          <p
+            className={`mt-4 rounded-2xl border px-3 py-2 text-xs ${
+              budgetAlert.type === 'success'
+                ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
+                : 'border-rose-400/40 bg-rose-500/10 text-rose-100'
+            }`}
+          >
+            {budgetAlert.message}
+          </p>
+        )}
+
+        <div className="mt-4 space-y-4">
+          {budgets.length === 0 ? (
+            <p className="rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-300">
+              Todavía no emitiste presupuestos para este paciente.
+            </p>
+          ) : (
+            budgets.map((budget) => (
+              <div
+                key={budget.id}
+                className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-sm shadow-cyan-500/5"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-white">{budget.title}</h3>
+                    <p className="text-xs text-slate-400">
+                      Emitido el {new Date(budget.createdAt).toLocaleDateString('es-AR')}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleBudgetEdit(budget)}
+                      className="rounded-full border border-white/10 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-cyan-300 hover:text-cyan-200"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteBudget(budget.id)}
+                      disabled={budgetDeletingId === budget.id}
+                      className="rounded-full border border-rose-400/60 px-3 py-1 text-xs font-semibold text-rose-200 transition hover:border-rose-300 hover:text-rose-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {budgetDeletingId === budget.id ? 'Eliminando…' : 'Eliminar'}
+                    </button>
+                  </div>
                 </div>
-
-                {treatmentError && (
-                  <p className="rounded-2xl bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{treatmentError}</p>
-                )}
-
-                <div className="flex justify-end gap-3">
-                  <button
-                    type="button"
-                    onClick={handleTreatmentCancel}
-                    className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-slate-100/60"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={treatmentSaving}
-                    className="rounded-full bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {treatmentSaving ? 'Guardando...' : 'Guardar tratamiento'}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            <div className="mt-4 space-y-3 text-sm text-slate-200">
-              {treatments.length === 0 && (
-                <p className="text-slate-400">Todavía no hay tratamientos registrados.</p>
-              )}
-              {treatments.map((treatment) => (
-                <div key={treatment.id} className="rounded-2xl bg-slate-900/60 px-4 py-3">
-                  <p className="font-medium text-white">{treatment.type}</p>
-                  <p className="text-xs text-slate-400">{treatment.date}</p>
-                  <p className="mt-1 text-sm text-slate-300">{treatment.description}</p>
-                  <p className="mt-2 text-xs text-emerald-300">
-                    Monto: {treatment.cost.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}
+                <div className="space-y-2 text-xs text-slate-300">
+                  <p>{budget.notes || 'Sin notas adicionales.'}</p>
+                  <p className="text-sm text-emerald-300">
+                    Total: {currencyFormatter.format(budget.totalAmount)}
                   </p>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-white">Pagos registrados</h2>
-              <Link href={`/payments?patientId=${patient.id}`} className="text-xs text-cyan-200 hover:underline">
-                Gestionar cobranzas
-              </Link>
-            </div>
-            <div className="mt-4 space-y-3 text-sm text-slate-200">
-              {payments.length === 0 && (
-                <p className="text-slate-400">No hay pagos cargados.</p>
-              )}
-              {payments.map((payment) => (
-                <div key={payment.id} className="flex items-center justify-between rounded-2xl bg-slate-900/60 px-4 py-3">
-                  <div>
-                    <p className="font-medium text-white">
-                      {payment.amount.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}
-                    </p>
-                    <p className="text-xs text-slate-400">{new Date(payment.date).toLocaleDateString('es-AR')}</p>
-                  </div>
-                  <span
-                    className={`rounded-full px-3 py-1 text-xs ${
-                      payment.status === 'completed'
-                        ? 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/40'
-                        : 'bg-amber-500/10 text-amber-200 border border-amber-400/40'
-                    }`}
+                <div className="space-y-2 text-xs text-slate-300">
+                  <a
+                    href={budget.pdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-200/60 hover:text-cyan-100"
                   >
-                    {payment.status === 'completed' ? 'Cobrado' : 'Pendiente'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-white">Recetas digitales</h2>
-                <p className="text-xs text-slate-300">Documentos firmados disponibles para el paciente.</p>
-              </div>
-              <button
-                type="button"
-                onClick={openPrescriptionModal}
-                className="rounded-full bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400"
-              >
-                Emitir receta
-              </button>
-            </div>
-
-            {prescriptionAlert && !isPrescriptionModalOpen && (
-              <p
-                className={`mt-4 rounded-2xl border px-3 py-2 text-xs ${
-                  prescriptionAlert.type === 'success'
-                    ? 'border-emerald-400/40 bg-emerald-500/10 text-emerald-100'
-                    : 'border-rose-400/40 bg-rose-500/10 text-rose-100'
-                }`}
-              >
-                {prescriptionAlert.message}
-              </p>
-            )}
-
-            {sortedPrescriptions.length === 0 ? (
-              <p className="mt-4 rounded-2xl border border-dashed border-white/10 bg-white/5 px-4 py-6 text-sm text-slate-300">
-                Todavía no emitiste recetas para este paciente.
-              </p>
-            ) : (
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                {sortedPrescriptions.map((prescription) => {
-                  const issued = new Date(prescription.createdAt).toLocaleString('es-AR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  });
-                  return (
-                    <article
-                      key={prescription.id}
-                      className="space-y-3 rounded-2xl border border-white/10 bg-white/5 p-4 shadow-sm shadow-cyan-500/5"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <h3 className="text-sm font-semibold text-white">{prescription.title}</h3>
-                          <p className="text-xs text-slate-400">Emitida el {issued}</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleSummaryDeletePrescription(prescription.id)}
-                          disabled={deletingPrescriptionId === prescription.id}
-                          title="Eliminar receta"
-                          aria-label="Eliminar receta"
-                          className="rounded-full border border-white/10 p-1.5 text-slate-200 transition hover:border-rose-300/60 hover:text-rose-200 disabled:cursor-not-allowed disabled:opacity-60"
+                    Descargar PDF
+                  </a>
+                  {budget.items.length > 0 && (
+                    <ul className="space-y-2 rounded-2xl border border-white/5 bg-slate-950/20 p-3">
+                      {budget.items.map((item) => (
+                        <li
+                          key={item.id}
+                          className="flex items-center justify-between rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2"
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                      <p className="text-xs text-slate-200 line-clamp-2">
-                        {prescription.instructions || 'Sin indicaciones registradas'}
-                      </p>
-                      <a
-                        href={prescription.pdfUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-200/60 hover:text-cyan-100"
-                      >
-                        Descargar PDF
-                      </a>
-                    </article>
-                  );
-                })}
+                          <div>
+                            <p className="font-semibold text-white">
+                              {BUDGET_PRACTICES.find((practice) => practice.value === item.practice)?.label ??
+                                item.practice}
+                            </p>
+                            {item.description && (
+                              <p className="text-[11px] text-slate-400">{item.description}</p>
+                            )}
+                          </div>
+                          <span className="text-emerald-300">{currencyFormatter.format(item.amount)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
               </div>
-            )}
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+
+    <div className="grid gap-6 lg:grid-cols-2">
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-white">Historial de tratamientos</h2>
+          <div className="flex items-center gap-3">
+            <Link href={`/treatments?patientId=${patient.id}`} className="text-xs text-cyan-200 hover:underline">
+              Ver todo
+            </Link>
+            <button
+              type="button"
+              onClick={() => {
+                if (showTreatmentForm) {
+                  setTreatmentForm(createEmptyTreatmentForm());
+                  setTreatmentError(null);
+                }
+                setShowTreatmentForm((current) => !current);
+              }}
+              className="rounded-full border border-cyan-400/60 px-4 py-1 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/10"
+            >
+              {showTreatmentForm ? 'Cerrar formulario' : 'Registrar tratamiento'}
+            </button>
           </div>
         </div>
 
-        <aside className="space-y-6">
-          {showAppointmentForm && (
-            <div className="rounded-3xl border border-cyan-300/40 bg-slate-900/60 p-6 shadow-lg shadow-cyan-500/20">
-              <h2 className="text-lg font-semibold text-white">Agendar nuevo turno</h2>
-              <p className="mt-1 text-xs text-slate-300">
-                El turno se sincroniza automáticamente con Google Calendar del profesional.
-              </p>
-              <div className="mt-4">
-                <AppointmentForm
-                  patients={[patient]}
-                  defaultPatientId={patient.id}
-                  onCreated={(appointment) => {
-                    setData((currentData) =>
-                      currentData
-                        ? {
-                            ...currentData,
-                            appointments: [...currentData.appointments, { ...appointment, patient }],
-                          }
-                        : currentData,
-                    );
-                    setShowAppointmentForm(false);
-                  }}
+        {showTreatmentForm && (
+          <form
+            onSubmit={handleTreatmentSubmit}
+            className="mt-4 space-y-4 rounded-2xl border border-white/10 bg-slate-950/40 p-4"
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                Tipo de tratamiento
+                <input
+                  name="type"
+                  value={treatmentForm.type}
+                  onChange={handleTreatmentFieldChange}
+                  placeholder="Ej: Ortodoncia"
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
                 />
-              </div>
+              </label>
+              <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                Fecha
+                <input
+                  type="date"
+                  name="date"
+                  value={treatmentForm.date}
+                  onChange={handleTreatmentFieldChange}
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                />
+              </label>
+              <label className="md:col-span-2 text-xs font-semibold uppercase tracking-widest text-slate-300">
+                Descripción
+                <textarea
+                  name="description"
+                  value={treatmentForm.description}
+                  onChange={handleTreatmentFieldChange}
+                  rows={3}
+                  placeholder="Detalles del procedimiento realizado"
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                />
+              </label>
+              <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                Monto
+                <input
+                  type="number"
+                  name="cost"
+                  min="0"
+                  step="0.01"
+                  value={treatmentForm.cost}
+                  onChange={handleTreatmentFieldChange}
+                  placeholder="Ej: 55000"
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                />
+              </label>
             </div>
+
+            {treatmentError && (
+              <p className="rounded-2xl bg-rose-500/10 px-3 py-2 text-xs text-rose-200">{treatmentError}</p>
+            )}
+
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={handleTreatmentCancel}
+                className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-slate-100/60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={treatmentSaving}
+                className="rounded-full bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {treatmentSaving ? 'Guardando...' : 'Guardar tratamiento'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        <div className="mt-4 space-y-3 text-sm text-slate-200">
+          {treatments.length === 0 && (
+            <p className="text-slate-400">Todavía no hay tratamientos registrados.</p>
           )}
-
-          <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
-            <h2 className="text-lg font-semibold text-white">Próximos turnos</h2>
-            <div className="mt-4 space-y-3 text-sm text-slate-200">
-              {appointments.length === 0 && (
-                <p className="text-slate-400">No hay turnos programados.</p>
-              )}
-              {appointments.map((appointment) => (
-                <div key={appointment.id} className="rounded-2xl bg-slate-900/60 px-4 py-3">
-                  <p className="font-medium text-white">{appointment.type}</p>
-                  <p className="text-xs text-slate-400">
-                    {appointment.date} • {appointment.time}
-                  </p>
-                  <p className="mt-2 text-xs text-cyan-200 capitalize">Estado: {appointment.status}</p>
-                </div>
-              ))}
+          {treatments.map((treatment) => (
+            <div key={treatment.id} className="rounded-2xl bg-slate-900/60 px-4 py-3">
+              <p className="font-medium text-white">{treatment.type}</p>
+              <p className="text-xs text-slate-400">{treatment.date}</p>
+              <p className="mt-1 text-sm text-slate-300">{treatment.description}</p>
+              <p className="mt-2 text-xs text-emerald-300">
+                Monto: {treatment.cost.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}
+              </p>
             </div>
-          </div>
-
-          <div className="rounded-3xl border border-white/10 bg-cyan-500/10 p-6 text-sm text-cyan-50 shadow-lg shadow-cyan-500/20">
-            <h2 className="text-lg font-semibold text-white">Recordatorios automáticos</h2>
-            <p className="mt-3 text-cyan-100">
-              Activá recordatorios por WhatsApp y mail para confirmar asistencia y enviar enlaces de pago previos al turno.
-            </p>
-            <button className="mt-4 w-full rounded-full border border-cyan-300/60 px-4 py-2 text-xs font-semibold text-cyan-100 hover:border-white/80">
-              Configurar automatizaciones
-            </button>
-          </div>
-        </aside>
+          ))}
+        </div>
       </div>
-      )}
+
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-white">Pagos registrados</h2>
+          <Link href={`/payments?patientId=${patient.id}`} className="text-xs text-cyan-200 hover:underline">
+            Gestionar cobranzas
+          </Link>
+        </div>
+        <div className="mt-4 space-y-3 text-sm text-slate-200">
+          {payments.length === 0 && (
+            <p className="text-slate-400">No hay pagos cargados.</p>
+          )}
+          {payments.map((payment) => (
+            <div
+              key={payment.id}
+              className="flex items-center justify-between rounded-2xl bg-slate-900/60 px-4 py-3"
+            >
+              <div>
+                <p className="font-medium text-white">
+                  {payment.amount.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}
+                </p>
+                <p className="text-xs text-slate-400">{new Date(payment.date).toLocaleDateString('es-AR')}</p>
+              </div>
+              <span
+                className={`rounded-full px-3 py-1 text-xs ${
+                  payment.status === 'completed'
+                    ? 'bg-emerald-500/10 text-emerald-200 border border-emerald-500/40'
+                    : 'bg-amber-500/10 text-amber-200 border border-amber-400/40'
+                }`}
+              >
+                {payment.status === 'completed' ? 'Cobrado' : 'Pendiente'}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+
+    <div className="rounded-3xl border border-white/10 bg-cyan-500/10 p-6 text-sm text-cyan-50 shadow-lg shadow-cyan-500/20">
+      <h2 className="text-lg font-semibold text-white">Recordatorios automáticos</h2>
+      <p className="mt-3 text-cyan-100">
+        Activá recordatorios por WhatsApp y mail para confirmar asistencia y enviar enlaces de pago previos al turno.
+      </p>
+      <button className="mt-4 w-full rounded-full border border-cyan-300/60 px-4 py-2 text-xs font-semibold text-cyan-100 hover:border-white/80">
+        Configurar automatizaciones
+      </button>
+    </div>
+  </div>
+)}
+
 
       {activeSection === 'clinicalHistory' && (
         <div className="space-y-6">
@@ -1843,8 +1800,10 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
           <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto rounded-2xl border border-white/10 bg-slate-900/90 p-6 text-white shadow-xl shadow-cyan-500/20 backdrop-blur sm:rounded-3xl sm:p-8">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-xl font-semibold text-white">Emitir receta digital</h2>
-                <p className="text-sm text-slate-300">Generá, firmá y guardá la receta en la historia clínica.</p>
+                <h2 className="text-xl font-semibold text-white">Recetas digitales</h2>
+                <p className="text-sm text-slate-300">
+                  Revisá las recetas emitidas o generá un nuevo documento firmado para el paciente.
+                </p>
               </div>
               <button
                 type="button"
@@ -1854,15 +1813,42 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
                 Cerrar
               </button>
             </div>
-            <div className="mt-6">
+            <div className="mt-6 space-y-6">
+              <div className="flex flex-wrap gap-2 rounded-2xl border border-white/10 bg-white/5 p-1 text-sm font-semibold text-slate-200">
+                <button
+                  type="button"
+                  onClick={() => setPrescriptionModalTab('history')}
+                  className={`flex-1 rounded-2xl px-4 py-2 transition ${
+                    prescriptionModalTab === 'history'
+                      ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30'
+                      : 'text-slate-200 hover:bg-white/10'
+                  }`}
+                >
+                  Recetas del paciente ({sortedPrescriptions.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrescriptionModalTab('create')}
+                  className={`flex-1 rounded-2xl px-4 py-2 transition ${
+                    prescriptionModalTab === 'create'
+                      ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30'
+                      : 'text-slate-200 hover:bg-white/10'
+                  }`}
+                >
+                  Generar nueva receta
+                </button>
+              </div>
+
               <PrescriptionManager
+                key={prescriptionModalTab}
                 prescriptions={prescriptions}
                 onCreate={handleCreatePrescription}
                 hasSavedSignature={signatureInfo.hasSignature}
                 savedSignatureUrl={signatureInfo.signatureUrl}
                 onDelete={deletePrescription}
                 onUpdateSignature={handleUpdateSignature}
-                showHistory={false}
+                mode={prescriptionModalTab === 'history' ? 'history' : 'create'}
+                showHistory={prescriptionModalTab === 'history'}
               />
             </div>
           </div>
