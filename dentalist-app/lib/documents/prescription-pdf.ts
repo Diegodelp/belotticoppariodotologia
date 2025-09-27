@@ -203,7 +203,7 @@ function buildContentStream(
 
   const sectionTitleFontSize = 13;
   const sectionSpacing = 26;
-  const titleToCardGap = 4;
+  const titleToCardGap = 6;
   const headerContentSpacing = 32;
   let contentCursorY = separatorY - headerContentSpacing;
 
@@ -310,7 +310,7 @@ function buildContentStream(
     signatureLineY = Math.max(MARGIN + 60, contentCursorY - minimumFooterSpacing);
   }
 
-  const footerLabelOffset = 40;
+  const footerLabelOffset = 28;
   const footerLabelY = signatureLineY + footerLabelOffset;
 
   const leftColumnX = panelX;
@@ -320,8 +320,6 @@ function buildContentStream(
   const signatureColumnWidth = 240;
   const signatureStartX = panelX + panelWidth - signatureColumnWidth;
   const signatureEndX = signatureStartX + Math.min(220, signatureColumnWidth - 20);
-
-  drawText('F2', 11, COLORS.subtitle, signatureStartX, footerLabelY, 'Firma');
 
   commands.push('q');
   commands.push(`${toPdfColor(COLORS.border)} RG`);
