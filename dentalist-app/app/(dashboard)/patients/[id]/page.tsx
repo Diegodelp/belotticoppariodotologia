@@ -975,12 +975,6 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
           >
             Receta
           </button>
-          <button
-            onClick={() => setShowAppointmentForm((previous) => !previous)}
-            className="rounded-full bg-cyan-500 px-5 py-2 text-sm font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400"
-          >
-            {showAppointmentForm ? 'Cerrar formulario' : 'Agendar turno'}
-          </button>
           <Link
             href={`/calendar?patientId=${patient.id}`}
             className="rounded-full border border-white/10 px-5 py-2 text-sm font-semibold text-slate-100 transition hover:border-cyan-300 hover:text-cyan-200"
@@ -1175,32 +1169,6 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
       </form>
     )}
 
-    {showAppointmentForm && (
-      <div className="rounded-3xl border border-cyan-300/40 bg-slate-900/60 p-6 shadow-lg shadow-cyan-500/20">
-        <h2 className="text-lg font-semibold text-white">Agendar nuevo turno</h2>
-        <p className="mt-1 text-xs text-slate-300">
-          El turno se sincroniza automáticamente con Google Calendar del profesional.
-        </p>
-        <div className="mt-4">
-          <AppointmentForm
-            patients={[patient]}
-            defaultPatientId={patient.id}
-            onCreated={(appointment) => {
-              setData((currentData) =>
-                currentData
-                  ? {
-                      ...currentData,
-                      appointments: [...currentData.appointments, { ...appointment, patient }],
-                    }
-                  : currentData,
-              );
-              setShowAppointmentForm(false);
-            }}
-          />
-        </div>
-      </div>
-    )}
-
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
         <h2 className="text-lg font-semibold text-white">Datos de contacto</h2>
@@ -1242,10 +1210,48 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
       </div>
 
       <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-white">Próximos turnos</h2>
-          <span className="text-xs text-slate-400">{appointments.length} turno(s)</span>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white">Próximos turnos</h2>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs text-slate-400">{appointments.length} turno(s)</span>
+            <button
+              type="button"
+              onClick={() => setShowAppointmentForm((previous) => !previous)}
+              className="rounded-full bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400"
+            >
+              {showAppointmentForm ? 'Cerrar' : 'Agendar turno'}
+            </button>
+          </div>
         </div>
+
+        {showAppointmentForm && (
+          <div className="mt-4 rounded-2xl border border-cyan-300/40 bg-slate-900/60 p-4 shadow-inner shadow-cyan-500/10">
+            <h3 className="text-sm font-semibold text-white">Nuevo turno</h3>
+            <p className="mt-1 text-xs text-slate-300">
+              El turno se sincroniza automáticamente con Google Calendar del profesional.
+            </p>
+            <div className="mt-4">
+              <AppointmentForm
+                patients={[patient]}
+                defaultPatientId={patient.id}
+                onCreated={(appointment) => {
+                  setData((currentData) =>
+                    currentData
+                      ? {
+                          ...currentData,
+                          appointments: [...currentData.appointments, { ...appointment, patient }],
+                        }
+                      : currentData,
+                  );
+                  setShowAppointmentForm(false);
+                }}
+              />
+            </div>
+          </div>
+        )}
+
         <div className="mt-4 space-y-3 text-sm text-slate-200">
           {appointments.length === 0 && (
             <p className="text-slate-400">No hay turnos programados.</p>
