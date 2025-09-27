@@ -259,12 +259,13 @@ function buildContentStream(
   commands.push('Q');
 
   const sectionTitleFontSize = 13;
-  const sectionSpacing = 26;
-  const titleToCardGap = 6;
+  const sectionSpacing = 20;
+  const minSectionSpacing = 3;
+  const titleToCardGap = 3;
   const headerContentSpacing = 32;
   let contentCursorY = separatorY - headerContentSpacing;
 
-  const patientTitleY = contentCursorY - 5;
+  const patientTitleY = contentCursorY - titleToCardGap;
   drawText('F2', sectionTitleFontSize, COLORS.subtitle, headerPaddingX, patientTitleY, 'Datos del paciente');
 
   const patientRows = [
@@ -317,8 +318,8 @@ function buildContentStream(
   ];
 
   const paragraphWidth = panelWidth - patientCardPadding * 2;
-  const baseSectionFontSize = 12.5;
-  const minSectionFontSize = 7.5;
+  const baseSectionFontSize = 11.25;
+  const minSectionFontSize = 8.5;
   const basePaddingY = 20;
   const minPaddingY = 4;
   const baseLineHeightOffset = 3;
@@ -403,7 +404,16 @@ function buildContentStream(
       textCursorY -= layout.lineHeight;
     }
 
-    contentCursorY = Math.max(layout.cardBottom - sectionSpacing, footerReservedTop + sectionSpacing);
+    const footerFloor = footerReservedTop + minSectionSpacing;
+    let nextCursor = layout.cardBottom - sectionSpacing;
+    if (nextCursor < footerFloor) {
+      nextCursor = footerFloor;
+    }
+    const maxCursor = layout.cardBottom - minSectionSpacing;
+    if (nextCursor > maxCursor) {
+      nextCursor = maxCursor;
+    }
+    contentCursorY = nextCursor;
   }
 
   const footerLabelOffset = 28;
