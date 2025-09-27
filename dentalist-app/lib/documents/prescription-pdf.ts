@@ -9,11 +9,15 @@ const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const COLORS = {
   title: [15, 23, 42] as const,
   subtitle: [30, 41, 59] as const,
-  label: [31, 41, 55] as const,
-  value: [17, 24, 39] as const,
-  muted: [107, 114, 128] as const,
+  label: [51, 65, 85] as const,
+  value: [15, 23, 42] as const,
+  muted: [100, 116, 139] as const,
   border: [226, 232, 240] as const,
   background: [248, 250, 252] as const,
+  headerBackground: [224, 242, 254] as const,
+  panel: [255, 255, 255] as const,
+  divider: [203, 213, 225] as const,
+  accent: [14, 116, 144] as const,
 };
 
 interface PdfContentOptions {
@@ -115,9 +119,26 @@ function buildContentStream(
   commands.push('B');
   commands.push('Q');
 
-  const headerPaddingX = MARGIN + 20;
-  const headerTop = PAGE_HEIGHT - MARGIN - 32;
-  let cursorY = headerTop;
+  const bodyPaddingX = 28;
+  const headerHeight = 120;
+  const headerTop = PAGE_HEIGHT - MARGIN;
+  const headerBottom = headerTop - headerHeight;
+
+  commands.push('q');
+  commands.push(`${toPdfColor(COLORS.headerBackground)} rg`);
+  commands.push(`${MARGIN} ${headerBottom} ${CONTENT_WIDTH} ${headerHeight} re`);
+  commands.push('f');
+  commands.push('Q');
+
+  commands.push('q');
+  commands.push(`${toPdfColor(COLORS.border)} RG`);
+  commands.push('1 w');
+  commands.push(`${MARGIN} ${headerBottom} ${CONTENT_WIDTH} ${headerHeight} re`);
+  commands.push('S');
+  commands.push('Q');
+
+  const headerPaddingX = MARGIN + bodyPaddingX;
+  let cursorY = headerTop - 36;
 
   const drawText = (font: 'F1' | 'F2', size: number, color: readonly [number, number, number], x: number, y: number, text: string) => {
     commands.push('BT');
@@ -129,17 +150,17 @@ function buildContentStream(
   };
 
   let headerTextX = headerPaddingX;
-  let logoBottomY = headerTop;
+  let logoBottomY = headerBottom + 24;
 
   if (assets.logo) {
     const { image, name } = assets.logo;
-    const maxWidth = 90;
-    const maxHeight = 90;
+    const maxWidth = 110;
+    const maxHeight = headerHeight - 40;
     const scale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
     const drawWidth = image.width * scale;
     const drawHeight = image.height * scale;
     const positionX = headerPaddingX;
-    const positionY = headerTop - drawHeight + 6;
+    const positionY = headerBottom + (headerHeight - drawHeight) / 2;
 
     commands.push('q');
     commands.push(`${drawWidth} 0 0 ${drawHeight} ${positionX} ${positionY} cm`);
@@ -147,16 +168,43 @@ function buildContentStream(
     commands.push('Q');
 
     headerTextX = positionX + drawWidth + 16;
-    logoBottomY = positionY - 12;
+    logoBottomY = positionY;
   }
 
-  drawText('F2', 26, COLORS.title, headerTextX, cursorY, options.title);
-  cursorY -= 44;
+  const headingTitle = options.title;
+  drawText('F2', 26, COLORS.title, headerTextX, cursorY, headingTitle);
+  cursorY -= 28;
 
-  cursorY = Math.min(cursorY, logoBottomY);
+  const headingMeta: string[] = [];
+  if (!assets.logo) {
+    headingMeta.push(options.professionalName);
+  }
+  if (options.professionalLocality) {
+    headingMeta.push(options.professionalLocality);
+  }
+  if (options.professionalLicense) {
+    headingMeta.push(`Matrícula ${options.professionalLicense}`);
+  }
 
-  drawText('F2', 18, COLORS.subtitle, headerPaddingX, cursorY, 'Datos del paciente');
-  cursorY -= 26;
+  for (const meta of headingMeta) {
+    drawText('F1', 12, COLORS.muted, headerTextX, cursorY, meta);
+    cursorY -= 18;
+  }
+
+  const separatorY = Math.max(Math.min(cursorY, logoBottomY) - 12, headerBottom + 16);
+
+  commands.push('q');
+  commands.push(`${toPdfColor(COLORS.accent)} RG`);
+  commands.push('1.5 w');
+  commands.push(`${headerPaddingX} ${separatorY} m`);
+  commands.push(`${PAGE_WIDTH - headerPaddingX} ${separatorY} l`);
+  commands.push('S');
+  commands.push('Q');
+
+  let contentCursorY = separatorY - 24;
+
+  drawText('F2', 18, COLORS.subtitle, headerPaddingX, contentCursorY, 'Datos del paciente');
+  contentCursorY -= 24;
 
   const patientRows = [
     ['Nombre', options.patientName],
@@ -165,42 +213,107 @@ function buildContentStream(
     ['N.º Afiliado', options.affiliateNumber],
   ] as const;
 
-  for (const [label, value] of patientRows) {
-    drawText('F2', 12, COLORS.label, headerPaddingX, cursorY, label);
-    drawText('F1', 14, COLORS.value, headerPaddingX + 120, cursorY, value);
-    cursorY -= 24;
+  const panelX = MARGIN + bodyPaddingX;
+  const panelWidth = CONTENT_WIDTH - bodyPaddingX * 2;
+  const patientCardPadding = 18;
+  const patientRowHeight = 34;
+  const patientColumns = 2;
+  const rowsPerColumn = Math.ceil(patientRows.length / patientColumns);
+  const patientCardHeight = patientCardPadding * 2 + rowsPerColumn * patientRowHeight;
+  const patientCardTop = contentCursorY;
+  const patientCardBottom = patientCardTop - patientCardHeight;
+
+  commands.push('q');
+  commands.push(`${toPdfColor(COLORS.panel)} rg`);
+  commands.push(`${toPdfColor(COLORS.border)} RG`);
+  commands.push('1 w');
+  commands.push(`${panelX} ${patientCardBottom} ${panelWidth} ${patientCardHeight} re`);
+  commands.push('B');
+  commands.push('Q');
+
+  const columnGap = 28;
+  const columnWidth = (panelWidth - columnGap) / patientColumns;
+
+  for (let index = 0; index < patientRows.length; index += 1) {
+    const [label, value] = patientRows[index];
+    const column = index % patientColumns;
+    const row = Math.floor(index / patientColumns);
+    const baseX = panelX + patientCardPadding + column * (columnWidth + columnGap);
+    const labelY = patientCardTop - patientCardPadding - row * patientRowHeight - 8;
+    const valueY = labelY - 16;
+
+    drawText('F2', 10, COLORS.muted, baseX, labelY, label.toUpperCase());
+    drawText('F1', 13, COLORS.value, baseX, valueY, value);
   }
 
-  const sections: Array<{ title: string; value: string }> = [
-    { title: 'Diagnóstico', value: options.diagnosis || 'No especificado' },
-    { title: 'Prescripción', value: `Rp/.\n${options.medication}`.trim() },
-    { title: 'Indicaciones', value: options.instructions },
+  contentCursorY = patientCardBottom - 32;
+
+  const sections: Array<{ title: string; value: string; prefix?: string }> = [
+    { title: 'Diagnóstico', value: options.diagnosis || 'Sin diagnóstico registrado' },
+    { title: 'Prescripción', value: options.medication, prefix: 'Rp/.' },
+    { title: 'Indicaciones para el paciente', value: options.instructions },
     { title: 'Notas adicionales', value: options.notes || 'Sin observaciones' },
   ];
 
-  const paragraphWidth = CONTENT_WIDTH - 40;
+  const paragraphWidth = panelWidth - patientCardPadding * 2;
   const lineHeight = 18;
 
   for (const section of sections) {
-    drawText('F2', 18, COLORS.subtitle, headerPaddingX, cursorY, section.title);
-    cursorY -= 24;
+    const lines = wrapText(section.value, 13, paragraphWidth, fontWidth);
+    const hasContent = lines.length > 0 && !(lines.length === 1 && lines[0] === '');
+    const effectiveLines = hasContent ? lines : ['—'];
+    const sectionPaddingY = 22;
+    const titleHeight = 20;
+    const prefixHeight = section.prefix ? lineHeight : 0;
+    const contentHeight = effectiveLines.length * lineHeight;
+    const sectionHeight = sectionPaddingY * 2 + titleHeight + prefixHeight + contentHeight;
+    const sectionTop = contentCursorY;
+    const sectionBottom = sectionTop - sectionHeight;
 
-    const lines = wrapText(section.value, 14, paragraphWidth, fontWidth);
-    for (const line of lines) {
-      if (line === '') {
-        cursorY -= lineHeight;
-        continue;
-      }
-      drawText('F1', 14, COLORS.value, headerPaddingX, cursorY, line);
-      cursorY -= lineHeight;
+    commands.push('q');
+    commands.push(`${toPdfColor(COLORS.panel)} rg`);
+    commands.push(`${toPdfColor(COLORS.border)} RG`);
+    commands.push('1 w');
+    commands.push(`${panelX} ${sectionBottom} ${panelWidth} ${sectionHeight} re`);
+    commands.push('B');
+    commands.push('Q');
+
+    commands.push('q');
+    commands.push(`${toPdfColor(COLORS.accent)} rg`);
+    commands.push(`${panelX} ${sectionTop - 6} ${panelWidth} 3 re`);
+    commands.push('f');
+    commands.push('Q');
+
+    let textCursorY = sectionTop - sectionPaddingY;
+    drawText('F2', 16, COLORS.subtitle, panelX + patientCardPadding, textCursorY, section.title);
+    textCursorY -= 24;
+
+    if (section.prefix) {
+      drawText('F2', 13, COLORS.accent, panelX + patientCardPadding, textCursorY, section.prefix);
+      textCursorY -= lineHeight;
     }
 
-    cursorY -= 24;
+    for (const line of effectiveLines) {
+      if (line === '') {
+        textCursorY -= lineHeight;
+        continue;
+      }
+      drawText('F1', 13, COLORS.value, panelX + patientCardPadding, textCursorY, line);
+      textCursorY -= lineHeight;
+    }
+
+    contentCursorY = sectionBottom - 24;
   }
 
+  const footerDateLabelY = MARGIN + 170;
+  drawText('F2', 12, COLORS.subtitle, panelX, footerDateLabelY, 'Fecha de emisión');
+  drawText('F1', 14, COLORS.value, panelX, footerDateLabelY - 22, formatDate(options.issuedAt));
+
   const signatureLineY = MARGIN + 140;
-  const signatureStartX = PAGE_WIDTH - MARGIN - 220;
+  const signatureStartX = PAGE_WIDTH - MARGIN - 240;
   const signatureEndX = PAGE_WIDTH - MARGIN - 20;
+
+  drawText('F2', 12, COLORS.subtitle, signatureStartX, signatureLineY + 40, 'Firma y sello del profesional');
 
   commands.push('q');
   commands.push(`${toPdfColor(COLORS.border)} RG`);
@@ -212,14 +325,14 @@ function buildContentStream(
 
   if (assets.signature) {
     const { image, name } = assets.signature;
-    const maxWidth = 190;
+    const maxWidth = 200;
     const maxHeight = 90;
     const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
     const drawWidth = image.width * scale;
     const drawHeight = image.height * scale;
     const signatureAreaWidth = signatureEndX - signatureStartX;
     const positionX = signatureStartX + (signatureAreaWidth - drawWidth) / 2;
-    const positionY = signatureLineY + 10;
+    const positionY = signatureLineY + 12;
 
     commands.push('q');
     commands.push(`${drawWidth} 0 0 ${drawHeight} ${positionX} ${positionY} cm`);
@@ -227,24 +340,21 @@ function buildContentStream(
     commands.push('Q');
   }
 
-  drawText('F2', 12, COLORS.label, signatureStartX + 10, signatureLineY - 30, options.professionalName);
+  drawText('F2', 12, COLORS.label, signatureStartX, signatureLineY - 26, options.professionalName);
 
   const professionalDetails: string[] = [];
   if (options.professionalLicense) {
-    professionalDetails.push(`Matrícula: ${options.professionalLicense}`);
+    professionalDetails.push(`Matrícula ${options.professionalLicense}`);
   }
   if (options.professionalLocality) {
-    professionalDetails.push(`Localidad: ${options.professionalLocality}`);
+    professionalDetails.push(options.professionalLocality);
   } else if (options.professionalDni) {
-    professionalDetails.push(`DNI: ${options.professionalDni}`);
+    professionalDetails.push(`DNI ${options.professionalDni}`);
   }
 
-  const professionalLabel =
-    professionalDetails.length > 0 ? professionalDetails.join(' · ') : 'Firma digital';
+  const professionalLabel = professionalDetails.length > 0 ? professionalDetails.join(' · ') : 'Firma digital';
 
-  drawText('F1', 11, COLORS.muted, signatureStartX + 10, signatureLineY - 48, professionalLabel);
-
-  drawText('F2', 12, COLORS.label, headerPaddingX, signatureLineY - 18, `Fecha: ${formatDate(options.issuedAt)}`);
+  drawText('F1', 11, COLORS.muted, signatureStartX, signatureLineY - 42, professionalLabel);
 
   return Buffer.from(commands.join('\n') + '\n', 'latin1');
 }
@@ -304,8 +414,12 @@ export async function generatePrescriptionPdf(options: PrescriptionPdfOptions): 
     }
   }
 
+  const computedTitle = options.logo
+    ? 'Receta digital'
+    : options.title?.trim() || options.professionalName || 'Receta digital';
+
   const pdfOptions: PdfContentOptions = {
-    title: options.title?.trim() || 'Receta digital',
+    title: computedTitle,
     patientName: options.patientName,
     patientDni: options.patientDni ?? 'No informado',
     healthInsurance: insuranceLabel,
@@ -313,9 +427,10 @@ export async function generatePrescriptionPdf(options: PrescriptionPdfOptions): 
     professionalName: options.professionalName,
     professionalDni: options.professionalDni,
     professionalLicense: options.professionalLicense,
+    professionalLocality: options.professionalLocality,
     diagnosis: options.diagnosis?.trim() || 'No especificado',
-    medication: options.medication.trim(),
-    instructions: options.instructions.trim(),
+    medication: options.medication.trim() || 'Sin prescripción indicada',
+    instructions: options.instructions.trim() || 'Sin indicaciones específicas',
     notes: options.notes?.trim() || 'Sin observaciones',
     issuedAt,
   };
