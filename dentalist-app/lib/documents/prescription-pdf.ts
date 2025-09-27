@@ -120,7 +120,7 @@ function buildContentStream(
   commands.push('Q');
 
   const bodyPaddingX = 28;
-  const headerHeight = 118;
+  const headerHeight = 96;
   const headerTop = PAGE_HEIGHT - MARGIN;
   const headerBottom = headerTop - headerHeight;
 
@@ -138,7 +138,7 @@ function buildContentStream(
   commands.push('Q');
 
   const headerPaddingX = MARGIN + bodyPaddingX;
-  let cursorY = headerTop - 40;
+  let cursorY = headerTop - 32;
 
   const drawText = (font: 'F1' | 'F2', size: number, color: readonly [number, number, number], x: number, y: number, text: string) => {
     commands.push('BT');
@@ -171,9 +171,15 @@ function buildContentStream(
     logoBottomY = positionY;
   }
 
-  const headingTitle = options.title;
-  drawText('F2', 20, COLORS.title, headerTextX, cursorY, headingTitle);
-  cursorY -= 26;
+  const headingTitle = assets.logo
+    ? ''
+    : options.title.trim().toLowerCase() === 'receta digital'
+    ? ''
+    : options.title;
+  if (headingTitle) {
+    drawText('F2', 20, COLORS.title, headerTextX, cursorY, headingTitle);
+    cursorY -= 26;
+  }
 
   const headingMeta: string[] = [];
   if (!assets.logo) {
@@ -196,11 +202,13 @@ function buildContentStream(
   commands.push('Q');
 
   const sectionTitleFontSize = 13;
-  const sectionTitleSpacing = 18;
-  let contentCursorY = separatorY - sectionTitleSpacing;
+  const sectionSpacing = 26;
+  const titleToCardGap = 4;
+  const headerContentSpacing = 32;
+  let contentCursorY = separatorY - headerContentSpacing;
 
-  drawText('F2', sectionTitleFontSize, COLORS.subtitle, headerPaddingX, contentCursorY, 'Datos del paciente');
-  contentCursorY -= sectionTitleSpacing;
+  const patientTitleY = contentCursorY;
+  drawText('F2', sectionTitleFontSize, COLORS.subtitle, headerPaddingX, patientTitleY, 'Datos del paciente');
 
   const patientRows = [
     ['Nombre', options.patientName],
@@ -216,7 +224,7 @@ function buildContentStream(
   const patientColumns = 2;
   const rowsPerColumn = Math.ceil(patientRows.length / patientColumns);
   const patientCardHeight = patientCardPadding * 2 + rowsPerColumn * patientRowHeight;
-  const patientCardTop = contentCursorY;
+  const patientCardTop = patientTitleY - titleToCardGap;
   const patientCardBottom = patientCardTop - patientCardHeight;
 
   commands.push('q');
@@ -242,7 +250,7 @@ function buildContentStream(
     drawText('F1', 12.5, COLORS.value, baseX, valueY, value);
   }
 
-  contentCursorY = patientCardBottom - sectionTitleSpacing;
+  contentCursorY = patientCardBottom - sectionSpacing;
 
   const sections: Array<{ title: string; value: string; prefix?: string }> = [
     { title: 'Diagnóstico', value: options.diagnosis || 'Sin diagnóstico registrado' },
@@ -264,7 +272,7 @@ function buildContentStream(
 
     const prefixHeight = section.prefix ? lineHeight : 0;
     const contentHeight = effectiveLines.length * lineHeight;
-    const cardTop = sectionTop - sectionTitleSpacing;
+    const cardTop = sectionTop - titleToCardGap;
     const cardHeight = sectionPaddingY * 2 + prefixHeight + contentHeight;
     const cardBottom = cardTop - cardHeight;
 
@@ -292,7 +300,7 @@ function buildContentStream(
       textCursorY -= lineHeight;
     }
 
-    contentCursorY = cardBottom - sectionTitleSpacing;
+    contentCursorY = cardBottom - sectionSpacing;
   }
 
   const desiredSignatureLineY = MARGIN + 74;
@@ -302,15 +310,15 @@ function buildContentStream(
     signatureLineY = Math.max(MARGIN + 60, contentCursorY - minimumFooterSpacing);
   }
 
-  const footerLabelOffset = 44;
+  const footerLabelOffset = 40;
   const footerDateLabelY = signatureLineY + footerLabelOffset;
   drawText('F2', 11, COLORS.subtitle, panelX, footerDateLabelY, 'Fecha de emisión');
   drawText('F1', 13, COLORS.value, panelX, footerDateLabelY - 20, formatDate(options.issuedAt));
 
-  const signatureStartX = PAGE_WIDTH - MARGIN - 240;
-  const signatureEndX = PAGE_WIDTH - MARGIN - 20;
+  const signatureStartX = panelX;
+  const signatureEndX = signatureStartX + 220;
 
-  drawText('F2', 11, COLORS.subtitle, signatureStartX, footerDateLabelY, 'Firma y sello del profesional');
+  drawText('F2', 11, COLORS.subtitle, signatureStartX, footerDateLabelY, 'Firma');
 
   commands.push('q');
   commands.push(`${toPdfColor(COLORS.border)} RG`);
@@ -327,8 +335,7 @@ function buildContentStream(
     const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
     const drawWidth = image.width * scale;
     const drawHeight = image.height * scale;
-    const signatureAreaWidth = signatureEndX - signatureStartX;
-    const positionX = signatureStartX + (signatureAreaWidth - drawWidth) / 2;
+    const positionX = signatureStartX;
     const positionY = signatureLineY + 10;
 
     commands.push('q');
