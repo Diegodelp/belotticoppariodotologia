@@ -708,12 +708,15 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
         throw new Error(treatmentResponse?.error ?? 'No pudimos registrar el tratamiento.');
       }
 
+      const payment: Payment = paymentResponse.payment;
+      const treatment: Treatment = treatmentResponse.treatment;
+
       setData((current) =>
         current
           ? {
               ...current,
-              payments: [paymentResponse.payment, ...current.payments],
-              treatments: [treatmentResponse.treatment, ...current.treatments],
+              payments: [payment, ...current.payments],
+              treatments: [treatment, ...current.treatments],
             }
           : current,
       );
