@@ -1417,18 +1417,20 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
                 <div className="space-y-2 text-xs text-slate-300">
                   <p>{budget.notes || 'Sin notas adicionales.'}</p>
                   <p className="text-sm text-emerald-300">
-                    Total: {currencyFormatter.format(budget.totalAmount)}
+                    Total: {currencyFormatter.format(budget.total)}
                   </p>
                 </div>
                 <div className="space-y-2 text-xs text-slate-300">
-                  <a
-                    href={budget.pdfUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-200/60 hover:text-cyan-100"
-                  >
-                    Descargar PDF
-                  </a>
+                  {budget.documentUrl && (
+                    <a
+                      href={budget.documentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-cyan-200 transition hover:border-cyan-200/60 hover:text-cyan-100"
+                    >
+                      Descargar PDF
+                    </a>
+                  )}
                   {budget.items.length > 0 && (
                     <ul className="space-y-2 rounded-2xl border border-white/5 bg-slate-950/20 p-3">
                       {budget.items.map((item) => (
