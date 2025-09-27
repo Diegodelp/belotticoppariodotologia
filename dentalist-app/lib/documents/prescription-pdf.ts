@@ -195,10 +195,12 @@ function buildContentStream(
   commands.push('S');
   commands.push('Q');
 
-  let contentCursorY = separatorY - 26;
+  const sectionTitleFontSize = 13;
+  const sectionTitleSpacing = 18;
+  let contentCursorY = separatorY - sectionTitleSpacing;
 
-  drawText('F2', 16, COLORS.subtitle, headerPaddingX, contentCursorY, 'Datos del paciente');
-  contentCursorY -= 22;
+  drawText('F2', sectionTitleFontSize, COLORS.subtitle, headerPaddingX, contentCursorY, 'Datos del paciente');
+  contentCursorY -= sectionTitleSpacing;
 
   const patientRows = [
     ['Nombre', options.patientName],
@@ -240,7 +242,7 @@ function buildContentStream(
     drawText('F1', 12.5, COLORS.value, baseX, valueY, value);
   }
 
-  contentCursorY = patientCardBottom - 26;
+  contentCursorY = patientCardBottom - sectionTitleSpacing;
 
   const sections: Array<{ title: string; value: string; prefix?: string }> = [
     { title: 'Diagnóstico', value: options.diagnosis || 'Sin diagnóstico registrado' },
@@ -256,31 +258,25 @@ function buildContentStream(
     const lines = wrapText(section.value, 13, paragraphWidth, fontWidth);
     const hasContent = lines.length > 0 && !(lines.length === 1 && lines[0] === '');
     const effectiveLines = hasContent ? lines : ['—'];
-    const sectionPaddingY = 26;
-    const titleHeight = 18;
+    const sectionPaddingY = 20;
+    const sectionTop = contentCursorY;
+    drawText('F2', sectionTitleFontSize, COLORS.subtitle, panelX, sectionTop, section.title);
+
     const prefixHeight = section.prefix ? lineHeight : 0;
     const contentHeight = effectiveLines.length * lineHeight;
-    const sectionHeight = sectionPaddingY * 2 + titleHeight + prefixHeight + contentHeight;
-    const sectionTop = contentCursorY;
-    const sectionBottom = sectionTop - sectionHeight;
+    const cardTop = sectionTop - sectionTitleSpacing;
+    const cardHeight = sectionPaddingY * 2 + prefixHeight + contentHeight;
+    const cardBottom = cardTop - cardHeight;
 
     commands.push('q');
     commands.push(`${toPdfColor(COLORS.panel)} rg`);
     commands.push(`${toPdfColor(COLORS.border)} RG`);
     commands.push('1 w');
-    commands.push(`${panelX} ${sectionBottom} ${panelWidth} ${sectionHeight} re`);
+    commands.push(`${panelX} ${cardBottom} ${panelWidth} ${cardHeight} re`);
     commands.push('B');
     commands.push('Q');
 
-    commands.push('q');
-    commands.push(`${toPdfColor(COLORS.accent)} rg`);
-    commands.push(`${panelX} ${sectionTop - 6} ${panelWidth} 1 re`);
-    commands.push('f');
-    commands.push('Q');
-
-    let textCursorY = sectionTop - sectionPaddingY;
-    drawText('F2', 14, COLORS.subtitle, panelX + patientCardPadding, textCursorY, section.title);
-    textCursorY -= 22;
+    let textCursorY = cardTop - sectionPaddingY - 6;
 
     if (section.prefix) {
       drawText('F2', 12, COLORS.accent, panelX + patientCardPadding, textCursorY, section.prefix);
@@ -296,7 +292,7 @@ function buildContentStream(
       textCursorY -= lineHeight;
     }
 
-    contentCursorY = sectionBottom - 20;
+    contentCursorY = cardBottom - sectionTitleSpacing;
   }
 
   const desiredSignatureLineY = MARGIN + 74;
@@ -326,8 +322,8 @@ function buildContentStream(
 
   if (assets.signature) {
     const { image, name } = assets.signature;
-    const maxWidth = 170;
-    const maxHeight = 70;
+    const maxWidth = 135;
+    const maxHeight = 55;
     const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
     const drawWidth = image.width * scale;
     const drawHeight = image.height * scale;
