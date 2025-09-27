@@ -7,6 +7,7 @@ import { ClinicalHistoryForm } from '@/components/patients/ClinicalHistoryForm';
 import { PatientMediaManager } from '@/components/patients/PatientMediaManager';
 import { PrescriptionManager } from '@/components/patients/PrescriptionManager';
 import { PatientService } from '@/services/patient.service';
+import { PaymentService } from '@/services/payment.service';
 import { TreatmentService } from '@/services/treatment.service';
 import { OrthodonticPlanService } from '@/services/orthodontic-plan.service';
 import {
@@ -44,6 +45,13 @@ const BUDGET_PRACTICES: Array<{ value: BudgetPractice; label: string }> = [
   { value: 'perno', label: 'Perno' },
   { value: 'endodoncia', label: 'Endodoncia' },
 ];
+
+const PAYMENT_METHOD_LABELS: Record<Payment['method'], string> = {
+  cash: 'Efectivo',
+  card: 'Tarjeta',
+  transfer: 'Transferencia',
+  other: 'Otro',
+};
 
 const createEmptyBudgetItem = () => ({
   practice: 'operatoria' as BudgetPractice,
@@ -136,6 +144,13 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
   const [budgetDeletingId, setBudgetDeletingId] = useState<string | null>(null);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
+  const [budgetPaymentContext, setBudgetPaymentContext] = useState<{
+    budgetId: string;
+    itemId: string;
+  } | null>(null);
+  const [budgetPaymentMethod, setBudgetPaymentMethod] = useState<'cash' | 'card' | 'transfer'>('cash');
+  const [budgetPaymentSaving, setBudgetPaymentSaving] = useState(false);
+  const [budgetPaymentError, setBudgetPaymentError] = useState<string | null>(null);
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
   const [assignedPlan, setAssignedPlan] = useState<PatientOrthodonticPlan | null>(null);
   const [activeSection, setActiveSection] = useState<PatientSectionKey>('overview');
@@ -157,6 +172,29 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     const list = data?.prescriptions ?? [];
     return [...list].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   }, [data?.prescriptions]);
+
+  const budgetPaymentTarget = useMemo(() => {
+    if (!budgetPaymentContext || !data?.budgets) {
+      return null;
+    }
+
+    const budget = data.budgets.find((item) => item.id === budgetPaymentContext.budgetId);
+    if (!budget) {
+      return null;
+    }
+
+    const item = budget.items.find((budgetItem) => budgetItem.id === budgetPaymentContext.itemId);
+    if (!item) {
+      return null;
+    }
+
+    return { budget, item } as const;
+  }, [budgetPaymentContext, data?.budgets]);
+
+  const budgetPaymentPracticeLabel = budgetPaymentTarget
+    ? BUDGET_PRACTICES.find((practice) => practice.value === budgetPaymentTarget.item.practice)?.label ??
+      budgetPaymentTarget.item.practice
+    : '';
 
   useEffect(() => {
     const fetchData = async () => {
@@ -202,6 +240,13 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
   useEffect(() => {
     setIsEditing(editParam === 'true');
   }, [editParam]);
+
+  useEffect(() => {
+    if (budgetPaymentContext) {
+      setBudgetPaymentMethod('cash');
+      setBudgetPaymentError(null);
+    }
+  }, [budgetPaymentContext]);
 
   useEffect(() => {
     let active = true;
@@ -426,6 +471,16 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     resetBudgetForm();
   };
 
+  const openBudgetPaymentModal = (budgetId: string, itemId: string) => {
+    setBudgetPaymentContext({ budgetId, itemId });
+  };
+
+  const closeBudgetPaymentModal = () => {
+    setBudgetPaymentContext(null);
+    setBudgetPaymentError(null);
+    setBudgetPaymentSaving(false);
+  };
+
   const handleBudgetEdit = (budget: Budget) => {
     setBudgetAlert(null);
     setEditingBudgetId(budget.id);
@@ -606,6 +661,76 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
       });
     } finally {
       setBudgetSaving(false);
+    }
+  };
+
+  const handleBudgetItemPayment = async () => {
+    if (!data?.patient || !budgetPaymentTarget) {
+      return;
+    }
+
+    const now = new Date();
+    const descriptionFallback = budgetPaymentPracticeLabel
+      ? `Tratamiento correspondiente a ${budgetPaymentPracticeLabel.toLowerCase()}`
+      : 'Tratamiento correspondiente al presupuesto';
+    const paymentNotes = budgetPaymentPracticeLabel
+      ? `Pago de ${budgetPaymentPracticeLabel} (${budgetPaymentTarget.budget.title})`
+      : `Pago del presupuesto ${budgetPaymentTarget.budget.title}`;
+
+    try {
+      setBudgetPaymentSaving(true);
+      setBudgetPaymentError(null);
+      const itemDescription = budgetPaymentTarget.item.description?.trim() ?? '';
+
+      const [paymentResponse, treatmentResponse] = await Promise.all([
+        PaymentService.create({
+          patientId: data.patient.id,
+          amount: budgetPaymentTarget.item.amount,
+          method: budgetPaymentMethod,
+          status: 'completed',
+          date: now.toISOString(),
+          notes: paymentNotes,
+        }),
+        TreatmentService.create({
+          patientId: data.patient.id,
+          type: budgetPaymentPracticeLabel || 'Tratamiento',
+          description: itemDescription.length > 0 ? itemDescription : descriptionFallback,
+          cost: budgetPaymentTarget.item.amount,
+          date: now.toISOString(),
+        }),
+      ]);
+
+      if (!paymentResponse?.success || !paymentResponse.payment) {
+        throw new Error(paymentResponse?.error ?? 'No pudimos registrar el pago.');
+      }
+
+      if (!treatmentResponse?.success || !treatmentResponse.treatment) {
+        throw new Error(treatmentResponse?.error ?? 'No pudimos registrar el tratamiento.');
+      }
+
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              payments: [paymentResponse.payment, ...current.payments],
+              treatments: [treatmentResponse.treatment, ...current.treatments],
+            }
+          : current,
+      );
+
+      setBudgetAlert({
+        type: 'success',
+        message: 'Registramos el pago y lo agregamos al historial de tratamientos.',
+      });
+      closeBudgetPaymentModal();
+    } catch (error) {
+      setBudgetPaymentError(
+        error instanceof Error
+          ? error.message
+          : 'No pudimos registrar el pago. Intentá nuevamente.',
+      );
+    } finally {
+      setBudgetPaymentSaving(false);
     }
   };
 
@@ -1442,7 +1567,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
                       {budget.items.map((item) => (
                         <li
                           key={item.id}
-                          className="flex items-center justify-between rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2"
+                          className="flex flex-col gap-3 rounded-xl border border-white/5 bg-slate-950/40 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
                         >
                           <div>
                             <p className="font-semibold text-white">
@@ -1453,7 +1578,18 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
                               <p className="text-[11px] text-slate-400">{item.description}</p>
                             )}
                           </div>
-                          <span className="text-emerald-300">{currencyFormatter.format(item.amount)}</span>
+                          <div className="flex flex-col items-end gap-2 sm:flex-row sm:items-center">
+                            <span className="text-emerald-300">
+                              {currencyFormatter.format(item.amount)}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => openBudgetPaymentModal(budget.id, item.id)}
+                              className="rounded-full border border-cyan-400/60 px-3 py-1 text-[11px] font-semibold text-cyan-200 transition hover:border-cyan-300 hover:bg-cyan-500/10"
+                            >
+                              Registrar pago
+                            </button>
+                          </div>
                         </li>
                       ))}
                     </ul>
@@ -1602,7 +1738,10 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
                 <p className="font-medium text-white">
                   {payment.amount.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}
                 </p>
-                <p className="text-xs text-slate-400">{new Date(payment.date).toLocaleDateString('es-AR')}</p>
+                <p className="text-xs text-slate-400">
+                  {new Date(payment.date).toLocaleDateString('es-AR')} •{' '}
+                  {PAYMENT_METHOD_LABELS[payment.method] ?? payment.method}
+                </p>
               </div>
               <span
                 className={`rounded-full px-3 py-1 text-xs ${
@@ -1799,6 +1938,88 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
                 </div>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {budgetPaymentContext && budgetPaymentTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 px-4 py-8">
+          <div className="w-full max-w-lg rounded-3xl border border-white/10 bg-slate-900/90 p-6 text-white shadow-xl shadow-cyan-500/20 backdrop-blur">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-white">Registrar pago de práctica</h2>
+                <p className="text-sm text-slate-300">
+                  Al confirmar, el pago se agregará a tu listado de cobranzas y la práctica quedará registrada en el historial de tratamientos del paciente.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeBudgetPaymentModal}
+                disabled={budgetPaymentSaving}
+                className="rounded-full border border-white/20 px-3 py-1 text-xs font-semibold text-slate-200 transition hover:border-white/40 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cerrar
+              </button>
+            </div>
+
+            <div className="mt-6 space-y-4 rounded-2xl border border-white/10 bg-slate-950/60 p-4 text-sm">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-slate-400">Presupuesto</p>
+                  <p className="font-semibold text-white">{budgetPaymentTarget.budget.title}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-slate-400">Práctica</p>
+                  <p className="font-semibold text-white">{budgetPaymentPracticeLabel}</p>
+                </div>
+                <div>
+                  <p className="text-xs uppercase tracking-widest text-slate-400">Importe</p>
+                  <p className="font-semibold text-emerald-300">
+                    {currencyFormatter.format(budgetPaymentTarget.item.amount)}
+                  </p>
+                </div>
+              </div>
+
+              <label className="block text-xs font-semibold uppercase tracking-widest text-slate-300">
+                Medio de pago
+                <select
+                  value={budgetPaymentMethod}
+                  onChange={(event) =>
+                    setBudgetPaymentMethod(event.target.value as 'cash' | 'card' | 'transfer')
+                  }
+                  className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                >
+                  <option value="cash">Efectivo</option>
+                  <option value="card">Tarjeta</option>
+                  <option value="transfer">Transferencia</option>
+                </select>
+              </label>
+
+              {budgetPaymentError && (
+                <p className="rounded-2xl border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
+                  {budgetPaymentError}
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center justify-end gap-3 text-xs font-semibold">
+                <button
+                  type="button"
+                  onClick={closeBudgetPaymentModal}
+                  disabled={budgetPaymentSaving}
+                  className="rounded-full border border-white/10 px-4 py-2 text-slate-200 transition hover:border-slate-200/60 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBudgetItemPayment}
+                  disabled={budgetPaymentSaving}
+                  className="rounded-full bg-cyan-500 px-4 py-2 text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {budgetPaymentSaving ? 'Guardando…' : 'Confirmar pago'}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
