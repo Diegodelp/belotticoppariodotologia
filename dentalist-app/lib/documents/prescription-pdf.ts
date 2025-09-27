@@ -120,7 +120,7 @@ function buildContentStream(
   commands.push('Q');
 
   const bodyPaddingX = 28;
-  const headerHeight = 120;
+  const headerHeight = 118;
   const headerTop = PAGE_HEIGHT - MARGIN;
   const headerBottom = headerTop - headerHeight;
 
@@ -138,7 +138,7 @@ function buildContentStream(
   commands.push('Q');
 
   const headerPaddingX = MARGIN + bodyPaddingX;
-  let cursorY = headerTop - 36;
+  let cursorY = headerTop - 40;
 
   const drawText = (font: 'F1' | 'F2', size: number, color: readonly [number, number, number], x: number, y: number, text: string) => {
     commands.push('BT');
@@ -154,8 +154,8 @@ function buildContentStream(
 
   if (assets.logo) {
     const { image, name } = assets.logo;
-    const maxWidth = 110;
-    const maxHeight = headerHeight - 40;
+    const maxWidth = 104;
+    const maxHeight = headerHeight - 44;
     const scale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
     const drawWidth = image.width * scale;
     const drawHeight = image.height * scale;
@@ -172,8 +172,8 @@ function buildContentStream(
   }
 
   const headingTitle = options.title;
-  drawText('F2', 22, COLORS.title, headerTextX, cursorY, headingTitle);
-  cursorY -= 28;
+  drawText('F2', 20, COLORS.title, headerTextX, cursorY, headingTitle);
+  cursorY -= 26;
 
   const headingMeta: string[] = [];
   if (!assets.logo) {
@@ -181,11 +181,11 @@ function buildContentStream(
   }
 
   for (const meta of headingMeta) {
-    drawText('F1', 12, COLORS.muted, headerTextX, cursorY, meta);
-    cursorY -= 18;
+    drawText('F1', 11, COLORS.muted, headerTextX, cursorY, meta);
+    cursorY -= 16;
   }
 
-  const separatorY = Math.max(Math.min(cursorY, logoBottomY) - 12, headerBottom + 16);
+  const separatorY = Math.max(Math.min(cursorY, logoBottomY) - 10, headerBottom + 18);
 
   commands.push('q');
   commands.push(`${toPdfColor(COLORS.accent)} RG`);
@@ -195,10 +195,10 @@ function buildContentStream(
   commands.push('S');
   commands.push('Q');
 
-  let contentCursorY = separatorY - 24;
+  let contentCursorY = separatorY - 26;
 
-  drawText('F2', 18, COLORS.subtitle, headerPaddingX, contentCursorY, 'Datos del paciente');
-  contentCursorY -= 24;
+  drawText('F2', 16, COLORS.subtitle, headerPaddingX, contentCursorY, 'Datos del paciente');
+  contentCursorY -= 22;
 
   const patientRows = [
     ['Nombre', options.patientName],
@@ -209,8 +209,8 @@ function buildContentStream(
 
   const panelX = MARGIN + bodyPaddingX;
   const panelWidth = CONTENT_WIDTH - bodyPaddingX * 2;
-  const patientCardPadding = 18;
-  const patientRowHeight = 34;
+  const patientCardPadding = 20;
+  const patientRowHeight = 32;
   const patientColumns = 2;
   const rowsPerColumn = Math.ceil(patientRows.length / patientColumns);
   const patientCardHeight = patientCardPadding * 2 + rowsPerColumn * patientRowHeight;
@@ -233,14 +233,14 @@ function buildContentStream(
     const column = index % patientColumns;
     const row = Math.floor(index / patientColumns);
     const baseX = panelX + patientCardPadding + column * (columnWidth + columnGap);
-    const labelY = patientCardTop - patientCardPadding - row * patientRowHeight - 8;
-    const valueY = labelY - 16;
+    const labelY = patientCardTop - patientCardPadding - row * patientRowHeight - 6;
+    const valueY = labelY - 15;
 
     drawText('F2', 10, COLORS.muted, baseX, labelY, label.toUpperCase());
-    drawText('F1', 13, COLORS.value, baseX, valueY, value);
+    drawText('F1', 12.5, COLORS.value, baseX, valueY, value);
   }
 
-  contentCursorY = patientCardBottom - 32;
+  contentCursorY = patientCardBottom - 26;
 
   const sections: Array<{ title: string; value: string; prefix?: string }> = [
     { title: 'Diagnóstico', value: options.diagnosis || 'Sin diagnóstico registrado' },
@@ -250,14 +250,14 @@ function buildContentStream(
   ];
 
   const paragraphWidth = panelWidth - patientCardPadding * 2;
-  const lineHeight = 18;
+  const lineHeight = 17;
 
   for (const section of sections) {
     const lines = wrapText(section.value, 13, paragraphWidth, fontWidth);
     const hasContent = lines.length > 0 && !(lines.length === 1 && lines[0] === '');
     const effectiveLines = hasContent ? lines : ['—'];
-    const sectionPaddingY = 22;
-    const titleHeight = 20;
+    const sectionPaddingY = 26;
+    const titleHeight = 18;
     const prefixHeight = section.prefix ? lineHeight : 0;
     const contentHeight = effectiveLines.length * lineHeight;
     const sectionHeight = sectionPaddingY * 2 + titleHeight + prefixHeight + contentHeight;
@@ -279,11 +279,11 @@ function buildContentStream(
     commands.push('Q');
 
     let textCursorY = sectionTop - sectionPaddingY;
-    drawText('F2', 16, COLORS.subtitle, panelX + patientCardPadding, textCursorY, section.title);
-    textCursorY -= 24;
+    drawText('F2', 14, COLORS.subtitle, panelX + patientCardPadding, textCursorY, section.title);
+    textCursorY -= 22;
 
     if (section.prefix) {
-      drawText('F2', 13, COLORS.accent, panelX + patientCardPadding, textCursorY, section.prefix);
+      drawText('F2', 12, COLORS.accent, panelX + patientCardPadding, textCursorY, section.prefix);
       textCursorY -= lineHeight;
     }
 
@@ -292,29 +292,29 @@ function buildContentStream(
         textCursorY -= lineHeight;
         continue;
       }
-      drawText('F1', 13, COLORS.value, panelX + patientCardPadding, textCursorY, line);
+      drawText('F1', 12.5, COLORS.value, panelX + patientCardPadding, textCursorY, line);
       textCursorY -= lineHeight;
     }
 
-    contentCursorY = sectionBottom - 24;
+    contentCursorY = sectionBottom - 20;
   }
 
-  const desiredSignatureLineY = MARGIN + 72;
-  const minimumFooterSpacing = 150;
+  const desiredSignatureLineY = MARGIN + 74;
+  const minimumFooterSpacing = 140;
   let signatureLineY = desiredSignatureLineY;
   if (contentCursorY - signatureLineY < minimumFooterSpacing) {
     signatureLineY = Math.max(MARGIN + 60, contentCursorY - minimumFooterSpacing);
   }
 
-  const footerLabelOffset = 48;
+  const footerLabelOffset = 44;
   const footerDateLabelY = signatureLineY + footerLabelOffset;
-  drawText('F2', 12, COLORS.subtitle, panelX, footerDateLabelY, 'Fecha de emisión');
-  drawText('F1', 14, COLORS.value, panelX, footerDateLabelY - 22, formatDate(options.issuedAt));
+  drawText('F2', 11, COLORS.subtitle, panelX, footerDateLabelY, 'Fecha de emisión');
+  drawText('F1', 13, COLORS.value, panelX, footerDateLabelY - 20, formatDate(options.issuedAt));
 
   const signatureStartX = PAGE_WIDTH - MARGIN - 240;
   const signatureEndX = PAGE_WIDTH - MARGIN - 20;
 
-  drawText('F2', 12, COLORS.subtitle, signatureStartX, footerDateLabelY, 'Firma y sello del profesional');
+  drawText('F2', 11, COLORS.subtitle, signatureStartX, footerDateLabelY, 'Firma y sello del profesional');
 
   commands.push('q');
   commands.push(`${toPdfColor(COLORS.border)} RG`);
@@ -326,14 +326,14 @@ function buildContentStream(
 
   if (assets.signature) {
     const { image, name } = assets.signature;
-    const maxWidth = 200;
-    const maxHeight = 90;
+    const maxWidth = 170;
+    const maxHeight = 70;
     const scale = Math.min(maxWidth / image.width, maxHeight / image.height);
     const drawWidth = image.width * scale;
     const drawHeight = image.height * scale;
     const signatureAreaWidth = signatureEndX - signatureStartX;
     const positionX = signatureStartX + (signatureAreaWidth - drawWidth) / 2;
-    const positionY = signatureLineY + 12;
+    const positionY = signatureLineY + 10;
 
     commands.push('q');
     commands.push(`${drawWidth} 0 0 ${drawHeight} ${positionX} ${positionY} cm`);
@@ -341,7 +341,7 @@ function buildContentStream(
     commands.push('Q');
   }
 
-  drawText('F2', 12, COLORS.label, signatureStartX, signatureLineY - 26, options.professionalName);
+  drawText('F2', 11, COLORS.label, signatureStartX, signatureLineY - 24, options.professionalName);
 
   const professionalDetails: string[] = [];
   if (options.professionalLicense) {
@@ -355,7 +355,7 @@ function buildContentStream(
 
   const professionalLabel = professionalDetails.length > 0 ? professionalDetails.join(' · ') : 'Firma digital';
 
-  drawText('F1', 11, COLORS.muted, signatureStartX, signatureLineY - 42, professionalLabel);
+  drawText('F1', 10.5, COLORS.muted, signatureStartX, signatureLineY - 38, professionalLabel);
 
   return Buffer.from(commands.join('\n') + '\n', 'latin1');
 }
