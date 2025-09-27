@@ -57,6 +57,57 @@ function encodeText(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)');
 }
 
+function splitLongWord(
+  word: string,
+  fontSize: number,
+  maxWidth: number,
+  fontWidthCalculator: (value: string, size: number) => number,
+): string[] {
+  if (fontWidthCalculator(word, fontSize) <= maxWidth) {
+    return [word];
+  }
+
+  const segments: string[] = [];
+  let buffer = '';
+
+  const pushBuffered = (isLast: boolean) => {
+    if (!buffer) {
+      return;
+    }
+    segments.push(isLast ? buffer : `${buffer}-`);
+    buffer = '';
+  };
+
+  const characters = [...word];
+  for (let index = 0; index < characters.length; index += 1) {
+    const char = characters[index];
+    const isLast = index === characters.length - 1;
+    const candidate = buffer + char;
+
+    const projected = isLast ? candidate : `${candidate}-`;
+    if (fontWidthCalculator(projected, fontSize) <= maxWidth) {
+      buffer = candidate;
+      if (isLast) {
+        pushBuffered(true);
+      }
+      continue;
+    }
+
+    pushBuffered(false);
+
+    if (fontWidthCalculator(isLast ? char : `${char}-`, fontSize) <= maxWidth) {
+      buffer = char;
+      if (isLast) {
+        pushBuffered(true);
+      }
+    } else {
+      segments.push(char);
+    }
+  }
+
+  return segments.length > 0 ? segments : [word];
+}
+
 function wrapText(
   text: string,
   fontSize: number,
@@ -75,8 +126,15 @@ function wrapText(
     }
 
     let currentLine = '';
-    for (const word of words) {
-      const candidate = currentLine ? `${currentLine} ${word}` : word;
+    const expandedWords = words.flatMap((word) => splitLongWord(word, fontSize, maxWidth, fontWidthCalculator));
+
+    for (const word of expandedWords) {
+      const continuesHyphen = currentLine.endsWith('-');
+      const candidate = currentLine
+        ? continuesHyphen
+          ? `${currentLine}${word}`
+          : `${currentLine} ${word}`
+        : word;
       if (fontWidthCalculator(candidate, fontSize) <= maxWidth) {
         currentLine = candidate;
       } else {
@@ -96,9 +154,8 @@ function wrapText(
 }
 
 function fontWidth(text: string, size: number): number {
-  // Helvetica aprox: cada unidad = size * 0.5 para caracteres alfanuméricos.
-  // Es una aproximación suficiente para el envoltorio manual.
-  return text.length * (size * 0.5);
+  // Factor conservador para asegurar que los renglones no sobresalgan del contenedor.
+  return text.length * (size * 0.53);
 }
 
 function buildContentStream(
