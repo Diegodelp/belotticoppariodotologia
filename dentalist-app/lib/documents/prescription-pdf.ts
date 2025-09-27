@@ -207,7 +207,7 @@ function buildContentStream(
   const headerContentSpacing = 32;
   let contentCursorY = separatorY - headerContentSpacing;
 
-  const patientTitleY = contentCursorY;
+  const patientTitleY = contentCursorY - 5;
   drawText('F2', sectionTitleFontSize, COLORS.subtitle, headerPaddingX, patientTitleY, 'Datos del paciente');
 
   const patientRows = [
@@ -311,14 +311,17 @@ function buildContentStream(
   }
 
   const footerLabelOffset = 40;
-  const footerDateLabelY = signatureLineY + footerLabelOffset;
-  drawText('F2', 11, COLORS.subtitle, panelX, footerDateLabelY, 'Fecha de emisión');
-  drawText('F1', 13, COLORS.value, panelX, footerDateLabelY - 20, formatDate(options.issuedAt));
+  const footerLabelY = signatureLineY + footerLabelOffset;
 
-  const signatureStartX = panelX;
-  const signatureEndX = signatureStartX + 220;
+  const leftColumnX = panelX;
+  drawText('F2', 11, COLORS.subtitle, leftColumnX, footerLabelY, 'Fecha de emisión');
+  drawText('F1', 13, COLORS.value, leftColumnX, footerLabelY - 20, formatDate(options.issuedAt));
 
-  drawText('F2', 11, COLORS.subtitle, signatureStartX, footerDateLabelY, 'Firma');
+  const signatureColumnWidth = 240;
+  const signatureStartX = panelX + panelWidth - signatureColumnWidth;
+  const signatureEndX = signatureStartX + Math.min(220, signatureColumnWidth - 20);
+
+  drawText('F2', 11, COLORS.subtitle, signatureStartX, footerLabelY, 'Firma');
 
   commands.push('q');
   commands.push(`${toPdfColor(COLORS.border)} RG`);
