@@ -175,12 +175,14 @@ export default function PaymentsPage() {
           throw new Error(response?.error ?? 'No pudimos actualizar el pago.');
         }
 
+        const updatedPayment = response.payment;
+
         setPayments((prev) =>
           prev.map((item) =>
-            item.id === response.payment!.id
+            item.id === updatedPayment.id
               ? {
-                  ...response.payment!,
-                  patient: patientMap.get(response.payment.patientId) ?? item.patient,
+                  ...updatedPayment,
+                  patient: patientMap.get(updatedPayment.patientId) ?? item.patient,
                 }
               : item,
           ),
