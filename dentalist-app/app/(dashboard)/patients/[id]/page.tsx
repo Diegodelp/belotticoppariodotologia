@@ -44,6 +44,9 @@ const BUDGET_PRACTICES: Array<{ value: BudgetPractice; label: string }> = [
   { value: 'carilla', label: 'Carilla' },
   { value: 'perno', label: 'Perno' },
   { value: 'endodoncia', label: 'Endodoncia' },
+  { value: 'urgencia', label: 'Urgencia' },
+  { value: 'regeneracionTisular', label: 'Regeneración tisular' },
+  { value: 'otro', label: 'Otro' },
 ];
 
 const PAYMENT_METHOD_LABELS: Record<Payment['method'], string> = {

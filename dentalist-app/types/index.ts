@@ -248,7 +248,10 @@ export type BudgetPractice =
   | 'corona'
   | 'carilla'
   | 'perno'
-  | 'endodoncia';
+  | 'endodoncia'
+  | 'urgencia'
+  | 'regeneracionTisular'
+  | 'otro';
 
 export interface BudgetItem {
   id: string;

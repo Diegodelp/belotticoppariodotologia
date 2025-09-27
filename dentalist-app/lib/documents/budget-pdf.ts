@@ -136,6 +136,12 @@ function practiceLabel(practice: BudgetPractice): string {
       return 'Perno';
     case 'endodoncia':
       return 'Endodoncia';
+    case 'urgencia':
+      return 'Urgencia';
+    case 'regeneracionTisular':
+      return 'Regeneración tisular';
+    case 'otro':
+      return 'Otro';
     default:
       return practice;
   }

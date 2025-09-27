@@ -21,6 +21,9 @@ const PRACTICES: BudgetPractice[] = [
   'carilla',
   'perno',
   'endodoncia',
+  'urgencia',
+  'regeneracionTisular',
+  'otro',
 ];
 
 type NormalizedBudgetItem = {
