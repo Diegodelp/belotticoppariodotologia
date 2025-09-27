@@ -261,8 +261,8 @@ function buildContentStream(
   const sectionTitleFontSize = 13;
   const sectionSpacing = 20;
   const minSectionSpacing = 3;
-  const titleToCardGap = 3;
-  const headerContentSpacing = 32;
+  const titleToCardGap = 2;
+  const headerContentSpacing = 36;
   let contentCursorY = separatorY - headerContentSpacing;
 
   const patientTitleY = contentCursorY - titleToCardGap;
