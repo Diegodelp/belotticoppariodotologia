@@ -172,18 +172,12 @@ function buildContentStream(
   }
 
   const headingTitle = options.title;
-  drawText('F2', 26, COLORS.title, headerTextX, cursorY, headingTitle);
+  drawText('F2', 22, COLORS.title, headerTextX, cursorY, headingTitle);
   cursorY -= 28;
 
   const headingMeta: string[] = [];
   if (!assets.logo) {
     headingMeta.push(options.professionalName);
-  }
-  if (options.professionalLocality) {
-    headingMeta.push(options.professionalLocality);
-  }
-  if (options.professionalLicense) {
-    headingMeta.push(`Matrícula ${options.professionalLicense}`);
   }
 
   for (const meta of headingMeta) {
@@ -280,7 +274,7 @@ function buildContentStream(
 
     commands.push('q');
     commands.push(`${toPdfColor(COLORS.accent)} rg`);
-    commands.push(`${panelX} ${sectionTop - 6} ${panelWidth} 3 re`);
+    commands.push(`${panelX} ${sectionTop - 6} ${panelWidth} 1 re`);
     commands.push('f');
     commands.push('Q');
 
@@ -305,19 +299,26 @@ function buildContentStream(
     contentCursorY = sectionBottom - 24;
   }
 
-  const footerDateLabelY = MARGIN + 170;
+  const desiredSignatureLineY = MARGIN + 72;
+  const minimumFooterSpacing = 150;
+  let signatureLineY = desiredSignatureLineY;
+  if (contentCursorY - signatureLineY < minimumFooterSpacing) {
+    signatureLineY = Math.max(MARGIN + 60, contentCursorY - minimumFooterSpacing);
+  }
+
+  const footerLabelOffset = 48;
+  const footerDateLabelY = signatureLineY + footerLabelOffset;
   drawText('F2', 12, COLORS.subtitle, panelX, footerDateLabelY, 'Fecha de emisión');
   drawText('F1', 14, COLORS.value, panelX, footerDateLabelY - 22, formatDate(options.issuedAt));
 
-  const signatureLineY = MARGIN + 140;
   const signatureStartX = PAGE_WIDTH - MARGIN - 240;
   const signatureEndX = PAGE_WIDTH - MARGIN - 20;
 
-  drawText('F2', 12, COLORS.subtitle, signatureStartX, signatureLineY + 40, 'Firma y sello del profesional');
+  drawText('F2', 12, COLORS.subtitle, signatureStartX, footerDateLabelY, 'Firma y sello del profesional');
 
   commands.push('q');
   commands.push(`${toPdfColor(COLORS.border)} RG`);
-  commands.push('2 w');
+  commands.push('1 w');
   commands.push(`${signatureStartX} ${signatureLineY} m`);
   commands.push(`${signatureEndX} ${signatureLineY} l`);
   commands.push('S');
