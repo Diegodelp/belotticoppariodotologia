@@ -14,7 +14,7 @@ import {
   OdontogramSurfaceMark,
 } from '@/types';
 
-const ALLOWED_STAGES: ClinicalStage[] = ['baseline', 'initial', 'intermediate', 'final'];
+const ALLOWED_STAGES: ClinicalStage[] = ['initial', 'intermediate', 'final'];
 const ODONTOGRAM_CONDITIONS: OdontogramCondition[] = [
   'caries',
   'extraction',

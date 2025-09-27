@@ -96,7 +96,7 @@ const PATIENT_INVITES_TABLE =
   process.env.SUPABASE_TABLE_PATIENT_INVITES ??
   'patient_invites';
 
-const CLINICAL_STAGES: ClinicalStage[] = ['baseline', 'initial', 'intermediate', 'final'];
+const CLINICAL_STAGES: ClinicalStage[] = ['initial', 'intermediate', 'final'];
 const ODONTOGRAM_CONDITIONS: OdontogramCondition[] = [
   'caries',
   'extraction',

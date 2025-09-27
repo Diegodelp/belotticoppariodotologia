@@ -14,11 +14,6 @@ import {
 
 const STAGES: Array<{ key: ClinicalStage; label: string; description: string }> = [
   {
-    key: 'baseline',
-    label: 'Parámetros diagnósticos',
-    description: 'Valores iniciales obtenidos antes de comenzar el plan clínico.',
-  },
-  {
     key: 'initial',
     label: 'Inicio del tratamiento',
     description: 'Registro al momento de colocar aparatología o iniciar terapéutica.',
@@ -532,11 +527,14 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
     }
     return initial;
   });
-  const [stageOpenState, setStageOpenState] = useState<Record<ClinicalStage, boolean>>(() =>
-    STAGES.reduce<Record<ClinicalStage, boolean>>((accumulator, { key }) => {
-      accumulator[key] = key === 'baseline' || stageHasValuesInHistory(key, history);
-      return accumulator;
-    }, {} as Record<ClinicalStage, boolean>),
+  const [stageOpenState, setStageOpenState] = useState<Partial<Record<ClinicalStage, boolean>>>(
+    () => {
+      const initialState: Partial<Record<ClinicalStage, boolean>> = {};
+      STAGES.forEach((stage, index) => {
+        initialState[stage.key] = index === 0 || stageHasValuesInHistory(stage.key, history);
+      });
+      return initialState;
+    },
   );
   const [odontogram, setOdontogram] = useState<OdontogramState>(() =>
     cloneOdontogram(history?.odontogram ?? null),
@@ -585,12 +583,11 @@ export function ClinicalHistoryForm({ history, onSubmit, loading = false }: Clin
     setSelectedProcedure('caries');
     setSelectedStatus('planned');
     setOdontogramTool('apply');
-    setStageOpenState(
-      STAGES.reduce<Record<ClinicalStage, boolean>>((accumulator, { key }) => {
-        accumulator[key] = key === 'baseline' || stageHasValuesInHistory(key, history ?? null);
-        return accumulator;
-      }, {} as Record<ClinicalStage, boolean>),
-    );
+    const nextOpenState: Partial<Record<ClinicalStage, boolean>> = {};
+    STAGES.forEach((stage, index) => {
+      nextOpenState[stage.key] = index === 0 || stageHasValuesInHistory(stage.key, history ?? null);
+    });
+    setStageOpenState(nextOpenState);
   }, [history]);
 
   useEffect(() => {

@@ -133,3 +133,62 @@ export async function sendTwoFactorCodeEmail({
     html: htmlBody,
   });
 }
+
+export async function sendPrescriptionIssuedEmail({
+  to,
+  patientName,
+  professionalName,
+  prescriptionTitle,
+  documentUrl,
+  clinicName,
+}: {
+  to: string;
+  patientName: string;
+  professionalName: string;
+  prescriptionTitle: string;
+  documentUrl: string;
+  clinicName?: string;
+}) {
+  const trimmedPatient = patientName.trim();
+  const trimmedProfessional = professionalName.trim();
+  const safePatient = trimmedPatient.length > 0 ? trimmedPatient : 'Paciente';
+  const safeProfessional = trimmedProfessional.length > 0 ? trimmedProfessional : 'su profesional tratante';
+  const heading = clinicName?.trim().length
+    ? `Receta emitida por ${clinicName.trim()}`
+    : 'Receta digital disponible';
+  const subject = heading;
+
+  const textBody = `Hola ${safePatient},\n\n` +
+    `${safeProfessional} emitió una nueva receta "${prescriptionTitle}".` +
+    '\nPodés descargarla en el siguiente enlace temporal:\n' +
+    `${documentUrl}\n\n` +
+    'Recordá guardar el archivo si necesitás consultarlo más adelante.\n\n' +
+    'Saludos.';
+
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+      <h2 style="color: #0ea5e9;">${heading}</h2>
+      <p>Hola ${safePatient},</p>
+      <p>
+        ${safeProfessional} emitió una nueva receta
+        <strong>${prescriptionTitle}</strong>.
+      </p>
+      <p>
+        Podés descargarla usando el siguiente enlace temporal:
+        <br />
+        <a href="${documentUrl}" style="color: #0ea5e9;">Descargar receta</a>
+      </p>
+      <p style="font-size: 12px; color: #64748b;">
+        Recordá guardar el archivo si necesitás consultarlo más adelante.
+      </p>
+      <p>Saludos.</p>
+    </div>
+  `;
+
+  await sendMail({
+    to,
+    subject,
+    text: textBody,
+    html: htmlBody,
+  });
+}

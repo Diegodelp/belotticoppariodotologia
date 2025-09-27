@@ -11,6 +11,7 @@ import {
   saveProfessionalSignature,
 } from '@/lib/db/supabase-repository';
 import { generatePrescriptionPdf } from '@/lib/documents/prescription-pdf';
+import { sendPrescriptionIssuedEmail } from '@/lib/email/mailer';
 import { parseSignatureDataUrl } from '@/lib/utils/signature';
 import { CreatePrescriptionInput } from '@/types';
 
@@ -143,6 +144,28 @@ export async function POST(
       // Refresh signature metadata if it existed previously.
       const latestSignature = await getProfessionalSignature(user.id);
       signaturePath = latestSignature?.storage_path ?? null;
+    }
+
+    if (patient.email) {
+      try {
+        await sendPrescriptionIssuedEmail({
+          to: patient.email,
+          patientName: `${patient.name} ${patient.lastName}`.trim(),
+          professionalName: professionalName ?? user.name,
+          prescriptionTitle: body.title,
+          documentUrl: prescription.pdfUrl,
+          clinicName: clinicTitle.length > 0 ? clinicTitle : undefined,
+        });
+      } catch (emailError) {
+        console.error('No se pudo enviar la receta por correo', emailError);
+        return NextResponse.json(
+          {
+            error:
+              'La receta se generó pero no pudimos enviarla por correo electrónico. Intentá nuevamente en unos minutos.',
+          },
+          { status: 502 },
+        );
+      }
     }
 
     return NextResponse.json({ success: true, prescription });
