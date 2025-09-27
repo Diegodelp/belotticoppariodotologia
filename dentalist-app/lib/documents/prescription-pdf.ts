@@ -260,54 +260,93 @@ function buildContentStream(
   ];
 
   const paragraphWidth = panelWidth - patientCardPadding * 2;
-  const lineHeight = 17;
+  const baseSectionFontSize = 12.5;
+  const minSectionFontSize = 7.5;
+  const basePaddingY = 20;
+  const minPaddingY = 4;
+  const baseLineHeightOffset = 3;
+
+  const signatureLineY = MARGIN + 74;
+  const footerReservedTop = signatureLineY + 120;
 
   for (const section of sections) {
-    const lines = wrapText(section.value, 13, paragraphWidth, fontWidth);
-    const hasContent = lines.length > 0 && !(lines.length === 1 && lines[0] === '');
-    const effectiveLines = hasContent ? lines : ['—'];
-    const sectionPaddingY = 20;
     const sectionTop = contentCursorY;
     drawText('F2', sectionTitleFontSize, COLORS.subtitle, panelX, sectionTop, section.title);
 
-    const prefixHeight = section.prefix ? lineHeight : 0;
-    const contentHeight = effectiveLines.length * lineHeight;
     const cardTop = sectionTop - titleToCardGap;
-    const cardHeight = sectionPaddingY * 2 + prefixHeight + contentHeight;
-    const cardBottom = cardTop - cardHeight;
+
+    const computeLayout = (fontSize: number, paddingY: number) => {
+      const wrapped = wrapText(section.value, fontSize, paragraphWidth, fontWidth);
+      const hasContent = wrapped.some((line) => line.trim().length > 0);
+      const effectiveLines = hasContent ? wrapped : ['—'];
+      const lineHeight = fontSize + baseLineHeightOffset;
+      const prefixHeight = section.prefix ? lineHeight : 0;
+      const cardHeight = paddingY * 2 + prefixHeight + effectiveLines.length * lineHeight;
+      const cardBottom = cardTop - cardHeight;
+      return { effectiveLines, lineHeight, prefixHeight, cardHeight, cardBottom };
+    };
+
+    let sectionFontSize = baseSectionFontSize;
+    let sectionPaddingY = basePaddingY;
+    let layout = computeLayout(sectionFontSize, sectionPaddingY);
+
+    while (layout.cardBottom < footerReservedTop && sectionFontSize > minSectionFontSize) {
+      sectionFontSize = Math.max(sectionFontSize - 0.75, minSectionFontSize);
+      layout = computeLayout(sectionFontSize, sectionPaddingY);
+    }
+
+    while (layout.cardBottom < footerReservedTop && sectionPaddingY > minPaddingY) {
+      sectionPaddingY = Math.max(sectionPaddingY - 2, minPaddingY);
+      layout = computeLayout(sectionFontSize, sectionPaddingY);
+    }
+
+    if (layout.cardBottom < footerReservedTop) {
+      const availableHeight = cardTop - footerReservedTop;
+      if (availableHeight > 0) {
+        const maxPadding = Math.max((availableHeight - layout.prefixHeight - layout.lineHeight) / 2, 0);
+        sectionPaddingY = Math.max(Math.min(sectionPaddingY, maxPadding), 0);
+        layout = computeLayout(sectionFontSize, sectionPaddingY);
+      }
+      const maxContentHeight = Math.max(availableHeight - sectionPaddingY * 2 - layout.prefixHeight, layout.lineHeight);
+      const maxLines = Math.max(Math.floor(maxContentHeight / layout.lineHeight), 1);
+      if (layout.effectiveLines.length > maxLines) {
+        const truncated = layout.effectiveLines.slice(0, maxLines);
+        const lastIndex = truncated.length - 1;
+        truncated[lastIndex] = `${truncated[lastIndex]}…`;
+        layout = {
+          ...layout,
+          effectiveLines: truncated,
+          cardHeight: sectionPaddingY * 2 + layout.prefixHeight + truncated.length * layout.lineHeight,
+          cardBottom: cardTop - (sectionPaddingY * 2 + layout.prefixHeight + truncated.length * layout.lineHeight),
+        };
+      }
+    }
 
     commands.push('q');
     commands.push(`${toPdfColor(COLORS.panel)} rg`);
     commands.push(`${toPdfColor(COLORS.border)} RG`);
     commands.push('1 w');
-    commands.push(`${panelX} ${cardBottom} ${panelWidth} ${cardHeight} re`);
+    commands.push(`${panelX} ${layout.cardBottom} ${panelWidth} ${layout.cardHeight} re`);
     commands.push('B');
     commands.push('Q');
 
     let textCursorY = cardTop - sectionPaddingY - 6;
 
     if (section.prefix) {
-      drawText('F2', 12, COLORS.accent, panelX + patientCardPadding, textCursorY, section.prefix);
-      textCursorY -= lineHeight;
+      drawText('F2', Math.max(sectionFontSize, 11), COLORS.accent, panelX + patientCardPadding, textCursorY, section.prefix);
+      textCursorY -= layout.lineHeight;
     }
 
-    for (const line of effectiveLines) {
+    for (const line of layout.effectiveLines) {
       if (line === '') {
-        textCursorY -= lineHeight;
+        textCursorY -= layout.lineHeight;
         continue;
       }
-      drawText('F1', 12.5, COLORS.value, panelX + patientCardPadding, textCursorY, line);
-      textCursorY -= lineHeight;
+      drawText('F1', sectionFontSize, COLORS.value, panelX + patientCardPadding, textCursorY, line);
+      textCursorY -= layout.lineHeight;
     }
 
-    contentCursorY = cardBottom - sectionSpacing;
-  }
-
-  const desiredSignatureLineY = MARGIN + 74;
-  const minimumFooterSpacing = 140;
-  let signatureLineY = desiredSignatureLineY;
-  if (contentCursorY - signatureLineY < minimumFooterSpacing) {
-    signatureLineY = Math.max(MARGIN + 60, contentCursorY - minimumFooterSpacing);
+    contentCursorY = Math.max(layout.cardBottom - sectionSpacing, footerReservedTop + sectionSpacing);
   }
 
   const footerLabelOffset = 28;
