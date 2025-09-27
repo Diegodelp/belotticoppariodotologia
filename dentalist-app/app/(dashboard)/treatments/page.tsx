@@ -154,10 +154,12 @@ export default function TreatmentsPage() {
           throw new Error(response?.error ?? 'No pudimos actualizar el tratamiento.');
         }
 
+        const updatedTreatment = response.treatment;
+
         setTreatments((prev) =>
           prev.map((item) =>
-            item.id === response.treatment!.id
-              ? { ...response.treatment!, patient: patientMap.get(response.treatment.patientId) ?? item.patient }
+            item.id === updatedTreatment.id
+              ? { ...updatedTreatment, patient: patientMap.get(updatedTreatment.patientId) ?? item.patient }
               : item,
           ),
         );
