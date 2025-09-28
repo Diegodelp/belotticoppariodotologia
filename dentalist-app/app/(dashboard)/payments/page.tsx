@@ -306,6 +306,7 @@ export default function PaymentsPage() {
                 <th className="px-6 py-3">Fecha</th>
                 <th className="px-6 py-3">Paciente</th>
                 <th className="px-6 py-3">Medio</th>
+                <th className="px-6 py-3">Estado</th>
                 <th className="px-6 py-3">Notas</th>
                 <th className="px-6 py-3 text-right">Monto</th>
                 <th className="px-6 py-3 text-right">Acciones</th>
@@ -321,6 +322,17 @@ export default function PaymentsPage() {
                     {payment.patient?.name} {payment.patient?.lastName}
                   </td>
                   <td className="px-6 py-4 capitalize text-slate-300">{payment.method}</td>
+                  <td className="px-6 py-4">
+                    <span
+                      className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+                        payment.status === 'completed'
+                          ? 'bg-emerald-500/15 text-emerald-200'
+                          : 'bg-amber-500/15 text-amber-200'
+                      }`}
+                    >
+                      {payment.status === 'completed' ? 'Cobrado' : 'Pendiente'}
+                    </span>
+                  </td>
                   <td className="px-6 py-4 text-slate-400">{payment.notes ?? '—'}</td>
                   <td className="px-6 py-4 text-right text-emerald-300">
                     {payment.amount.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}
@@ -348,7 +360,7 @@ export default function PaymentsPage() {
               ))}
               {!loading && filteredPayments.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-slate-300">
+                  <td colSpan={7} className="px-6 py-4 text-center text-slate-300">
                     No encontramos pagos con los filtros seleccionados.
                   </td>
                 </tr>

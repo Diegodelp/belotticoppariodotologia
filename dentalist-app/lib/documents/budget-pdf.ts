@@ -187,7 +187,7 @@ function buildContentStream(options: BudgetPdfOptions, logo?: { image: PngImage;
   commands.push('S');
   commands.push('Q');
 
-  let cursorY = headerTop - 32;
+  const cursorY = headerTop - 32;
 
   const drawText = (
     font: 'F1' | 'F2',
@@ -205,7 +205,6 @@ function buildContentStream(options: BudgetPdfOptions, logo?: { image: PngImage;
     commands.push('ET');
   };
 
-  let headingX = headerPaddingX;
   let logoBottomY = headerBottom + 24;
 
   if (logo) {
@@ -222,44 +221,7 @@ function buildContentStream(options: BudgetPdfOptions, logo?: { image: PngImage;
     commands.push(`${drawWidth} 0 0 ${drawHeight} ${positionX} ${positionY} cm`);
     commands.push(`/${name} Do`);
     commands.push('Q');
-
-    headingX = positionX + drawWidth + 16;
     logoBottomY = positionY;
-  }
-
-  const clinicName = options.professional.clinicName?.trim() ?? '';
-  const title = options.title?.trim() ?? '';
-  const professionalName = options.professional.name?.trim() ?? '';
-  const primaryHeading = clinicName || title || 'Presupuesto';
-  const secondaryHeading = title && title.toLowerCase() !== primaryHeading.toLowerCase() ? title : '';
-
-  if (primaryHeading) {
-    drawText('F2', 20, COLORS.title, headingX, cursorY, primaryHeading);
-    cursorY -= 26;
-  }
-
-  if (secondaryHeading) {
-    drawText('F1', 13, COLORS.value, headingX, cursorY, secondaryHeading);
-    cursorY -= 20;
-  }
-
-  const headingMeta: string[] = [];
-  if (professionalName) {
-    headingMeta.push(professionalName);
-  }
-  if (options.professional.licenseNumber?.trim()) {
-    headingMeta.push(`Matrícula ${options.professional.licenseNumber.trim()}`);
-  }
-  if (options.professional.phone?.trim()) {
-    headingMeta.push(`Tel. ${options.professional.phone.trim()}`);
-  }
-  if (options.professional.email?.trim()) {
-    headingMeta.push(options.professional.email.trim());
-  }
-
-  for (const meta of headingMeta) {
-    drawText('F1', 11, COLORS.muted, headingX, cursorY, meta);
-    cursorY -= 15;
   }
 
   const separatorY = Math.max(Math.min(cursorY, logoBottomY) - 10, headerBottom + 18);
