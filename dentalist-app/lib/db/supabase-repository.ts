@@ -1593,6 +1593,36 @@ export async function listBudgets(
   return rows.map((row, index) => mapBudget(row, signedUrls[index] ?? undefined));
 }
 
+export async function getBudgetById(
+  professionalId: string,
+  patientId: string,
+  budgetId: string,
+): Promise<Budget | null> {
+  const client = getClient();
+  const { data, error } = await client
+    .from(BUDGETS_TABLE)
+    .select('*, items:budget_items(*)')
+    .eq('professional_id', professionalId)
+    .eq('id', budgetId)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    return null;
+  }
+
+  const row = data as AppBudgetRow;
+  if (row.patient_id !== patientId) {
+    return null;
+  }
+
+  const signedUrl = row.document_path
+    ? await createSignedUrl(client, DOCUMENTS_BUCKET, row.document_path)
+    : null;
+
+  return mapBudget(row, signedUrl ?? undefined);
+}
+
 export async function createBudgetRecord(
   professionalId: string,
   patientId: string,

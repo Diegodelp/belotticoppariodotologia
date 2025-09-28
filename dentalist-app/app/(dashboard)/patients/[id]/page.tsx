@@ -148,6 +148,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
   const [budgetAlert, setBudgetAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [editingBudgetId, setEditingBudgetId] = useState<string | null>(null);
   const [budgetDeletingId, setBudgetDeletingId] = useState<string | null>(null);
+  const [budgetSendingId, setBudgetSendingId] = useState<string | null>(null);
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false);
   const [budgetPaymentContext, setBudgetPaymentContext] = useState<{
     budgetId: string;
@@ -172,6 +173,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     : isEditingBudget
       ? 'Guardar cambios'
       : 'Generar presupuesto';
+  const patientHasEmail = Boolean(data?.patient?.email && data.patient.email.trim().length > 0);
 
   const sortedPrescriptions = useMemo(() => {
     const list = data?.prescriptions ?? [];
@@ -667,6 +669,42 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
       });
     } finally {
       setBudgetSaving(false);
+    }
+  };
+
+  const handleSendBudget = async (budget: Budget) => {
+    if (!data?.patient) {
+      return;
+    }
+
+    if (!patientHasEmail) {
+      setBudgetAlert({
+        type: 'error',
+        message: 'El paciente no tiene un correo electrónico registrado.',
+      });
+      return;
+    }
+
+    try {
+      setBudgetSendingId(budget.id);
+      setBudgetAlert(null);
+      const response = await PatientService.sendBudget(data.patient.id, budget.id);
+      if (response.success) {
+        setBudgetAlert({ type: 'success', message: 'Presupuesto enviado por correo.' });
+      } else {
+        setBudgetAlert({
+          type: 'error',
+          message: response.error ?? 'No pudimos enviar el presupuesto. Intentá nuevamente.',
+        });
+      }
+    } catch (error) {
+      console.error('Error al enviar presupuesto', error);
+      setBudgetAlert({
+        type: 'error',
+        message: 'No pudimos enviar el presupuesto. Intentá nuevamente.',
+      });
+    } finally {
+      setBudgetSendingId(null);
     }
   };
 
@@ -1619,6 +1657,14 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleSendBudget(budget)}
+                      disabled={budgetSendingId === budget.id || !patientHasEmail}
+                      className="rounded-full border border-cyan-400/60 px-3 py-1 text-xs font-semibold text-cyan-200 transition hover:border-cyan-300 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {budgetSendingId === budget.id ? 'Enviando…' : 'Enviar por mail'}
+                    </button>
                     <button
                       type="button"
                       onClick={() => handleBudgetEdit(budget)}

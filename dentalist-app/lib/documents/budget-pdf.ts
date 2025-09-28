@@ -9,11 +9,15 @@ const CONTENT_WIDTH = PAGE_WIDTH - MARGIN * 2;
 const COLORS = {
   title: [15, 23, 42] as const,
   subtitle: [30, 41, 59] as const,
-  label: [31, 41, 55] as const,
+  label: [51, 65, 85] as const,
   value: [17, 24, 39] as const,
-  muted: [107, 114, 128] as const,
+  muted: [100, 116, 139] as const,
   border: [226, 232, 240] as const,
   background: [248, 250, 252] as const,
+  headerBackground: [224, 242, 254] as const,
+  panel: [255, 255, 255] as const,
+  divider: [203, 213, 225] as const,
+  accent: [14, 116, 144] as const,
 };
 
 interface BudgetPdfProfessional {
@@ -152,7 +156,38 @@ function practiceLabel(practice: BudgetPractice): string {
 function buildContentStream(options: BudgetPdfOptions, logo?: { image: PngImage; name: string }): Buffer {
   const commands: string[] = [];
 
-  let cursorY = PAGE_HEIGHT - MARGIN - 32;
+  const bodyPaddingX = 28;
+  const headerHeight = 96;
+  const headerTop = PAGE_HEIGHT - MARGIN;
+  const headerBottom = headerTop - headerHeight;
+  const headerPaddingX = MARGIN + bodyPaddingX;
+  const panelX = MARGIN + bodyPaddingX;
+  const panelWidth = CONTENT_WIDTH - bodyPaddingX * 2;
+
+  // Fondo exterior
+  commands.push('q');
+  commands.push(`${toPdfColor(COLORS.background)} rg`);
+  commands.push(`${toPdfColor(COLORS.border)} RG`);
+  commands.push('1 w');
+  commands.push(`${MARGIN} ${MARGIN} ${CONTENT_WIDTH} ${PAGE_HEIGHT - MARGIN * 2} re`);
+  commands.push('B');
+  commands.push('Q');
+
+  // Encabezado
+  commands.push('q');
+  commands.push(`${toPdfColor(COLORS.headerBackground)} rg`);
+  commands.push(`${MARGIN} ${headerBottom} ${CONTENT_WIDTH} ${headerHeight} re`);
+  commands.push('f');
+  commands.push('Q');
+
+  commands.push('q');
+  commands.push(`${toPdfColor(COLORS.border)} RG`);
+  commands.push('1 w');
+  commands.push(`${MARGIN} ${headerBottom} ${CONTENT_WIDTH} ${headerHeight} re`);
+  commands.push('S');
+  commands.push('Q');
+
+  let cursorY = headerTop - 32;
 
   const drawText = (
     font: 'F1' | 'F2',
@@ -170,100 +205,289 @@ function buildContentStream(options: BudgetPdfOptions, logo?: { image: PngImage;
     commands.push('ET');
   };
 
-  const primaryHeading =
-    options.professional.clinicName?.trim() || options.professional.name || options.title?.trim() || 'Presupuesto';
-  const secondaryHeading = (() => {
-    const title = options.title?.trim();
-    if (!title) {
-      return '';
-    }
-    if (title.toLowerCase() === (primaryHeading ?? '').toLowerCase()) {
-      return '';
-    }
-    return title;
-  })();
-
-  let headingX = MARGIN;
-  let logoBottomY = cursorY;
+  let headingX = headerPaddingX;
+  let logoBottomY = headerBottom + 24;
 
   if (logo) {
     const { image, name } = logo;
-    const maxWidth = 110;
-    const maxHeight = 100;
+    const maxWidth = 104;
+    const maxHeight = headerHeight - 44;
     const scale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
     const drawWidth = image.width * scale;
     const drawHeight = image.height * scale;
-    const positionX = MARGIN;
-    const positionY = cursorY - drawHeight + 6;
+    const positionX = headerPaddingX;
+    const positionY = headerBottom + (headerHeight - drawHeight) / 2;
 
     commands.push('q');
     commands.push(`${drawWidth} 0 0 ${drawHeight} ${positionX} ${positionY} cm`);
     commands.push(`/${name} Do`);
     commands.push('Q');
 
-    headingX = positionX + drawWidth + 18;
-    logoBottomY = positionY - 12;
+    headingX = positionX + drawWidth + 16;
+    logoBottomY = positionY;
   }
 
-  drawText('F2', 26, COLORS.title, headingX, cursorY, primaryHeading);
-  cursorY -= secondaryHeading ? 26 : 32;
+  const clinicName = options.professional.clinicName?.trim() ?? '';
+  const title = options.title?.trim() ?? '';
+  const professionalName = options.professional.name?.trim() ?? '';
+  const primaryHeading = clinicName || title || 'Presupuesto';
+  const secondaryHeading = title && title.toLowerCase() !== primaryHeading.toLowerCase() ? title : '';
+
+  if (primaryHeading) {
+    drawText('F2', 20, COLORS.title, headingX, cursorY, primaryHeading);
+    cursorY -= 26;
+  }
 
   if (secondaryHeading) {
-    drawText('F1', 14, COLORS.value, headingX, cursorY, secondaryHeading);
-    cursorY -= 24;
+    drawText('F1', 13, COLORS.value, headingX, cursorY, secondaryHeading);
+    cursorY -= 20;
   }
 
-  cursorY = Math.min(cursorY, logoBottomY);
-
-  drawText('F2', 16, COLORS.subtitle, MARGIN, cursorY, 'Profesional');
-  cursorY -= 22;
-
-  const professionalLines = [
-    options.professional.name ? `Nombre: ${options.professional.name}` : null,
-    options.professional.licenseNumber ? `Matrícula: ${options.professional.licenseNumber}` : null,
-    options.professional.phone ? `Teléfono: ${options.professional.phone}` : null,
-  ].filter((value): value is string => Boolean(value));
-
-  for (const line of professionalLines) {
-    drawText('F1', 13, COLORS.value, MARGIN, cursorY, line);
-    cursorY -= 18;
+  const headingMeta: string[] = [];
+  if (professionalName) {
+    headingMeta.push(professionalName);
+  }
+  if (options.professional.licenseNumber?.trim()) {
+    headingMeta.push(`Matrícula ${options.professional.licenseNumber.trim()}`);
+  }
+  if (options.professional.phone?.trim()) {
+    headingMeta.push(`Tel. ${options.professional.phone.trim()}`);
+  }
+  if (options.professional.email?.trim()) {
+    headingMeta.push(options.professional.email.trim());
   }
 
-  cursorY -= 6;
-  drawText('F2', 16, COLORS.subtitle, MARGIN, cursorY, 'Paciente');
-  cursorY -= 22;
-  drawText('F1', 13, COLORS.value, MARGIN, cursorY, options.patient.name || '');
-  cursorY -= 28;
+  for (const meta of headingMeta) {
+    drawText('F1', 11, COLORS.muted, headingX, cursorY, meta);
+    cursorY -= 15;
+  }
 
-  drawText('F2', 16, COLORS.subtitle, MARGIN, cursorY, 'Detalle del presupuesto');
-  cursorY -= 22;
+  const separatorY = Math.max(Math.min(cursorY, logoBottomY) - 10, headerBottom + 18);
 
-  const amountColumnX = MARGIN + CONTENT_WIDTH - 120;
-  const detailWidth = amountColumnX - MARGIN - 20;
+  commands.push('q');
+  commands.push(`${toPdfColor(COLORS.accent)} RG`);
+  commands.push('1.5 w');
+  commands.push(`${headerPaddingX} ${separatorY} m`);
+  commands.push(`${PAGE_WIDTH - headerPaddingX} ${separatorY} l`);
+  commands.push('S');
+  commands.push('Q');
+
+  const sectionTitleFontSize = 13;
+  const sectionSpacing = 24;
+  const titleToCardGap = 2;
+  const headerContentSpacing = 36;
+  let contentCursorY = separatorY - headerContentSpacing;
+
+  const patientTitleY = contentCursorY - titleToCardGap;
+  drawText('F2', sectionTitleFontSize, COLORS.subtitle, panelX, patientTitleY, 'Datos del paciente');
+
+  const patientRows = [
+    ['Nombre', options.patient.name],
+    ['DNI', options.patient.dni],
+    ['Obra Social', options.patient.healthInsurance || 'Sin obra social'],
+    ['N.º Afiliado', options.patient.affiliateNumber || '—'],
+  ] as const;
+
+  const patientCardPadding = 20;
+  const patientRowHeight = 32;
+  const patientColumns = 2;
+  const rowsPerColumn = Math.ceil(patientRows.length / patientColumns);
+  const patientCardHeight = patientCardPadding * 2 + rowsPerColumn * patientRowHeight;
+  const patientCardTop = patientTitleY - titleToCardGap;
+  const patientCardBottom = patientCardTop - patientCardHeight;
+
+  commands.push('q');
+  commands.push(`${toPdfColor(COLORS.panel)} rg`);
+  commands.push(`${toPdfColor(COLORS.border)} RG`);
+  commands.push('1 w');
+  commands.push(`${panelX} ${patientCardBottom} ${panelWidth} ${patientCardHeight} re`);
+  commands.push('B');
+  commands.push('Q');
+
+  const columnGap = 28;
+  const columnWidth = (panelWidth - columnGap) / patientColumns;
+
+  for (let index = 0; index < patientRows.length; index += 1) {
+    const [label, value] = patientRows[index];
+    const column = index % patientColumns;
+    const row = Math.floor(index / patientColumns);
+    const baseX = panelX + patientCardPadding + column * (columnWidth + columnGap);
+    const labelY = patientCardTop - patientCardPadding - row * patientRowHeight - 6;
+    const valueY = labelY - 15;
+
+    drawText('F2', 10, COLORS.muted, baseX, labelY, label.toUpperCase());
+    drawText('F1', 12.5, COLORS.value, baseX, valueY, value);
+  }
+
+  contentCursorY = patientCardBottom - sectionSpacing;
+
+  const itemsTitleY = contentCursorY - titleToCardGap;
+  drawText('F2', sectionTitleFontSize, COLORS.subtitle, panelX, itemsTitleY, 'Detalle del presupuesto');
+
+  const itemsCardTop = itemsTitleY - titleToCardGap;
+  const itemsPaddingX = 22;
+  const itemsPaddingY = 22;
+  const amountColumnWidth = 110;
+  const detailColumnWidth = panelWidth - itemsPaddingX * 2 - amountColumnWidth;
+  const headerLineHeight = 12;
+  const headerSpacing = 18;
+  const practiceLineHeight = 16;
+  const descriptionLineHeight = 12.5;
+  const postDescriptionWithContent = 6;
+  const postDescriptionEmpty = 10;
+  const interItemSpacing = 8;
+
+  const hasItems = options.items.length > 0;
+  const itemLayouts = hasItems
+    ? options.items.map((item) => {
+        const practiceName = practiceLabel(item.practice);
+        const description = item.description?.trim() ?? '';
+        const descriptionLines = description
+          ? wrapText(description, 10.5, detailColumnWidth, fontWidth)
+          : [];
+        const amountText = formatCurrency(item.amount);
+        const blockHeight =
+          practiceLineHeight +
+          (descriptionLines.length > 0
+            ? descriptionLines.length * descriptionLineHeight + postDescriptionWithContent
+            : postDescriptionEmpty);
+        return { practiceName, descriptionLines, amountText, blockHeight };
+      })
+    : [];
+
+  const itemsContentHeight = hasItems
+    ? itemLayouts.reduce(
+        (sum, layout, index) =>
+          sum +
+          layout.blockHeight +
+          (index < itemLayouts.length - 1 ? interItemSpacing : 0),
+        0,
+      )
+    : 18;
+
+  const itemsCardHeight = itemsPaddingY * 2 + headerLineHeight + headerSpacing + itemsContentHeight;
+  const itemsCardBottom = itemsCardTop - itemsCardHeight;
+
+  commands.push('q');
+  commands.push(`${toPdfColor(COLORS.panel)} rg`);
+  commands.push(`${toPdfColor(COLORS.border)} RG`);
+  commands.push('1 w');
+  commands.push(`${panelX} ${itemsCardBottom} ${panelWidth} ${itemsCardHeight} re`);
+  commands.push('B');
+  commands.push('Q');
+
+  const amountHeaderText = 'MONTO';
+  const amountHeaderWidth = fontWidth(amountHeaderText, 10);
+  const amountHeaderX = panelX + panelWidth - itemsPaddingX - amountHeaderWidth;
+  const headerLabelY = itemsCardTop - itemsPaddingY - 4;
+
+  drawText('F2', 10, COLORS.muted, panelX + itemsPaddingX, headerLabelY, 'PRÁCTICA');
+  drawText('F2', 10, COLORS.muted, amountHeaderX, headerLabelY, amountHeaderText);
+
+  let itemCursorY = headerLabelY - headerSpacing;
+
+  if (hasItems) {
+    itemLayouts.forEach((layout, index) => {
+      const amountWidth = fontWidth(layout.amountText, 12.5);
+      const amountX = panelX + panelWidth - itemsPaddingX - amountWidth;
+
+      drawText('F2', 12.5, COLORS.value, panelX + itemsPaddingX, itemCursorY, layout.practiceName);
+      drawText('F2', 12.5, COLORS.value, amountX, itemCursorY, layout.amountText);
+
+      itemCursorY -= practiceLineHeight;
+
+      if (layout.descriptionLines.length > 0) {
+        for (const line of layout.descriptionLines) {
+          drawText('F1', 10.5, COLORS.muted, panelX + itemsPaddingX, itemCursorY, line);
+          itemCursorY -= descriptionLineHeight;
+        }
+        itemCursorY -= postDescriptionWithContent;
+      } else {
+        itemCursorY -= postDescriptionEmpty;
+      }
+
+      if (index < itemLayouts.length - 1) {
+        const dividerY = itemCursorY + 4;
+        commands.push('q');
+        commands.push(`${toPdfColor(COLORS.divider)} RG`);
+        commands.push('0.75 w');
+        commands.push(`${panelX + itemsPaddingX} ${dividerY} m`);
+        commands.push(`${panelX + panelWidth - itemsPaddingX} ${dividerY} l`);
+        commands.push('S');
+        commands.push('Q');
+        itemCursorY -= interItemSpacing;
+      }
+    });
+  } else {
+    drawText(
+      'F1',
+      11,
+      COLORS.muted,
+      panelX + itemsPaddingX,
+      itemCursorY,
+      'Sin prácticas registradas.',
+    );
+  }
+
+  contentCursorY = itemsCardBottom - sectionSpacing;
+
+  const notesContent = options.notes?.trim() ?? '';
+  const notesText = notesContent.length > 0 ? notesContent : 'Sin notas adicionales.';
+  const notesTitleY = contentCursorY - titleToCardGap;
+  drawText('F2', sectionTitleFontSize, COLORS.subtitle, panelX, notesTitleY, 'Notas del profesional');
+
+  const notesCardTop = notesTitleY - titleToCardGap;
+  const notesPadding = 20;
+  const paragraphWidth = panelWidth - notesPadding * 2;
+  const noteLines = wrapText(notesText, 11, paragraphWidth, fontWidth);
+  const noteLineHeight = 14;
+  const notesCardHeight = notesPadding * 2 + noteLines.length * noteLineHeight;
+  const notesCardBottom = notesCardTop - notesCardHeight;
+
+  commands.push('q');
+  commands.push(`${toPdfColor(COLORS.panel)} rg`);
+  commands.push(`${toPdfColor(COLORS.border)} RG`);
+  commands.push('1 w');
+  commands.push(`${panelX} ${notesCardBottom} ${panelWidth} ${notesCardHeight} re`);
+  commands.push('B');
+  commands.push('Q');
+
+  let noteCursorY = notesCardTop - notesPadding;
+  for (const line of noteLines) {
+    drawText('F1', 11, COLORS.value, panelX + notesPadding, noteCursorY, line);
+    noteCursorY -= noteLineHeight;
+  }
+
+  contentCursorY = notesCardBottom - sectionSpacing;
 
   const total = options.items.reduce((sum, item) => sum + Number(item.amount ?? 0), 0);
+  const summaryTitleY = contentCursorY - titleToCardGap;
+  drawText('F2', sectionTitleFontSize, COLORS.subtitle, panelX, summaryTitleY, 'Resumen');
 
-  for (const item of options.items) {
-    const practiceName = practiceLabel(item.practice);
-    drawText('F1', 12, COLORS.value, MARGIN, cursorY, `• ${practiceName}`);
-    drawText('F1', 12, COLORS.value, amountColumnX, cursorY, formatCurrency(item.amount));
-    cursorY -= 16;
+  const summaryCardTop = summaryTitleY - titleToCardGap;
+  const summaryPadding = 20;
+  const summaryCardHeight = summaryPadding * 2 + 48;
+  const summaryCardBottom = summaryCardTop - summaryCardHeight;
 
-    if (item.description && item.description.trim().length > 0) {
-      const descriptionLines = wrapText(item.description.trim(), 11, detailWidth, fontWidth);
-      for (const line of descriptionLines) {
-        drawText('F1', 11, COLORS.muted, MARGIN + 18, cursorY, line);
-        cursorY -= 14;
-      }
-    }
+  commands.push('q');
+  commands.push(`${toPdfColor(COLORS.panel)} rg`);
+  commands.push(`${toPdfColor(COLORS.border)} RG`);
+  commands.push('1 w');
+  commands.push(`${panelX} ${summaryCardBottom} ${panelWidth} ${summaryCardHeight} re`);
+  commands.push('B');
+  commands.push('Q');
 
-    cursorY -= 6;
-  }
+  const columnSpacing = 32;
+  const summaryColumnWidth = (panelWidth - summaryPadding * 2 - columnSpacing) / 2;
+  const firstColumnX = panelX + summaryPadding;
+  const secondColumnX = firstColumnX + summaryColumnWidth + columnSpacing;
+  const summaryLabelY = summaryCardTop - summaryPadding - 6;
 
-  cursorY -= 10;
-  drawText('F2', 14, COLORS.subtitle, MARGIN, cursorY, `Total: ${formatCurrency(total)}`);
-  cursorY -= 22;
-  drawText('F2', 12, COLORS.label, MARGIN, cursorY, `Fecha: ${formatDate(options.issuedAt)}`);
+  drawText('F2', 10, COLORS.muted, firstColumnX, summaryLabelY, 'TOTAL');
+  drawText('F1', 13, COLORS.value, firstColumnX, summaryLabelY - 18, formatCurrency(total));
+
+  drawText('F2', 10, COLORS.muted, secondColumnX, summaryLabelY, 'FECHA DE EMISIÓN');
+  drawText('F1', 12, COLORS.value, secondColumnX, summaryLabelY - 18, formatDate(options.issuedAt));
 
   return Buffer.from(commands.join('\n') + '\n', 'latin1');
 }

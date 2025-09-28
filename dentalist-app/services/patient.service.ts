@@ -251,6 +251,23 @@ export class PatientService {
     return response.json();
   }
 
+  static async sendBudget(
+    patientId: string,
+    budgetId: string,
+  ): Promise<{ success: boolean; error?: string }> {
+    const response = await fetch(`/api/patients/${patientId}/budgets/send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...authHeaders(),
+      },
+      credentials: 'include',
+      body: JSON.stringify({ budgetId }),
+    });
+
+    return response.json();
+  }
+
   static async getProfessionalSignature(): Promise<{
     hasSignature: boolean;
     signatureUrl: string | null;

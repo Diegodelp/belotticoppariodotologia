@@ -192,3 +192,75 @@ export async function sendPrescriptionIssuedEmail({
     html: htmlBody,
   });
 }
+
+export async function sendBudgetIssuedEmail({
+  to,
+  patientName,
+  professionalName,
+  budgetTitle,
+  totalAmount,
+  documentUrl,
+  clinicName,
+}: {
+  to: string;
+  patientName: string;
+  professionalName: string;
+  budgetTitle: string;
+  totalAmount: number;
+  documentUrl: string;
+  clinicName?: string;
+}) {
+  const trimmedPatient = patientName.trim();
+  const trimmedProfessional = professionalName.trim();
+  const safePatient = trimmedPatient.length > 0 ? trimmedPatient : 'Paciente';
+  const safeProfessional = trimmedProfessional.length > 0 ? trimmedProfessional : 'su profesional tratante';
+  const heading = clinicName?.trim().length
+    ? `Presupuesto emitido por ${clinicName.trim()}`
+    : 'Nuevo presupuesto disponible';
+  const subject = heading;
+
+  const currencyFormatter = new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 2,
+  });
+  const totalText = currencyFormatter.format(totalAmount);
+
+  const textBody = `Hola ${safePatient},\n\n` +
+    `${safeProfessional} compartió un presupuesto "${budgetTitle}".` +
+    `\nMonto estimado: ${totalText}.` +
+    '\nPodés descargarlo desde el siguiente enlace temporal:\n' +
+    `${documentUrl}\n\n` +
+    'Guardá el archivo si necesitás consultarlo más adelante.\n\n' +
+    'Saludos.';
+
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+      <h2 style="color: #0ea5e9;">${heading}</h2>
+      <p>Hola ${safePatient},</p>
+      <p>
+        ${safeProfessional} preparó un nuevo presupuesto
+        <strong>${budgetTitle}</strong>.
+      </p>
+      <p style="margin: 12px 0; font-size: 14px; color: #0f172a;">
+        Monto estimado: <strong>${totalText}</strong>
+      </p>
+      <p>
+        Descargalo utilizando el siguiente enlace temporal:
+        <br />
+        <a href="${documentUrl}" style="color: #0ea5e9;">Descargar presupuesto</a>
+      </p>
+      <p style="font-size: 12px; color: #64748b;">
+        Guardá el archivo si necesitás consultarlo más adelante.
+      </p>
+      <p>Saludos.</p>
+    </div>
+  `;
+
+  await sendMail({
+    to,
+    subject,
+    text: textBody,
+    html: htmlBody,
+  });
+}
