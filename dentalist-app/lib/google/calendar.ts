@@ -10,6 +10,14 @@ const CALENDAR_SCOPES = [
   'https://www.googleapis.com/auth/userinfo.profile',
 ];
 
+const APPOINTMENT_REMINDERS: calendar_v3.Schema$EventReminders = {
+  useDefault: false,
+  overrides: [
+    { method: 'popup', minutes: 60 },
+    { method: 'popup', minutes: 24 * 60 },
+  ],
+};
+
 const explicitRedirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
 function resolveClientId() {
   return (
@@ -191,6 +199,7 @@ export async function createCalendarEvent(
       end: toEventDate(params.end, params.timeZone),
       attendees: params.attendees,
       location: params.location,
+      reminders: APPOINTMENT_REMINDERS,
     },
     sendUpdates: 'all',
   });
@@ -223,6 +232,7 @@ export async function updateCalendarEvent(
       end: toEventDate(params.end, params.timeZone),
       attendees: params.attendees,
       location: params.location,
+      reminders: APPOINTMENT_REMINDERS,
     },
     sendUpdates: 'all',
   });
