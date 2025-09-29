@@ -10,7 +10,7 @@ const CALENDAR_SCOPES = [
   'https://www.googleapis.com/auth/userinfo.profile',
 ];
 
-const APPOINTMENT_REMINDERS: calendar_v3.Schema$EventReminders = {
+const APPOINTMENT_REMINDERS: NonNullable<calendar_v3.Schema$Event['reminders']> = {
   useDefault: false,
   overrides: [
     { method: 'popup', minutes: 60 },
