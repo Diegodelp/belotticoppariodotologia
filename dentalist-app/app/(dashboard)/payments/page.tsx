@@ -17,6 +17,8 @@ const PAYMENT_METHOD_OPTIONS: Array<{ value: Payment['method']; label: string }>
 
 type ModalMode = 'create' | 'edit';
 
+const getToday = () => new Date().toISOString().split('T')[0];
+
 const createEmptyForm = () => ({
   patientId: '',
   amount: '',
@@ -32,6 +34,8 @@ export default function PaymentsPage() {
   const [loading, setLoading] = useState(true);
   const [patientsLoading, setPatientsLoading] = useState(true);
   const [status, setStatus] = useState<'all' | 'completed' | 'pending'>('all');
+  const [fromDate, setFromDate] = useState<string>(() => getToday());
+  const [toDate, setToDate] = useState<string>(() => getToday());
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<ModalMode>('create');
   const [form, setForm] = useState(() => createEmptyForm());
@@ -93,9 +97,22 @@ export default function PaymentsPage() {
   );
 
   const filteredPayments = useMemo(() => {
-    const list = status === 'all' ? payments : payments.filter((payment) => payment.status === status);
+    const list = payments.filter((payment) => {
+      const normalizedDate = payment.date.split('T')[0];
+      if (fromDate && normalizedDate < fromDate) {
+        return false;
+      }
+      if (toDate && normalizedDate > toDate) {
+        return false;
+      }
+      if (status !== 'all' && payment.status !== status) {
+        return false;
+      }
+      return true;
+    });
+
     return [...list].sort((a, b) => (a.date < b.date ? 1 : -1));
-  }, [payments, status]);
+  }, [fromDate, payments, status, toDate]);
 
   const totals = useMemo(() => {
     return filteredPayments.reduce(
@@ -282,27 +299,63 @@ export default function PaymentsPage() {
           ))}
         </div>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="rounded-3xl border border-emerald-400/30 bg-emerald-500/10 p-5 text-sm text-emerald-50">
-            <p>Cobrado</p>
-            <p className="mt-2 text-2xl font-semibold text-emerald-100">
-              {totals.collected.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}
-            </p>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-3 text-xs text-slate-200 sm:flex-row sm:items-center">
+            <label className="flex flex-1 items-center gap-2">
+              <span className="hidden text-slate-300 sm:inline">Desde</span>
+              <input
+                type="date"
+                value={fromDate}
+                onChange={(event) => setFromDate(event.target.value)}
+                aria-label="Filtrar pagos desde"
+                className="w-full rounded-full border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+              />
+            </label>
+            <label className="flex flex-1 items-center gap-2">
+              <span className="hidden text-slate-300 sm:inline">Hasta</span>
+              <input
+                type="date"
+                value={toDate}
+                onChange={(event) => setToDate(event.target.value)}
+                aria-label="Filtrar pagos hasta"
+                className="w-full rounded-full border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => {
+                const today = getToday();
+                setFromDate(today);
+                setToDate(today);
+              }}
+              className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-cyan-300/60 hover:text-cyan-200"
+            >
+              Hoy
+            </button>
           </div>
-          <div className="rounded-3xl border border-amber-400/30 bg-amber-500/10 p-5 text-sm text-amber-50">
-            <p>Pendiente</p>
-            <p className="mt-2 text-2xl font-semibold text-amber-100">
-              {totals.pending.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}
-            </p>
+
+          <div className="grid w-full gap-4 sm:grid-cols-2 lg:w-auto">
+            <div className="rounded-3xl border border-emerald-400/30 bg-emerald-500/10 p-5 text-sm text-emerald-50">
+              <p>Cobrado</p>
+              <p className="mt-2 text-2xl font-semibold text-emerald-100">
+                {totals.collected.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}
+              </p>
+            </div>
+            <div className="rounded-3xl border border-amber-400/30 bg-amber-500/10 p-5 text-sm text-amber-50">
+              <p>Pendiente</p>
+              <p className="mt-2 text-2xl font-semibold text-amber-100">
+                {totals.pending.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}
+              </p>
+            </div>
           </div>
         </div>
 
         {loading && <p className="text-sm text-slate-300">Cargando pagos...</p>}
 
         <div className="overflow-x-auto">
-          <div className="inline-block min-w-full align-middle">
+          <div className="inline-block w-full min-w-full align-middle">
             <div className="overflow-hidden rounded-2xl border border-white/10">
-              <table className="min-w-[720px] divide-y divide-white/10 text-left text-sm text-slate-200">
+              <table className="min-w-[720px] w-full divide-y divide-white/10 text-left text-sm text-slate-200">
                 <thead className="bg-slate-900/70 text-xs uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="px-6 py-3">Fecha</th>

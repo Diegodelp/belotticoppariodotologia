@@ -8,6 +8,8 @@ interface TreatmentWithPatient extends Treatment {
   patient?: Patient;
 }
 
+const getToday = () => new Date().toISOString().split('T')[0];
+
 const createEmptyForm = () => ({
   patientId: '',
   type: '',
@@ -24,6 +26,8 @@ export default function TreatmentsPage() {
   const [loading, setLoading] = useState(true);
   const [patientsLoading, setPatientsLoading] = useState(true);
   const [filter, setFilter] = useState('');
+  const [fromDate, setFromDate] = useState<string>(() => getToday());
+  const [toDate, setToDate] = useState<string>(() => getToday());
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<ModalMode>('create');
   const [form, setForm] = useState(() => createEmptyForm());
@@ -86,11 +90,20 @@ export default function TreatmentsPage() {
 
   const filteredTreatments = useMemo(() => {
     const search = filter.trim().toLowerCase();
-    if (!search) return treatments;
-    return treatments.filter((treatment) =>
-      `${treatment.type} ${treatment.description}`.toLowerCase().includes(search),
-    );
-  }, [filter, treatments]);
+    return treatments.filter((treatment) => {
+      const normalizedDate = treatment.date.split('T')[0];
+      if (fromDate && normalizedDate < fromDate) {
+        return false;
+      }
+      if (toDate && normalizedDate > toDate) {
+        return false;
+      }
+      if (!search) {
+        return true;
+      }
+      return `${treatment.type} ${treatment.description}`.toLowerCase().includes(search);
+    });
+  }, [filter, fromDate, toDate, treatments]);
 
   const totalRevenue = filteredTreatments.reduce((acc, treatment) => acc + treatment.cost, 0);
 
@@ -241,14 +254,49 @@ export default function TreatmentsPage() {
       </div>
 
       <div className="grid gap-4 rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <input
-            type="search"
-            placeholder="Buscar tratamiento o descripción"
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-            className="w-full rounded-full border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white placeholder:text-slate-400 focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40 md:w-96"
-          />
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex w-full flex-col gap-3 md:flex-row md:items-center">
+            <input
+              type="search"
+              placeholder="Buscar tratamiento o descripción"
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              className="w-full rounded-full border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white placeholder:text-slate-400 focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40 md:max-w-sm"
+            />
+            <div className="flex w-full flex-col gap-3 text-xs text-slate-200 md:flex-row md:items-center">
+              <label className="flex flex-1 items-center gap-2">
+                <span className="hidden text-slate-300 md:inline">Desde</span>
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(event) => setFromDate(event.target.value)}
+                  aria-label="Filtrar tratamientos desde"
+                  className="w-full rounded-full border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                />
+              </label>
+              <label className="flex flex-1 items-center gap-2">
+                <span className="hidden text-slate-300 md:inline">Hasta</span>
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(event) => setToDate(event.target.value)}
+                  aria-label="Filtrar tratamientos hasta"
+                  className="w-full rounded-full border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                />
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  const today = getToday();
+                  setFromDate(today);
+                  setToDate(today);
+                }}
+                className="rounded-full border border-white/10 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-cyan-300/60 hover:text-cyan-200"
+              >
+                Hoy
+              </button>
+            </div>
+          </div>
           <div className="rounded-full border border-white/10 bg-slate-900/60 px-5 py-2 text-xs text-slate-200">
             Facturación estimada: {totalRevenue.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}
           </div>
@@ -257,9 +305,9 @@ export default function TreatmentsPage() {
         {loading && <p className="text-sm text-slate-300">Cargando tratamientos...</p>}
 
         <div className="overflow-x-auto">
-          <div className="inline-block min-w-full align-middle">
+          <div className="inline-block w-full min-w-full align-middle">
             <div className="overflow-hidden rounded-2xl border border-white/10">
-              <table className="min-w-[720px] divide-y divide-white/10 text-left text-sm text-slate-200">
+              <table className="min-w-[720px] w-full divide-y divide-white/10 text-left text-sm text-slate-200">
                 <thead className="bg-slate-900/70 text-xs uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="px-6 py-3">Fecha</th>
