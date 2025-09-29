@@ -51,6 +51,23 @@ const PATIENTS_TABLE =
   process.env.SUPABASE_TABLE_PATIENTS ??
   'patients';
 const ENCRYPTED_PLACEHOLDER = '[encriptado]';
+
+function hashSensitiveValue(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return crypto.createHash('sha256').update(trimmed).digest('hex');
+}
+
+function maskIfPresent(value: string | null | undefined): string | null {
+  return value && value.trim() ? ENCRYPTED_PLACEHOLDER : null;
+}
 const APPOINTMENTS_TABLE =
   process.env.SUPABASE_TABLE_TURNOS ??
   process.env.SUPABASE_TABLE_APPOINTMENTS ??
@@ -526,6 +543,7 @@ type AppProfessionalRow = {
 type AppPatientRow = {
   id: string;
   dni: string | null;
+  dni_hash?: string | null;
   first_name: string;
   last_name: string;
   email: string | null;
@@ -1312,14 +1330,34 @@ export async function findUserByDni(
     };
   }
 
-  const { data, error } = await client
-    .from(PATIENTS_TABLE)
-    .select('*')
-    .eq('dni', dni)
-    .maybeSingle();
-  if (error) throw error;
-  if (!data) return null;
-  const row = data as AppPatientRow;
+  const dniHash = hashSensitiveValue(dni);
+  let row: AppPatientRow | null = null;
+
+  if (dniHash) {
+    const { data: hashedData, error: hashedError } = await client
+      .from(PATIENTS_TABLE)
+      .select('*')
+      .eq('dni_hash', dniHash)
+      .maybeSingle<AppPatientRow>();
+
+    if (hashedError) throw hashedError;
+    if (hashedData) {
+      row = hashedData;
+    }
+  }
+
+  if (!row) {
+    const { data: legacyData, error: legacyError } = await client
+      .from(PATIENTS_TABLE)
+      .select('*')
+      .eq('dni', dni)
+      .maybeSingle<AppPatientRow>();
+
+    if (legacyError) throw legacyError;
+    row = legacyData ?? null;
+  }
+
+  if (!row) return null;
   const patient = await mapPatient(row);
   return {
     id: patient.id,
@@ -1593,6 +1631,7 @@ export async function createPatient(
   patient: Omit<Patient, 'id'>,
 ): Promise<Patient> {
   const client = getClient();
+  const dniHash = hashSensitiveValue(patient.dni);
   const encrypted = await encryptSensitivePayload(professionalId, {
     dni: patient.dni,
     firstName: patient.name,
@@ -1608,14 +1647,15 @@ export async function createPatient(
     .from(PATIENTS_TABLE)
     .insert({
       professional_id: professionalId,
-      dni: patient.dni,
+      dni: maskIfPresent(patient.dni),
+      dni_hash: dniHash,
       first_name: ENCRYPTED_PLACEHOLDER,
       last_name: ENCRYPTED_PLACEHOLDER,
-      email: null,
-      phone: null,
-      address: null,
-      health_insurance: null,
-      afiliado: null,
+      email: maskIfPresent(patient.email),
+      phone: maskIfPresent(patient.phone),
+      address: maskIfPresent(patient.address),
+      health_insurance: maskIfPresent(patient.healthInsurance),
+      afiliado: maskIfPresent(patient.affiliateNumber ?? null),
       status: patient.status,
       contact_payload_ciphertext: encrypted.ciphertext,
       contact_payload_iv: encrypted.iv,
@@ -1664,29 +1704,37 @@ export async function updatePatient(
   }
 
   const current = await mapPatient(existingData);
+  const nextDni = updates.dni ?? current.dni ?? '';
+  const dniHash = hashSensitiveValue(nextDni);
+  const nextEmail = updates.email ?? current.email ?? '';
+  const nextPhone = updates.phone ?? current.phone ?? '';
+  const nextAddress = updates.address ?? current.address ?? '';
+  const nextHealthInsurance = updates.healthInsurance ?? current.healthInsurance ?? '';
+  const nextAffiliate = updates.affiliateNumber ?? current.affiliateNumber ?? null;
 
   const encrypted = await encryptSensitivePayload(professionalId, {
-    dni: updates.dni ?? current.dni,
+    dni: nextDni,
     firstName: updates.name ?? current.name,
     lastName: updates.lastName ?? current.lastName,
-    email: updates.email ?? current.email,
-    phone: updates.phone ?? current.phone,
-    address: updates.address ?? current.address,
-    healthInsurance: updates.healthInsurance ?? current.healthInsurance,
-    affiliateNumber: updates.affiliateNumber ?? current.affiliateNumber ?? null,
+    email: nextEmail,
+    phone: nextPhone,
+    address: nextAddress,
+    healthInsurance: nextHealthInsurance,
+    affiliateNumber: nextAffiliate,
   });
 
   const { data, error } = await client
     .from(PATIENTS_TABLE)
     .update({
-      dni: updates.dni ?? current.dni,
+      dni: maskIfPresent(nextDni),
+      dni_hash: dniHash,
       first_name: ENCRYPTED_PLACEHOLDER,
       last_name: ENCRYPTED_PLACEHOLDER,
-      email: null,
-      phone: null,
-      address: null,
-      health_insurance: null,
-      afiliado: null,
+      email: maskIfPresent(nextEmail),
+      phone: maskIfPresent(nextPhone),
+      address: maskIfPresent(nextAddress),
+      health_insurance: maskIfPresent(nextHealthInsurance),
+      afiliado: maskIfPresent(nextAffiliate ?? null),
       status: updates.status ?? current.status,
       contact_payload_ciphertext: encrypted.ciphertext,
       contact_payload_iv: encrypted.iv,
