@@ -278,9 +278,9 @@ function setProfessionalKeyCache(professionalId: string, value: { key: Buffer; m
 async function fetchProfessionalKeyRow(client: ReturnType<typeof getClient>, professionalId: string) {
   const { data, error } = await client
     .from(PROFESSIONAL_KEYS_TABLE)
-    .select<ProfessionalKeyRow>('professional_id, encrypted_key, key_iv, version, created_at, updated_at, rotated_at')
+    .select('professional_id, encrypted_key, key_iv, version, created_at, updated_at, rotated_at')
     .eq('professional_id', professionalId)
-    .maybeSingle();
+    .maybeSingle<ProfessionalKeyRow>();
 
   if (error) {
     throw error;
@@ -302,8 +302,8 @@ async function insertProfessionalKeyRow(
       key_iv: encrypted.iv,
       version: 1,
     })
-    .select<ProfessionalKeyRow>('professional_id, encrypted_key, key_iv, version, created_at, updated_at, rotated_at')
-    .single();
+    .select('professional_id, encrypted_key, key_iv, version, created_at, updated_at, rotated_at')
+    .single<ProfessionalKeyRow>();
 
   if (error) {
     throw error;
@@ -328,8 +328,8 @@ async function updateProfessionalKeyRow(
       updated_at: new Date().toISOString(),
     })
     .eq('professional_id', professionalId)
-    .select<ProfessionalKeyRow>('professional_id, encrypted_key, key_iv, version, created_at, updated_at, rotated_at')
-    .single();
+    .select('professional_id, encrypted_key, key_iv, version, created_at, updated_at, rotated_at')
+    .single<ProfessionalKeyRow>();
 
   if (error) {
     throw error;
