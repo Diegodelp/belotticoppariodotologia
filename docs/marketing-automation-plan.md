@@ -5,12 +5,31 @@
    - Identificar componentes del sidebar y routing en `dentalist-app/components/layout/Sidebar.tsx` y las páginas donde se montará la nueva sección (posiblemente bajo `/marketing`).
    - Revisar servicios existentes en `dentalist-app/services` y módulos API en `app/api` para reutilizar patrones de autenticación y Supabase.
    - Listar puntos donde hoy se asume una única cuenta global (tokens, prompts, endpoints) para sustituirlos por configuraciones dependientes de `professional_id`.
-2. **Definir variables de entorno**
-   - `WHATSAPP_API_BASE_URL`, `INSTAGRAM_API_BASE_URL` (comunes a todas las cuentas).
-   - `META_APP_ID`, `META_APP_SECRET` y `META_WEBHOOK_VERIFY_TOKEN` para ejecutar el intercambio OAuth por profesional.
-   - `OPENAI_API_KEY` (o proveedor LLM gratuito/propio que se elija) para generar respuestas y creatividades.
-   - `WEBHOOK_PUBLIC_URL` (URL pública donde WhatsApp e Instagram enviarán los mensajes entrantes; usar Vercel serverless o Supabase Edge Functions).
-   - **Sin tokens globales**: los `access_token` y `business_account_id` de cada profesional se almacenarán en Supabase en tablas multi-tenant, nunca como variables de entorno.
+2. **Definir variables de entorno globales**
+   - `WHATSAPP_API_BASE_URL`, `INSTAGRAM_API_BASE_URL`: endpoints base de Meta que son iguales para todos los profesionales.
+   - `META_APP_ID`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`: credenciales de la aplicación de Meta necesarias para iniciar cada flujo OAuth individual.
+   - `OPENAI_API_KEY` (o clave del proveedor LLM seleccionado) cuando la clínica quiera usar un modelo compartido. Si cada profesional aporta su propia clave se almacenará cifrada en Supabase.
+   - `WEBHOOK_PUBLIC_URL`: URL pública de Vercel (o Supabase Edge Functions) que Meta utilizará para entregar los webhooks.
+   - **Importante**: los `access_token`, `business_account_id`, `phone_number_id`, etc. generados para cada profesional **no** van en Vercel. Se guardan cifrados en Supabase con el `professional_id` correspondiente, por lo que cada odontólogo opera con sus propias credenciales.
+
+### Cómo obtener y cargar las variables en Vercel
+
+1. **Crear la app en Meta for Developers**
+   - Ingresar en [https://developers.facebook.com/apps](https://developers.facebook.com/apps), crear una app de tipo "Business" y añadir los productos *WhatsApp* e *Instagram Basic Display/Graph API*.
+   - En el panel **Settings → Basic** copiar el `App ID` y generar un `App Secret` nuevo. Estas cadenas alimentarán `META_APP_ID` y `META_APP_SECRET`.
+   - En **WhatsApp → Configuration** localizar el campo *Webhook verify token* o definir uno nuevo (por ejemplo, una cadena aleatoria). Ese valor se usa como `META_WEBHOOK_VERIFY_TOKEN` para validar el reto inicial de Meta.
+   - Las URLs base recomendadas actualmente son `https://graph.facebook.com` para Instagram y `https://graph.facebook.com/v19.0` (o la versión vigente) para WhatsApp Cloud API.
+
+2. **Registrar las variables en Vercel**
+   - Desde el dashboard de Vercel abrir el proyecto → pestaña **Settings → Environment Variables**.
+   - Añadir cada variable (`META_APP_ID`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN`, `WHATSAPP_API_BASE_URL`, `INSTAGRAM_API_BASE_URL`, `WEBHOOK_PUBLIC_URL`, `OPENAI_API_KEY` si aplica) indicando en qué entornos estará disponible (Development/Preview/Production).
+   - Para automatizarlo con CLI: `vercel env add META_APP_ID` y pegar el valor cuando Vercel lo solicite.
+   - Tras guardar los cambios, ejecutar `vercel env pull .env.local` si se quiere sincronizar las variables con el entorno local.
+
+3. **Comprender qué sigue siendo por profesional**
+   - Cuando un odontólogo vincula su WhatsApp/Instagram se intercambia un `code` por un `access_token` y metadatos (`phone_number_id`, `instagram_business_account`). Esos valores se cifran y guardan en la tabla `marketing_channel_credentials` junto al `professional_id`.
+   - Si el profesional decide usar su propia IA o clave OpenAI, el formulario de configuración la enviará a Supabase y quedará asociada solo a ese usuario.
+   - La app lee primero las variables globales (App ID/Secret, URLs base) para saber cómo hablar con Meta y luego consulta Supabase para recuperar las credenciales concretas del profesional activo.
 3. **Configurar cuentas externas**
    - Registrar un **WhatsApp Business Account** y una **Instagram Business Account** en Meta for Developers. La app de Dentalist gestionará el OAuth para que **cada profesional vincule su propio número/página** y genere tokens largos almacenados con su `professional_id`.
    - Documentar para el profesional final los pasos necesarios (verificación de negocio, alta del número, creación de plantillas, publicación de la app en modo Live) y proporcionar un asistente dentro de Dentalist para guiar el enlace.
