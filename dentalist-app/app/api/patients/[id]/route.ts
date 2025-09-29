@@ -4,6 +4,7 @@ import {
   getPatientById,
   getClinicalHistory,
   getPatientOrthodonticPlan,
+  getProfessionalProfile,
   listPatientMedia,
   listAppointments,
   listBudgets,
@@ -13,6 +14,11 @@ import {
   removePatient,
   updatePatient,
 } from '@/lib/db/supabase-repository';
+import {
+  DEFAULT_TIME_ZONE,
+  formatAppointmentsForTimeZone,
+  normalizeTimeZone,
+} from '@/lib/utils/timezone';
 
 export async function GET(
   request: NextRequest,
@@ -29,7 +35,8 @@ export async function GET(
   }
 
   const [
-    appointments,
+    profile,
+    appointmentsRaw,
     treatments,
     payments,
     clinicalHistory,
@@ -38,6 +45,7 @@ export async function GET(
     budgets,
     media,
   ] = await Promise.all([
+    getProfessionalProfile(user.id),
     listAppointments(user.id, patient.id),
     listTreatments(user.id, patient.id),
     listPayments(user.id, patient.id),
@@ -47,6 +55,9 @@ export async function GET(
     listBudgets(user.id, patient.id),
     listPatientMedia(user.id, patient.id),
   ]);
+
+  const timeZone = normalizeTimeZone(profile?.timeZone ?? user.timeZone ?? DEFAULT_TIME_ZONE);
+  const appointments = formatAppointmentsForTimeZone(appointmentsRaw, timeZone);
 
   return NextResponse.json({
     patient,

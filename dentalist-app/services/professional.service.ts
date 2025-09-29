@@ -42,7 +42,7 @@ export class ProfessionalService {
     payload: Partial<
       Pick<
         ProfessionalProfile,
-        'fullName' | 'clinicName' | 'licenseNumber' | 'phone' | 'address' | 'country' | 'province' | 'locality'
+        'fullName' | 'clinicName' | 'licenseNumber' | 'phone' | 'address' | 'country' | 'province' | 'locality' | 'timeZone'
       >
     >,
   ): Promise<{ profile: ProfessionalProfile }> {

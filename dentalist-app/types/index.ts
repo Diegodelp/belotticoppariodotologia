@@ -11,6 +11,7 @@ export interface User {
   country?: string | null;
   province?: string | null;
   locality?: string | null;
+  timeZone?: string | null;
   logoUrl?: string | null;
 }
 
@@ -226,6 +227,7 @@ export interface ProfessionalProfile {
   country: string | null;
   province: string | null;
   locality: string | null;
+  timeZone: string | null;
   logoUrl: string | null;
   logoPath?: string | null;
   updatedAt: string | null;

@@ -1,15 +1,29 @@
 'use client';
 
-import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { GoogleCalendarService, GoogleCalendarStatus } from '@/services/google-calendar.service';
 import { ProfessionalService } from '@/services/professional.service';
 import { OrthodonticPlanService } from '@/services/orthodontic-plan.service';
 import { useAuth } from '@/hooks/useAuth';
 import { OrthodonticPlan, ProfessionalProfile } from '@/types';
+import { DEFAULT_TIME_ZONE, getSupportedTimeZones, normalizeTimeZone } from '@/lib/utils/timezone';
 
 export function SettingsClient() {
   const { user, refresh: refreshUser } = useAuth();
+  const detectedTimeZone = useMemo(() => {
+    try {
+      const resolved = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : null;
+      return normalizeTimeZone(resolved);
+    } catch {
+      return DEFAULT_TIME_ZONE;
+    }
+  }, []);
+  const timeZones = useMemo(() => {
+    const values = getSupportedTimeZones();
+    const enriched = values.includes(detectedTimeZone) ? values : [detectedTimeZone, ...values];
+    return Array.from(new Set(enriched)).sort((a, b) => a.localeCompare(b));
+  }, [detectedTimeZone]);
   const [profile, setProfile] = useState<ProfessionalProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -23,6 +37,7 @@ export function SettingsClient() {
     country: '',
     province: '',
     locality: '',
+    timeZone: detectedTimeZone,
   });
   const [notifications, setNotifications] = useState({
     whatsapp: true,
@@ -112,6 +127,7 @@ export function SettingsClient() {
           country: response.profile.country ?? '',
           province: response.profile.province ?? '',
           locality: response.profile.locality ?? '',
+          timeZone: normalizeTimeZone(response.profile.timeZone ?? detectedTimeZone),
         });
         setLogoUrl(response.profile.logoUrl ?? null);
         setProfileError(null);
@@ -132,7 +148,7 @@ export function SettingsClient() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [detectedTimeZone]);
 
   useEffect(() => {
     let active = true;
@@ -471,6 +487,7 @@ export function SettingsClient() {
         country: form.country,
         province: form.province,
         locality: form.locality,
+        timeZone: form.timeZone,
       });
       setProfile(response.profile);
       setForm({
@@ -482,6 +499,7 @@ export function SettingsClient() {
         country: response.profile.country ?? '',
         province: response.profile.province ?? '',
         locality: response.profile.locality ?? '',
+        timeZone: normalizeTimeZone(response.profile.timeZone ?? detectedTimeZone),
       });
       setLogoUrl(response.profile.logoUrl ?? null);
       setProfileError(null);
@@ -779,6 +797,29 @@ export function SettingsClient() {
               autoComplete="address-level2"
               disabled={profileLoading || savingProfile}
             />
+          </div>
+          <div className="space-y-2 md:col-span-3">
+            <label className="text-sm text-slate-300" htmlFor="profile-timezone">
+              Zona horaria
+            </label>
+            <select
+              id="profile-timezone"
+              value={form.timeZone}
+              onChange={(event) =>
+                setForm((prev) => ({ ...prev, timeZone: normalizeTimeZone(event.target.value) }))
+              }
+              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+              disabled={profileLoading || savingProfile}
+            >
+              {timeZones.map((zone) => (
+                <option key={zone} value={zone}>
+                  {zone}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-slate-400">
+              Dentalist usa esta zona horaria para agendar turnos y sincronizarlos con Google Calendar.
+            </p>
           </div>
         </div>
 

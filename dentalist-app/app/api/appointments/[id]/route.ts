@@ -5,6 +5,7 @@ import {
   getAppointmentById,
   getPatientById,
   getProfessionalGoogleCredentials,
+  getProfessionalProfile,
   updateAppointment,
   upsertProfessionalGoogleCredentials,
 } from '@/lib/db/supabase-repository';
@@ -14,6 +15,12 @@ import {
   OAuthTokenSet,
   updateCalendarEvent,
 } from '@/lib/google/calendar';
+import {
+  DEFAULT_TIME_ZONE,
+  formatAppointmentForTimeZone,
+  normalizeTimeZone,
+  parseDateTimeInTimeZone,
+} from '@/lib/utils/timezone';
 
 export async function PUT(
   request: NextRequest,
@@ -24,6 +31,8 @@ export async function PUT(
     if (!user) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
+    const profile = await getProfessionalProfile(user.id);
+    const timeZone = normalizeTimeZone(profile?.timeZone ?? user.timeZone ?? DEFAULT_TIME_ZONE);
     const body = await request.json();
     const params = await context.params;
     const current = await getAppointmentById(user.id, params.id);
@@ -32,33 +41,47 @@ export async function PUT(
       return NextResponse.json({ error: 'Turno no encontrado' }, { status: 404 });
     }
 
+    const zonedCurrent = formatAppointmentForTimeZone(current, timeZone);
+
     const { status, type, date, time, patientId } = body ?? {};
-    const updated = await updateAppointment(user.id, params.id, {
-      status,
-      type,
-      date,
-      time,
-      patientId,
-    });
+    const updated = await updateAppointment(
+      user.id,
+      params.id,
+      {
+        status,
+        type,
+        date,
+        time,
+        patientId,
+      },
+      { timeZone },
+    );
 
     if (!updated) {
       return NextResponse.json({ error: 'Turno no encontrado' }, { status: 404 });
     }
 
-    if (!updated.googleEventId) {
-      return NextResponse.json({ success: true, appointment: updated });
+    const zonedUpdated = formatAppointmentForTimeZone(updated, timeZone);
+
+    if (!zonedUpdated.googleEventId) {
+      return NextResponse.json({ success: true, appointment: zonedUpdated });
     }
 
     const credentials = await getProfessionalGoogleCredentials(user.id);
 
     if (!isCalendarReady() || !credentials) {
-      await updateAppointment(user.id, params.id, {
-        status: current.status,
-        type: current.type,
-        date: current.date,
-        time: current.time,
-        patientId: current.patientId,
-      }).catch(() => undefined);
+      await updateAppointment(
+        user.id,
+        params.id,
+        {
+          status: zonedCurrent.status,
+          type: zonedCurrent.type,
+          date: zonedCurrent.date,
+          time: zonedCurrent.time,
+          patientId: zonedCurrent.patientId,
+        },
+        { timeZone },
+      ).catch(() => undefined);
       return NextResponse.json(
         {
           error:
@@ -69,9 +92,11 @@ export async function PUT(
     }
 
     try {
-      const patient = updated.patientId ? await getPatientById(user.id, updated.patientId) : null;
-      const start = updated.startAt ? new Date(updated.startAt) : new Date(`${updated.date}T${updated.time}:00`);
-      const end = updated.endAt ? new Date(updated.endAt) : new Date(start.getTime() + 60 * 60 * 1000);
+      const patient = zonedUpdated.patientId ? await getPatientById(user.id, zonedUpdated.patientId) : null;
+      const start = zonedUpdated.startAt
+        ? new Date(zonedUpdated.startAt)
+        : parseDateTimeInTimeZone(zonedUpdated.date, zonedUpdated.time, timeZone);
+      const end = zonedUpdated.endAt ? new Date(zonedUpdated.endAt) : new Date(start.getTime() + 60 * 60 * 1000);
 
       const tokenSet: OAuthTokenSet = {
         accessToken: credentials.accessToken,
@@ -83,8 +108,8 @@ export async function PUT(
 
       const { latestCredentials } = await updateCalendarEvent(tokenSet, {
         calendarId: credentials.calendarId ?? undefined,
-        eventId: updated.googleEventId,
-        summary: `${updated.type} con ${patient ? `${patient.name} ${patient.lastName}` : 'paciente'}`,
+        eventId: zonedUpdated.googleEventId,
+        summary: `${zonedUpdated.type} con ${patient ? `${patient.name} ${patient.lastName}` : 'paciente'}`,
         description: [
           patient ? `Paciente: ${patient.name} ${patient.lastName}` : null,
           patient?.dni ? `DNI: ${patient.dni}` : null,
@@ -95,6 +120,7 @@ export async function PUT(
           .join('\n'),
         start,
         end,
+        timeZone,
         attendees:
           patient?.email
             ? [
@@ -127,13 +153,18 @@ export async function PUT(
       }
     } catch (calendarError) {
       console.error('Error al actualizar evento en Google Calendar', calendarError);
-      await updateAppointment(user.id, params.id, {
-        status: current.status,
-        type: current.type,
-        date: current.date,
-        time: current.time,
-        patientId: current.patientId,
-      }).catch(() => undefined);
+      await updateAppointment(
+        user.id,
+        params.id,
+        {
+          status: zonedCurrent.status,
+          type: zonedCurrent.type,
+          date: zonedCurrent.date,
+          time: zonedCurrent.time,
+          patientId: zonedCurrent.patientId,
+        },
+        { timeZone },
+      ).catch(() => undefined);
       return NextResponse.json(
         {
           error:
@@ -143,7 +174,7 @@ export async function PUT(
       );
     }
 
-    return NextResponse.json({ success: true, appointment: updated });
+    return NextResponse.json({ success: true, appointment: zonedUpdated });
   } catch (error) {
     console.error('Error al actualizar turno', error);
     return NextResponse.json(

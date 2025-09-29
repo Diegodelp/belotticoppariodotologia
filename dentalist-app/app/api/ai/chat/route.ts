@@ -1,11 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth/get-user';
 import {
+  getProfessionalProfile,
   listAppointments,
   listPatients,
   listPayments,
   listTreatments,
 } from '@/lib/db/supabase-repository';
+import {
+  DEFAULT_TIME_ZONE,
+  formatAppointmentsForTimeZone,
+  normalizeTimeZone,
+  parseDateTimeInTimeZone,
+} from '@/lib/utils/timezone';
 
 export async function POST(request: NextRequest) {
   const user = getUserFromRequest(request);
@@ -17,12 +24,16 @@ export async function POST(request: NextRequest) {
   const text: string = (message ?? '').toString().toLowerCase();
 
   try {
-    const [patients, appointments, treatments, payments] = await Promise.all([
+    const [profile, patients, appointmentsRaw, treatments, payments] = await Promise.all([
+      getProfessionalProfile(user.id),
       listPatients(user.id),
       listAppointments(user.id),
       listTreatments(user.id),
       listPayments(user.id),
     ]);
+
+    const timeZone = normalizeTimeZone(profile?.timeZone ?? user.timeZone ?? DEFAULT_TIME_ZONE);
+    const appointments = formatAppointmentsForTimeZone(appointmentsRaw, timeZone);
 
   let response = 'Soy el asistente virtual de Dentalist. Puedo ayudarte con pacientes, agenda, tratamientos y finanzas.';
 
@@ -30,9 +41,19 @@ export async function POST(request: NextRequest) {
     const active = patients.filter((patient) => patient.status === 'active').length;
     response = `Actualmente tenés ${patients.length} pacientes cargados y ${active} con seguimiento activo. ¿Querés que revise un paciente en particular o que programe un recordatorio?`;
   } else if (text.includes('turno') || text.includes('agenda') || text.includes('calendario')) {
+    const now = new Date();
     const nextAppointment = appointments
-      .filter((appointment) => new Date(`${appointment.date}T${appointment.time}`) >= new Date())
-      .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))[0];
+      .filter((appointment) => {
+        const start = appointment.startAt
+          ? new Date(appointment.startAt)
+          : parseDateTimeInTimeZone(appointment.date, appointment.time, timeZone);
+        return start >= now;
+      })
+      .sort((a, b) => {
+        const aKey = a.startAt ?? `${a.date}T${a.time}`;
+        const bKey = b.startAt ?? `${b.date}T${b.time}`;
+        return aKey.localeCompare(bKey);
+      })[0];
     if (nextAppointment) {
       const patient = patients.find((item) => item.id === nextAppointment.patientId);
       response = `Tu próximo turno es el ${nextAppointment.date} a las ${nextAppointment.time} con ${patient?.name ?? 'un paciente'} para ${nextAppointment.type}. ¿Querés reagendarlo o confirmar la asistencia?`;

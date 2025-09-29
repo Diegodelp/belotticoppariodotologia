@@ -80,6 +80,14 @@ function parseUpdates(input: unknown): ProfessionalProfileUpdate {
     updates.locality = value as string | null;
   }
 
+  if ('timeZone' in record) {
+    const value = record.timeZone;
+    if (typeof value !== 'string' && value !== null) {
+      throw new Error('La zona horaria debe ser texto');
+    }
+    updates.timeZone = value as string | null;
+  }
+
   return updates;
 }
 

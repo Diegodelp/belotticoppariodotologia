@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth/get-user';
 import {
+  getProfessionalProfile,
   listAppointments,
   listPayments,
   listPatients,
   listTreatments,
 } from '@/lib/db/supabase-repository';
+import {
+  DEFAULT_TIME_ZONE,
+  formatAppointmentsForTimeZone,
+  formatDateTimeInTimeZone,
+  normalizeTimeZone,
+  parseDateTimeInTimeZone,
+} from '@/lib/utils/timezone';
 
 function isSameMonth(dateIso: string, reference: Date) {
   const date = new Date(dateIso);
@@ -24,18 +32,32 @@ export async function GET(request: NextRequest) {
   const today = new Date();
 
   try {
-    const [patients, appointments, treatments, payments] = await Promise.all([
+    const [profile, patients, appointmentsRaw, treatments, payments] = await Promise.all([
+      getProfessionalProfile(user.id),
       listPatients(user.id),
       listAppointments(user.id),
       listTreatments(user.id),
       listPayments(user.id),
     ]);
 
+    const timeZone = normalizeTimeZone(profile?.timeZone ?? user.timeZone ?? DEFAULT_TIME_ZONE);
+    const appointments = formatAppointmentsForTimeZone(appointmentsRaw, timeZone);
+    const todayInZone = formatDateTimeInTimeZone(today, timeZone).date;
+
     const activePatients = patients.filter((patient) => patient.status === 'active');
 
     const upcomingAppointments = appointments
-      .filter((appointment) => new Date(`${appointment.date}T${appointment.time}`) >= new Date())
-      .sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`))
+      .filter((appointment) => {
+        const start = appointment.startAt
+          ? new Date(appointment.startAt)
+          : parseDateTimeInTimeZone(appointment.date, appointment.time, timeZone);
+        return start >= today;
+      })
+      .sort((a, b) => {
+        const aKey = a.startAt ?? `${a.date}T${a.time}`;
+        const bKey = b.startAt ?? `${b.date}T${b.time}`;
+        return aKey.localeCompare(bKey);
+      })
       .slice(0, 5);
 
     const revenueThisMonth = payments
@@ -56,7 +78,7 @@ export async function GET(request: NextRequest) {
         patients: patients.length,
         activePatients: activePatients.length,
         appointmentsToday: appointments.filter(
-          (appointment) => appointment.date === today.toISOString().split('T')[0],
+          (appointment) => appointment.date === todayInZone,
         ).length,
         revenueThisMonth,
         outstandingBalance,

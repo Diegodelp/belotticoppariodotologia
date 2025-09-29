@@ -1,5 +1,6 @@
 import { google, calendar_v3 } from 'googleapis';
 import { Credentials } from 'google-auth-library';
+import { DEFAULT_TIME_ZONE, normalizeTimeZone } from '@/lib/utils/timezone';
 
 const CALENDAR_SCOPES = [
   'https://www.googleapis.com/auth/calendar.events',
@@ -10,8 +11,6 @@ const CALENDAR_SCOPES = [
 ];
 
 const explicitRedirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
-const defaultTimeZone = process.env.GOOGLE_CALENDAR_TIMEZONE ?? 'America/Argentina/Buenos_Aires';
-
 function resolveClientId() {
   return (
     process.env.GOOGLE_CLIENT_ID ??
@@ -162,10 +161,10 @@ async function ensureAuthorizedCalendar(tokens: OAuthTokenSet) {
   };
 }
 
-function toEventDate(date: Date) {
+function toEventDate(date: Date, timeZone?: string) {
   return {
     dateTime: date.toISOString(),
-    timeZone: defaultTimeZone,
+    timeZone: normalizeTimeZone(timeZone ?? DEFAULT_TIME_ZONE),
   } satisfies calendar_v3.Schema$EventDateTime;
 }
 
@@ -179,6 +178,7 @@ export async function createCalendarEvent(
     end: Date;
     attendees?: calendar_v3.Schema$EventAttendee[];
     location?: string;
+    timeZone?: string;
   },
 ) {
   const { calendar, latestCredentials } = await ensureAuthorizedCalendar(tokens);
@@ -187,8 +187,8 @@ export async function createCalendarEvent(
     requestBody: {
       summary: params.summary,
       description: params.description,
-      start: toEventDate(params.start),
-      end: toEventDate(params.end),
+      start: toEventDate(params.start, params.timeZone),
+      end: toEventDate(params.end, params.timeZone),
       attendees: params.attendees,
       location: params.location,
     },
@@ -209,6 +209,7 @@ export async function updateCalendarEvent(
     end: Date;
     attendees?: calendar_v3.Schema$EventAttendee[];
     location?: string;
+    timeZone?: string;
   },
 ) {
   const { calendar, latestCredentials } = await ensureAuthorizedCalendar(tokens);
@@ -218,8 +219,8 @@ export async function updateCalendarEvent(
     requestBody: {
       summary: params.summary,
       description: params.description,
-      start: toEventDate(params.start),
-      end: toEventDate(params.end),
+      start: toEventDate(params.start, params.timeZone),
+      end: toEventDate(params.end, params.timeZone),
       attendees: params.attendees,
       location: params.location,
     },

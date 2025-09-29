@@ -30,6 +30,12 @@ import {
   User,
   ProfessionalProfile,
 } from '@/types';
+import {
+  DEFAULT_TIME_ZONE,
+  formatDateTimeInTimeZone,
+  normalizeTimeZone,
+  parseDateTimeInTimeZone,
+} from '@/lib/utils/timezone';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -274,6 +280,7 @@ type AppProfessionalRow = {
   locality: string | null;
   logo_path: string | null;
   updated_at: string | null;
+  time_zone?: string | null;
 };
 
 type AppPatientRow = {
@@ -478,6 +485,7 @@ function mapProfessionalProfile(row: AppProfessionalRow): ProfessionalProfile {
     country: row.country ?? null,
     province: row.province ?? null,
     locality: row.locality ?? null,
+    timeZone: normalizeTimeZone(row.time_zone ?? null),
     logoPath: row.logo_path ?? null,
     logoUrl: null,
     updatedAt: row.updated_at ?? null,
@@ -951,6 +959,7 @@ export async function registerProfessional(data: {
       full_name: name,
       email,
       password_hash: passwordHash,
+      time_zone: DEFAULT_TIME_ZONE,
     })
     .select('*')
     .single();
@@ -973,6 +982,7 @@ export async function registerProfessional(data: {
     country: (inserted as { country?: string | null }).country ?? null,
     province: (inserted as { province?: string | null }).province ?? null,
     locality: (inserted as { locality?: string | null }).locality ?? null,
+    timeZone: (inserted as { time_zone?: string | null }).time_zone ?? DEFAULT_TIME_ZONE,
   };
 }
 
@@ -990,6 +1000,7 @@ export type StoredAuthUser = {
   country: string | null;
   province: string | null;
   locality: string | null;
+  timeZone: string | null;
 };
 
 export async function findUserByDni(
@@ -1019,6 +1030,7 @@ export async function findUserByDni(
       country: data.country ?? null,
       province: data.province ?? null,
       locality: data.locality ?? null,
+      timeZone: normalizeTimeZone((data as { time_zone?: string | null }).time_zone ?? null),
     };
   }
 
@@ -1043,6 +1055,7 @@ export async function findUserByDni(
     country: null,
     province: null,
     locality: null,
+    timeZone: null,
   };
 }
 
@@ -1127,6 +1140,7 @@ export type ProfessionalProfileUpdate = {
   country?: string | null;
   province?: string | null;
   locality?: string | null;
+  timeZone?: string | null;
 };
 
 export async function getProfessionalProfile(professionalId: string): Promise<ProfessionalProfile | null> {
@@ -1135,7 +1149,7 @@ export async function getProfessionalProfile(professionalId: string): Promise<Pr
   const { data, error } = await client
     .from(PROFESSIONALS_TABLE)
     .select(
-      'id, dni, full_name, email, clinic_name, license_number, phone, address, country, province, locality, logo_path, updated_at',
+      'id, dni, full_name, email, clinic_name, license_number, phone, address, country, province, locality, time_zone, logo_path, updated_at',
     )
     .eq('id', professionalId)
     .maybeSingle<AppProfessionalRow>();
@@ -1214,6 +1228,11 @@ export async function updateProfessionalProfile(
     payload.locality = locality;
   }
 
+  const timeZone = updates.timeZone === undefined ? undefined : normalizeTimeZone(updates.timeZone);
+  if (timeZone !== undefined) {
+    payload.time_zone = timeZone;
+  }
+
   if (Object.keys(payload).length === 0) {
     const existing = await getProfessionalProfile(professionalId);
     if (!existing) {
@@ -1229,7 +1248,7 @@ export async function updateProfessionalProfile(
     .update(payload)
     .eq('id', professionalId)
     .select(
-      'id, dni, full_name, email, clinic_name, license_number, phone, address, country, province, locality, logo_path, updated_at',
+      'id, dni, full_name, email, clinic_name, license_number, phone, address, country, province, locality, time_zone, logo_path, updated_at',
     )
     .maybeSingle<AppProfessionalRow>();
 
@@ -1964,6 +1983,7 @@ export async function updateAppointment(
   professionalId: string,
   appointmentId: string,
   updates: Partial<Appointment> & { date?: string; time?: string; type?: string },
+  options: { timeZone?: string } = {},
 ) {
   const client = getClient();
   const { data: currentRow, error: fetchError } = await client
@@ -1992,19 +2012,12 @@ export async function updateAppointment(
   }
 
   if (updates.date || updates.time) {
-    const startDate = new Date(current.start_at);
+    const timeZone = normalizeTimeZone(options.timeZone);
+    const currentLocal = formatDateTimeInTimeZone(current.start_at, timeZone);
+    const targetDate = updates.date ?? currentLocal.date;
+    const targetTime = updates.time ?? currentLocal.time;
+    const startDate = parseDateTimeInTimeZone(targetDate, targetTime, timeZone);
     const endDate = new Date(current.end_at);
-
-    if (updates.date) {
-      const [year, month, day] = updates.date.split('-').map(Number);
-      startDate.setFullYear(year, (month ?? 1) - 1, day);
-    }
-
-    if (updates.time) {
-      const [hours, minutes] = updates.time.split(':').map(Number);
-      startDate.setHours(hours ?? 0, minutes ?? 0, 0, 0);
-    }
-
     const duration = endDate.getTime() - new Date(current.start_at).getTime();
     const newEnd = new Date(startDate.getTime() + duration);
     payload.start_at = startDate.toISOString();
@@ -2845,6 +2858,7 @@ export function toPublicUser(user: {
   country?: string | null;
   province?: string | null;
   locality?: string | null;
+  timeZone?: string | null;
   logoUrl?: string | null;
 }): User {
   return {
@@ -2860,6 +2874,7 @@ export function toPublicUser(user: {
     country: user.country ?? null,
     province: user.province ?? null,
     locality: user.locality ?? null,
+    timeZone: user.timeZone ?? null,
     logoUrl: user.logoUrl ?? null,
   };
 }

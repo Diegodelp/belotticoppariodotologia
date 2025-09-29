@@ -6,12 +6,20 @@ import {
   deleteAppointment,
   getPatientById,
   getProfessionalGoogleCredentials,
+  getProfessionalProfile,
   listAppointments,
   listPatients,
   upsertProfessionalGoogleCredentials,
 } from '@/lib/db/supabase-repository';
 import { createCalendarEvent, isCalendarReady, OAuthTokenSet } from '@/lib/google/calendar';
 import { Appointment, Patient } from '@/types';
+import {
+  DEFAULT_TIME_ZONE,
+  formatAppointmentForTimeZone,
+  formatAppointmentsForTimeZone,
+  normalizeTimeZone,
+  parseDateTimeInTimeZone,
+} from '@/lib/utils/timezone';
 
 export async function GET(request: NextRequest) {
   const user = getUserFromRequest(request);
@@ -26,10 +34,14 @@ export async function GET(request: NextRequest) {
   const to = searchParams.get('to');
 
   try {
-    const [appointments, patients] = await Promise.all([
+    const [profile, appointmentsRaw, patients] = await Promise.all([
+      getProfessionalProfile(user.id),
       listAppointments(user.id, patientId ?? undefined),
       listPatients(user.id),
     ]);
+
+    const timeZone = normalizeTimeZone(profile?.timeZone ?? user.timeZone ?? DEFAULT_TIME_ZONE);
+    const appointments = formatAppointmentsForTimeZone(appointmentsRaw, timeZone);
 
     const filtered = appointments.filter((appointment) => {
       const withinStatus = status ? appointment.status === status : true;
@@ -61,6 +73,8 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
+    const profile = await getProfessionalProfile(user.id);
+    const timeZone = normalizeTimeZone(profile?.timeZone ?? user.timeZone ?? DEFAULT_TIME_ZONE);
     const body = await request.json();
     const { patientId, date, time, type, status = 'pending' } = body ?? {};
 
@@ -71,7 +85,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const startAt = new Date(`${date}T${time}:00`);
+    const startAt = parseDateTimeInTimeZone(date, time, timeZone);
     const endAt = new Date(startAt.getTime() + 60 * 60 * 1000);
 
     const appointment: Appointment = await createAppointment(user.id, {
@@ -118,6 +132,7 @@ export async function POST(request: NextRequest) {
           .join('\n'),
         start: startAt,
         end: endAt,
+        timeZone,
         attendees:
           patient?.email
             ? [
@@ -154,8 +169,9 @@ export async function POST(request: NextRequest) {
       }
 
       const updated = await attachAppointmentGoogleEvent(user.id, appointment.id, event.id);
+      const responseAppointment = formatAppointmentForTimeZone(updated ?? appointment, timeZone);
 
-      return NextResponse.json({ success: true, appointment: updated ?? appointment });
+      return NextResponse.json({ success: true, appointment: responseAppointment });
     } catch (calendarError) {
       console.error('Error al crear evento en Google Calendar', calendarError);
       await deleteAppointment(user.id, appointment.id).catch(() => undefined);
