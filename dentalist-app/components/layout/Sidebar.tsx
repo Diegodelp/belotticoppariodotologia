@@ -14,16 +14,25 @@ const menuItems = [
   { href: '/settings', label: 'Configuración', icon: '⚙️' },
 ];
 
-export default function Sidebar() {
+type SidebarProps = {
+  onNavigate?: () => void;
+  className?: string;
+  isMobile?: boolean;
+};
+
+export default function Sidebar({ onNavigate, className = '', isMobile = false }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
 
   const handleLogout = () => {
     AuthService.logout();
+    onNavigate?.();
   };
 
   return (
-    <aside className="flex w-72 flex-col border-r border-white/10 bg-slate-950/80 text-slate-100">
+    <aside
+      className={`flex h-full w-full max-w-xs flex-col border-r border-white/10 bg-slate-950/90 text-slate-100 backdrop-blur lg:max-w-none lg:w-72 ${className}`}
+    >
       <div className="flex flex-col gap-3 border-b border-white/10 px-6 pb-6 pt-8">
         <div className="flex items-center justify-between">
           <Link href="/dashboard" className="text-2xl font-semibold text-white">
@@ -33,6 +42,16 @@ export default function Sidebar() {
             APP
           </span>
         </div>
+        {isMobile && (
+          <button
+            type="button"
+            onClick={onNavigate}
+            className="self-end rounded-full border border-white/10 px-3 py-1 text-xs text-slate-300 transition hover:border-white/20 hover:text-white lg:hidden"
+            aria-label="Cerrar menú"
+          >
+            Cerrar
+          </button>
+        )}
         <p className="text-sm text-slate-400">
           Gestión integral para consultorios odontológicos.
         </p>
@@ -56,6 +75,7 @@ export default function Sidebar() {
               className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition hover:bg-white/10 ${
                 isActive ? 'bg-white/10 text-cyan-200' : 'text-slate-200'
               }`}
+              onClick={onNavigate}
             >
               <span>{item.icon}</span>
               {item.label}

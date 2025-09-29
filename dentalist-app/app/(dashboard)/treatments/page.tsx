@@ -256,9 +256,11 @@ export default function TreatmentsPage() {
 
         {loading && <p className="text-sm text-slate-300">Cargando tratamientos...</p>}
 
-        <div className="overflow-hidden rounded-2xl border border-white/10">
-          <table className="min-w-full divide-y divide-white/10 text-left text-sm text-slate-200">
-            <thead className="bg-slate-900/70 text-xs uppercase tracking-wider text-slate-400">
+        <div className="overflow-x-auto">
+          <div className="inline-block min-w-full align-middle">
+            <div className="overflow-hidden rounded-2xl border border-white/10">
+              <table className="min-w-[720px] divide-y divide-white/10 text-left text-sm text-slate-200">
+                <thead className="bg-slate-900/70 text-xs uppercase tracking-wider text-slate-400">
               <tr>
                 <th className="px-6 py-3">Fecha</th>
                 <th className="px-6 py-3">Paciente</th>
@@ -308,9 +310,12 @@ export default function TreatmentsPage() {
                   </td>
                 </tr>
               )}
-            </tbody>
-          </table>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
+
       </div>
 
       {modalOpen && (

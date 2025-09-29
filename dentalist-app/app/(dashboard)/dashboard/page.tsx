@@ -51,7 +51,7 @@ export default function DashboardPage() {
 
   return (
     <section className="space-y-10">
-      <div className="grid gap-6 lg:grid-cols-4">
+      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
         {loading && <p className="text-slate-300">Cargando indicadores...</p>}
         {error && <p className="rounded-2xl bg-rose-500/10 p-4 text-sm text-rose-200">{error}</p>}
         {overview && !loading && (
@@ -100,7 +100,7 @@ export default function DashboardPage() {
       </div>
 
       {overview && (
-        <div className="grid gap-8 lg:grid-cols-[2fr,1fr]">
+        <div className="grid gap-8 lg:grid-cols-[1.5fr,1fr] xl:grid-cols-[2fr,1fr]">
           <div className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-lg shadow-cyan-500/10">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-white">Próximos turnos</h2>
