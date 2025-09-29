@@ -50,6 +50,7 @@ const PATIENTS_TABLE =
   process.env.SUPABASE_TABLE_PACIENTES ??
   process.env.SUPABASE_TABLE_PATIENTS ??
   'patients';
+const ENCRYPTED_PLACEHOLDER = '[encriptado]';
 const APPOINTMENTS_TABLE =
   process.env.SUPABASE_TABLE_TURNOS ??
   process.env.SUPABASE_TABLE_APPOINTMENTS ??
@@ -533,6 +534,11 @@ type AppPatientRow = {
   health_insurance: string | null;
   afiliado: string | null;
   status: string;
+  professional_id: string;
+  contact_payload_ciphertext?: string | null;
+  contact_payload_iv?: string | null;
+  contact_payload_version?: number | null;
+  password_hash?: string | null;
 };
 
 type AppAppointmentRow = {
@@ -731,17 +737,50 @@ function mapProfessionalProfile(row: AppProfessionalRow): ProfessionalProfile {
   };
 }
 
-function mapPatient(record: AppPatientRow): Patient {
+type PatientSensitivePayload = {
+  dni?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  healthInsurance?: string | null;
+  affiliateNumber?: string | null;
+};
+
+async function mapPatient(record: AppPatientRow): Promise<Patient> {
+  let decrypted: PatientSensitivePayload | null = null;
+
+  if (
+    record.professional_id &&
+    record.contact_payload_ciphertext &&
+    record.contact_payload_iv &&
+    typeof record.contact_payload_version === 'number'
+  ) {
+    try {
+      decrypted = await decryptSensitivePayload<PatientSensitivePayload>(record.professional_id, {
+        ciphertext: record.contact_payload_ciphertext,
+        iv: record.contact_payload_iv,
+        version: record.contact_payload_version,
+      });
+    } catch (error) {
+      console.error('No pudimos descifrar los datos del paciente', error);
+    }
+  }
+
+  const name = (decrypted?.firstName ?? record.first_name ?? '').trim();
+  const lastName = (decrypted?.lastName ?? record.last_name ?? '').trim();
+
   return {
     id: record.id,
-    dni: record.dni ?? '',
-    name: record.first_name,
-    lastName: record.last_name,
-    email: record.email ?? '',
-    phone: record.phone ?? '',
-    address: record.address ?? '',
-    healthInsurance: record.health_insurance ?? 'Particular',
-    affiliateNumber: record.afiliado ?? undefined,
+    dni: decrypted?.dni ?? record.dni ?? '',
+    name,
+    lastName,
+    email: decrypted?.email ?? record.email ?? '',
+    phone: decrypted?.phone ?? record.phone ?? '',
+    address: decrypted?.address ?? record.address ?? '',
+    healthInsurance: decrypted?.healthInsurance ?? record.health_insurance ?? 'Particular',
+    affiliateNumber: decrypted?.affiliateNumber ?? record.afiliado ?? undefined,
     status: (record.status as Patient['status']) ?? 'active',
   };
 }
@@ -1280,17 +1319,19 @@ export async function findUserByDni(
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
+  const row = data as AppPatientRow;
+  const patient = await mapPatient(row);
   return {
-    id: data.id,
-    dni: data.dni,
-    name: `${data.first_name} ${data.last_name}`.trim(),
-    email: data.email ?? '',
+    id: patient.id,
+    dni: patient.dni,
+    name: `${patient.name} ${patient.lastName}`.trim(),
+    email: patient.email ?? '',
     type: 'paciente' as const,
-    passwordHash: data.password_hash ?? null,
+    passwordHash: row.password_hash ?? null,
     clinicName: null,
     licenseNumber: null,
-    phone: null,
-    address: null,
+    phone: patient.phone ?? null,
+    address: patient.address ?? null,
     country: null,
     province: null,
     locality: null,
@@ -1521,17 +1562,30 @@ export async function listPatients(
     query = query.eq('status', filters.status);
   }
 
-  if (filters.search) {
-    const search = filters.search.trim();
-    query = query.or(
-      `first_name.ilike.%${search}%,last_name.ilike.%${search}%,dni.ilike.%${search}%`,
-    );
-  }
-
   const { data, error } = await query;
   if (error) throw error;
   const rows = (data ?? []) as AppPatientRow[];
-  return rows.map(mapPatient);
+  let patients = await Promise.all(rows.map((row) => mapPatient(row)));
+
+  if (filters.search) {
+    const search = filters.search.trim().toLowerCase();
+    if (search.length > 0) {
+      patients = patients.filter((patient) => {
+        const haystack = [
+          patient.name,
+          patient.lastName,
+          `${patient.name} ${patient.lastName}`.trim(),
+          patient.dni,
+          patient.email,
+        ]
+          .filter(Boolean)
+          .map((value) => value.toLowerCase());
+        return haystack.some((value) => value.includes(search));
+      });
+    }
+  }
+
+  return patients;
 }
 
 export async function createPatient(
@@ -1539,24 +1593,38 @@ export async function createPatient(
   patient: Omit<Patient, 'id'>,
 ): Promise<Patient> {
   const client = getClient();
+  const encrypted = await encryptSensitivePayload(professionalId, {
+    dni: patient.dni,
+    firstName: patient.name,
+    lastName: patient.lastName,
+    email: patient.email,
+    phone: patient.phone,
+    address: patient.address,
+    healthInsurance: patient.healthInsurance,
+    affiliateNumber: patient.affiliateNumber ?? null,
+  });
+
   const { data, error } = await client
     .from(PATIENTS_TABLE)
     .insert({
       professional_id: professionalId,
       dni: patient.dni,
-      first_name: patient.name,
-      last_name: patient.lastName,
-      email: patient.email,
-      phone: patient.phone,
-      address: patient.address,
-      health_insurance: patient.healthInsurance,
-      afiliado: patient.affiliateNumber,
+      first_name: ENCRYPTED_PLACEHOLDER,
+      last_name: ENCRYPTED_PLACEHOLDER,
+      email: null,
+      phone: null,
+      address: null,
+      health_insurance: null,
+      afiliado: null,
       status: patient.status,
+      contact_payload_ciphertext: encrypted.ciphertext,
+      contact_payload_iv: encrypted.iv,
+      contact_payload_version: encrypted.version,
     })
     .select('*')
     .single();
   if (error) throw error;
-  return mapPatient(data as AppPatientRow);
+  return await mapPatient(data as AppPatientRow);
 }
 
 export async function getPatientById(
@@ -1571,7 +1639,7 @@ export async function getPatientById(
     .eq('professional_id', professionalId)
     .maybeSingle();
   if (error) throw error;
-  return data ? mapPatient(data as AppPatientRow) : null;
+  return data ? await mapPatient(data as AppPatientRow) : null;
 }
 
 export async function updatePatient(
@@ -1580,25 +1648,56 @@ export async function updatePatient(
   updates: Partial<Patient>,
 ): Promise<Patient | null> {
   const client = getClient();
+  const { data: existingData, error: existingError } = await client
+    .from(PATIENTS_TABLE)
+    .select('*')
+    .eq('id', patientId)
+    .eq('professional_id', professionalId)
+    .maybeSingle<AppPatientRow>();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  if (!existingData) {
+    return null;
+  }
+
+  const current = await mapPatient(existingData);
+
+  const encrypted = await encryptSensitivePayload(professionalId, {
+    dni: updates.dni ?? current.dni,
+    firstName: updates.name ?? current.name,
+    lastName: updates.lastName ?? current.lastName,
+    email: updates.email ?? current.email,
+    phone: updates.phone ?? current.phone,
+    address: updates.address ?? current.address,
+    healthInsurance: updates.healthInsurance ?? current.healthInsurance,
+    affiliateNumber: updates.affiliateNumber ?? current.affiliateNumber ?? null,
+  });
+
   const { data, error } = await client
     .from(PATIENTS_TABLE)
     .update({
-      dni: updates.dni,
-      first_name: updates.name,
-      last_name: updates.lastName,
-      email: updates.email,
-      phone: updates.phone,
-      address: updates.address,
-      health_insurance: updates.healthInsurance,
-      afiliado: updates.affiliateNumber,
-      status: updates.status,
+      dni: updates.dni ?? current.dni,
+      first_name: ENCRYPTED_PLACEHOLDER,
+      last_name: ENCRYPTED_PLACEHOLDER,
+      email: null,
+      phone: null,
+      address: null,
+      health_insurance: null,
+      afiliado: null,
+      status: updates.status ?? current.status,
+      contact_payload_ciphertext: encrypted.ciphertext,
+      contact_payload_iv: encrypted.iv,
+      contact_payload_version: encrypted.version,
     })
     .eq('id', patientId)
     .eq('professional_id', professionalId)
     .select('*')
     .maybeSingle();
   if (error) throw error;
-  return data ? mapPatient(data as AppPatientRow) : null;
+  return data ? await mapPatient(data as AppPatientRow) : null;
 }
 
 export async function removePatient(
