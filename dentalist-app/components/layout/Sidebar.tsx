@@ -10,6 +10,7 @@ const menuItems = [
   { href: '/calendar', label: 'Calendario', icon: '📅' },
   { href: '/treatments', label: 'Tratamientos', icon: '🦷' },
   { href: '/payments', label: 'Pagos', icon: '💳' },
+  { href: '/marketing', label: 'Marketing', icon: '📣' },
   { href: '/settings', label: 'Configuración', icon: '⚙️' },
 ];
 

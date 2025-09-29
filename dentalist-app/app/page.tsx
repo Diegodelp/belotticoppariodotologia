@@ -134,6 +134,9 @@ export default function Home() {
             <Link href="/register" className="hover:text-cyan-200">
               Crear cuenta
             </Link>
+            <Link href="/politicas-de-privacidad" className="hover:text-cyan-200">
+              Políticas de Privacidad
+            </Link>
             <a href="mailto:hola@dentalist.com" className="hover:text-cyan-200">
               Contacto comercial
             </a>
