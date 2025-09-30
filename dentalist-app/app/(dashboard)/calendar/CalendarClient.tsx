@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 import { AppointmentForm } from '@/components/appointments/AppointmentForm';
+import { useAuth } from '@/hooks/useAuth';
 import { AppointmentService } from '@/services/appointment.service';
 import { ClinicService } from '@/services/clinic.service';
 import { PatientService } from '@/services/patient.service';
@@ -25,17 +26,38 @@ function getPatientDisplayName(patient?: Patient) {
 export function CalendarClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   const [appointments, setAppointments] = useState<AppointmentWithPatient[]>([]);
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const [allPatients, setAllPatients] = useState<Patient[]>([]);
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'all' | 'confirmed' | 'pending' | 'cancelled'>('all');
+  const [clinicFilter, setClinicFilter] = useState<string>('all');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const defaultPatientId = searchParams.get('patientId') ?? undefined;
   const appointmentIdParam = searchParams.get('appointmentId');
+
+  const isAdminProfessional =
+    user?.type === 'profesional' && (!user.ownerProfessionalId || user.teamRole === 'admin');
+
+  const filteredPatients = useMemo(() => {
+    if (!user) {
+      return allPatients;
+    }
+
+    if (user.ownerProfessionalId && user.teamRole !== 'admin') {
+      if (!user.teamClinicId) {
+        return [];
+      }
+
+      return allPatients.filter((patient) => patient.clinicId === user.teamClinicId);
+    }
+
+    return allPatients;
+  }, [allPatients, user]);
 
   useEffect(() => {
     const fetchAppointments = async () => {
@@ -56,9 +78,9 @@ export function CalendarClient() {
       try {
         const response = await PatientService.getAll();
         if (Array.isArray(response)) {
-          setPatients(response as Patient[]);
+          setAllPatients(response as Patient[]);
         } else if (Array.isArray(response?.patients)) {
-          setPatients(response.patients as Patient[]);
+          setAllPatients(response.patients as Patient[]);
         }
       } catch (error) {
         console.error('No pudimos obtener los pacientes', error);
@@ -93,13 +115,31 @@ export function CalendarClient() {
     }
   }, [appointmentIdParam]);
 
+  useEffect(() => {
+    if (!isAdminProfessional) {
+      setClinicFilter('all');
+      return;
+    }
+
+    if (clinicFilter !== 'all' && !clinics.some((clinic) => clinic.id === clinicFilter)) {
+      setClinicFilter('all');
+    }
+  }, [clinicFilter, clinics, isAdminProfessional]);
+
   const filteredAppointments = useMemo(() => {
     const filtered =
       status === 'all'
         ? appointments
         : appointments.filter((appointment) => appointment.status === status);
-    return filtered.sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
-  }, [appointments, status]);
+    const clinicFiltered =
+      !isAdminProfessional || clinicFilter === 'all'
+        ? filtered
+        : filtered.filter((appointment) => {
+            const appointmentClinicId = appointment.patient?.clinicId ?? appointment.clinicId ?? null;
+            return appointmentClinicId === clinicFilter;
+          });
+    return clinicFiltered.sort((a, b) => `${a.date}T${a.time}`.localeCompare(`${b.date}T${b.time}`));
+  }, [appointments, clinicFilter, isAdminProfessional, status]);
 
   const groupedByDate = useMemo(() => {
     return filteredAppointments.reduce<Record<string, AppointmentWithPatient[]>>((acc, appointment) => {
@@ -201,9 +241,10 @@ export function CalendarClient() {
             </p>
             <div className="mt-4">
               <AppointmentForm
-                patients={patients}
+                patients={filteredPatients}
                 defaultPatientId={defaultPatientId}
                 clinics={clinics}
+                allowClinicSelection={!isAdminProfessional}
                 onCreated={(appointment, patient) => {
                   clearMessages();
                   setAppointments((previous) => [
@@ -245,9 +286,10 @@ export function CalendarClient() {
             </div>
             <div className="mt-4 space-y-4">
               <AppointmentForm
-                patients={patients}
+                patients={filteredPatients}
                 appointment={editingAppointment}
                 clinics={clinics}
+                allowClinicSelection={!isAdminProfessional}
                 mode="edit"
                 onUpdated={(appointment, patient) => {
                   clearMessages();
@@ -276,20 +318,39 @@ export function CalendarClient() {
           </div>
         )}
 
-        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-200">
-          {(['all', 'confirmed', 'pending', 'cancelled'] as const).map((value) => (
-            <button
-              key={value}
-              onClick={() => setStatus(value)}
-              className={`rounded-full border px-4 py-2 capitalize transition ${
-                status === value
-                  ? 'border-cyan-300 bg-cyan-500/20 text-cyan-100'
-                  : 'border-white/10 bg-slate-900/60 text-slate-300 hover:border-cyan-300/60 hover:text-cyan-200'
-              }`}
-            >
-              {value === 'all' ? 'Todos' : value}
-            </button>
-          ))}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-200">
+            {(['all', 'confirmed', 'pending', 'cancelled'] as const).map((value) => (
+              <button
+                key={value}
+                onClick={() => setStatus(value)}
+                className={`rounded-full border px-4 py-2 capitalize transition ${
+                  status === value
+                    ? 'border-cyan-300 bg-cyan-500/20 text-cyan-100'
+                    : 'border-white/10 bg-slate-900/60 text-slate-300 hover:border-cyan-300/60 hover:text-cyan-200'
+                }`}
+              >
+                {value === 'all' ? 'Todos' : value}
+              </button>
+            ))}
+          </div>
+          {isAdminProfessional && clinics.length > 0 && (
+            <label className="flex flex-col text-xs text-slate-200">
+              <span className="font-semibold uppercase tracking-[0.2em] text-slate-400">Consultorio</span>
+              <select
+                value={clinicFilter}
+                onChange={(event) => setClinicFilter(event.target.value)}
+                className="mt-1 min-w-[200px] rounded-full border border-white/10 bg-slate-900/60 px-4 py-2 text-xs font-semibold text-white focus:border-cyan-300 focus:outline-none"
+              >
+                <option value="all">Todos</option>
+                {clinics.map((clinic) => (
+                  <option key={clinic.id} value={clinic.id}>
+                    {clinic.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
 
         {loading && <p className="text-sm text-slate-300">Cargando turnos...</p>}
@@ -337,11 +398,18 @@ export function CalendarClient() {
                         <p className="text-xs text-slate-300">
                           {appointment.type || 'Tipo de turno no especificado'}
                         </p>
-                        {appointment.clinicId && (
-                          <p className="text-[11px] text-slate-400">
-                            Consultorio: {clinicMap.get(appointment.clinicId) ?? 'Sin nombre'}
-                          </p>
-                        )}
+                        {(() => {
+                          const appointmentClinic =
+                            appointment.clinicId ?? appointment.patient?.clinicId ?? null;
+                          if (!appointmentClinic) {
+                            return null;
+                          }
+                          return (
+                            <p className="text-[11px] text-slate-400">
+                              Consultorio: {clinicMap.get(appointmentClinic) ?? 'Sin nombre'}
+                            </p>
+                          );
+                        })()}
                         {appointment.patient?.id && (
                           <Link
                             href={`/patients/${appointment.patient.id}`}

@@ -10,6 +10,7 @@ interface AppointmentFormProps {
   appointment?: Appointment;
   mode?: 'create' | 'edit';
   clinics?: Clinic[];
+  allowClinicSelection?: boolean;
   onCreated?: (appointment: Appointment, patient?: Patient) => void;
   onUpdated?: (appointment: Appointment, patient?: Patient) => void;
   onCancel?: () => void;
@@ -23,6 +24,7 @@ export function AppointmentForm({
   appointment,
   mode = 'create',
   clinics,
+  allowClinicSelection = true,
   onCreated,
   onUpdated,
   onCancel,
@@ -81,6 +83,13 @@ export function AppointmentForm({
     }
   }, [clinicOptions, mode, selectedPatient?.clinicId]);
 
+  useEffect(() => {
+    if (!allowClinicSelection) {
+      const patientClinic = selectedPatient?.clinicId ?? '';
+      setClinicId((previous) => (previous === patientClinic ? previous : patientClinic));
+    }
+  }, [allowClinicSelection, selectedPatient?.clinicId]);
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
@@ -95,7 +104,9 @@ export function AppointmentForm({
       setLoading(true);
       const selectedPatient = patientOptions.find((item) => item.id === patientId);
 
-      const normalizedClinicId = clinicId && clinicId.length > 0 ? clinicId : undefined;
+      const clinicIdSource = allowClinicSelection ? clinicId : selectedPatient?.clinicId ?? '';
+      const normalizedClinicId =
+        clinicIdSource && clinicIdSource.length > 0 ? clinicIdSource : undefined;
 
       if (mode === 'edit' && appointment) {
         const response = await AppointmentService.update(appointment.id, {
@@ -165,23 +176,23 @@ export function AppointmentForm({
           </select>
         </label>
 
-        {clinicOptions.length > 0 && (
-          <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
-            Consultorio
-            <select
-              value={clinicId}
-              onChange={(event) => setClinicId(event.target.value)}
-              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900/60 px-4 py-2 text-sm text-white focus:border-cyan-400 focus:outline-none"
-            >
-              <option value="">Sin asignar</option>
-              {clinicOptions.map((clinic) => (
-                <option key={clinic.id} value={clinic.id}>
-                  {clinic.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
+          {allowClinicSelection && clinicOptions.length > 0 && (
+            <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+              Consultorio
+              <select
+                value={clinicId}
+                onChange={(event) => setClinicId(event.target.value)}
+                className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900/60 px-4 py-2 text-sm text-white focus:border-cyan-400 focus:outline-none"
+              >
+                <option value="">Sin asignar</option>
+                {clinicOptions.map((clinic) => (
+                  <option key={clinic.id} value={clinic.id}>
+                    {clinic.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
 
         <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
           Fecha
