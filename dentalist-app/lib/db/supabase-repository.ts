@@ -2300,20 +2300,25 @@ export async function createStaffInvitation(
   };
 }
 
-export async function getStaffInvitationDetails(token: string): Promise<{
-  invitation: StaffInvitation;
-  owner: {
-    id: string;
-    name: string | null;
-    email: string | null;
-    clinicName: string | null;
-    subscriptionPlan: SubscriptionPlan;
-    subscriptionStatus: SubscriptionStatus;
-    trialStartedAt: string | null;
-    trialEndsAt: string | null;
-    subscriptionLockedAt: string | null;
-  };
-}> {
+export async function getStaffInvitationDetails(
+  token: string,
+): Promise<
+  | {
+      invitation: StaffInvitation;
+      owner: {
+        id: string;
+        name: string | null;
+        email: string | null;
+        clinicName: string | null;
+        subscriptionPlan: SubscriptionPlan;
+        subscriptionStatus: SubscriptionStatus;
+        trialStartedAt: string | null;
+        trialEndsAt: string | null;
+        subscriptionLockedAt: string | null;
+      };
+    }
+  | null
+> {
   const client = getClient();
   const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
