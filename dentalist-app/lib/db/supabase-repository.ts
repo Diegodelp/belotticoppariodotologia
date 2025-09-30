@@ -3999,6 +3999,9 @@ export function toPublicUser(user: {
   trialStartedAt?: string | null;
   trialEndsAt?: string | null;
   subscriptionLockedAt?: string | null;
+  ownerProfessionalId?: string | null;
+  teamRole?: StaffRole | null;
+  teamClinicId?: string | null;
 }): User {
   const resolvedPlan =
     user.subscriptionPlan ?? (user.type === 'profesional' ? 'starter' : null);
