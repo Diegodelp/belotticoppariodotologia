@@ -30,9 +30,9 @@ export function TeamManagement({ plan }: TeamManagementProps) {
     clinicId: '',
   });
   const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteMessage, setInviteMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(
-    null,
-  );
+  const [inviteMessage, setInviteMessage] = useState<
+    { type: 'success' | 'error' | 'warning'; text: string; inviteUrl?: string }
+  | null>(null);
 
   const resolvedPlan: SubscriptionPlan | null | undefined =
     (overview?.stats.plan as SubscriptionPlan | null | undefined) ?? plan ?? null;
@@ -127,17 +127,28 @@ export function TeamManagement({ plan }: TeamManagementProps) {
 
     try {
       setInviteLoading(true);
-      const { inviteUrl } = await TeamService.inviteMember({
+      const { inviteUrl, emailSent, emailError } = await TeamService.inviteMember({
         email: inviteForm.email.trim(),
         role: inviteForm.role,
         clinicId: inviteForm.clinicId || undefined,
       });
       await refresh();
       setInviteForm({ email: '', role: getDefaultRole(plan), clinicId: '' });
-      setInviteMessage({
-        type: 'success',
-        text: `Invitación enviada. Compartí este enlace si necesitás reenviarlo: ${inviteUrl}`,
-      });
+      if (emailSent) {
+        setInviteMessage({
+          type: 'success',
+          text: 'Enviamos la invitación por correo. También podés compartir este enlace directamente.',
+          inviteUrl,
+        });
+      } else {
+        setInviteMessage({
+          type: 'warning',
+          text:
+            emailError ??
+            'No pudimos enviar el correo automáticamente. Compartí el enlace manualmente o revisá tu configuración SMTP.',
+          inviteUrl,
+        });
+      }
     } catch (err) {
       setInviteMessage({
         type: 'error',
@@ -195,10 +206,17 @@ export function TeamManagement({ plan }: TeamManagementProps) {
           className={`rounded-xl border p-4 text-sm ${
             inviteMessage.type === 'success'
               ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
-              : 'border-red-500/40 bg-red-500/10 text-red-100'
+              : inviteMessage.type === 'warning'
+                ? 'border-amber-400/40 bg-amber-400/10 text-amber-100'
+                : 'border-red-500/40 bg-red-500/10 text-red-100'
           }`}
         >
-          {inviteMessage.text}
+          <p>{inviteMessage.text}</p>
+          {inviteMessage.inviteUrl && (
+            <p className="mt-2 break-all text-xs text-inherit">
+              {inviteMessage.inviteUrl}
+            </p>
+          )}
         </div>
       )}
 

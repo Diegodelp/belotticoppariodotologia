@@ -82,6 +82,9 @@ export async function POST(request: NextRequest) {
     const origin = request.headers.get('origin') ?? new URL(request.url).origin;
     const inviteUrl = `${origin}/register?invite=${token}`;
 
+    let emailSent = true;
+    let emailErrorMessage: string | null = null;
+
     try {
       await sendStaffInvitationEmail({
         to: email,
@@ -93,9 +96,18 @@ export async function POST(request: NextRequest) {
       });
     } catch (emailError) {
       console.error('Error al enviar la invitación por correo', emailError);
+      emailSent = false;
+      emailErrorMessage =
+        'No pudimos enviar el correo automáticamente. Compartí el enlace manualmente o revisá tu configuración SMTP.';
     }
 
-    return NextResponse.json({ invitation: { ...invitation, token }, inviteUrl, success: true });
+    return NextResponse.json({
+      invitation: { ...invitation, token },
+      inviteUrl,
+      success: true,
+      emailSent,
+      emailError: emailErrorMessage,
+    });
   } catch (error) {
     console.error('Error al invitar integrante del equipo', error);
     return NextResponse.json(

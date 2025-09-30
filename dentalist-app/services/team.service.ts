@@ -92,7 +92,7 @@ export class TeamService {
     email: string;
     role: StaffRole;
     clinicId?: string | null;
-  }): Promise<{ invitation: StaffInvitation; inviteUrl: string }> {
+  }): Promise<{ invitation: StaffInvitation; inviteUrl: string; emailSent: boolean; emailError: string | null }> {
     const response = await fetch('/api/team/invitations', {
       method: 'POST',
       headers: {
@@ -108,7 +108,12 @@ export class TeamService {
       throw new Error((data as { error?: string } | null)?.error ?? 'No pudimos enviar la invitación.');
     }
 
-    return (await response.json()) as { invitation: StaffInvitation; inviteUrl: string };
+    return (await response.json()) as {
+      invitation: StaffInvitation;
+      inviteUrl: string;
+      emailSent: boolean;
+      emailError: string | null;
+    };
   }
 
   static async revokeInvitation(invitationId: string): Promise<void> {
