@@ -119,11 +119,14 @@ export function planSupportsCapability(
   switch (capability) {
     case 'patientLimit':
       return Boolean(definition.capabilities.patientLimit === null);
-    case 'staffSeats':
-      return (
-        definition.capabilities.staffSeats === null ||
-        definition.capabilities.staffSeats > PLAN_DEFINITIONS.starter.capabilities.staffSeats
-      );
+    case 'staffSeats': {
+      const starterStaffSeats = PLAN_DEFINITIONS.starter.capabilities.staffSeats;
+      if (starterStaffSeats === null) {
+        return true;
+      }
+      const planStaffSeats = definition.capabilities.staffSeats;
+      return planStaffSeats === null || planStaffSeats > starterStaffSeats;
+    }
     case 'storage':
       return definition.capabilities.storageGb > PLAN_DEFINITIONS.starter.capabilities.storageGb;
     case 'aiInsights':
