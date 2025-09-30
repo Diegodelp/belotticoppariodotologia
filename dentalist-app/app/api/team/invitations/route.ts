@@ -36,8 +36,35 @@ export async function POST(request: NextRequest) {
     const plan = user.subscriptionPlan ?? 'starter';
     const seatLimit = getStaffSeatLimit(plan);
     const assistantLimit = seatLimit === null ? null : Math.max(seatLimit - 1, 0);
+    const ownerProfessionalId = user.ownerProfessionalId ?? user.id;
+    const isOwner = !user.ownerProfessionalId;
+    const actingRole = user.teamRole ?? (isOwner ? 'admin' : null);
+    const actingClinicId = user.teamClinicId ?? null;
 
-    const { staff, invitations } = await listClinicsAndTeam(user.id);
+    const { staff, invitations } = await listClinicsAndTeam(ownerProfessionalId);
+
+    if (!isOwner) {
+      if (actingRole !== 'professional') {
+        return NextResponse.json(
+          { error: 'No tenés permisos para invitar integrantes del equipo.' },
+          { status: 403 },
+        );
+      }
+
+      if (role !== 'assistant') {
+        return NextResponse.json(
+          { error: 'Solo podés invitar asistentes a tu consultorio.' },
+          { status: 403 },
+        );
+      }
+
+      if (actingClinicId && clinicId && clinicId !== actingClinicId) {
+        return NextResponse.json(
+          { error: 'No podés asignar asistentes a un consultorio diferente al tuyo.' },
+          { status: 403 },
+        );
+      }
+    }
 
     if (plan !== 'pro') {
       if (role !== 'assistant') {
@@ -72,10 +99,12 @@ export async function POST(request: NextRequest) {
     }
 
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    const { invitation, token } = await createStaffInvitation(user.id, {
+    const targetClinicId = isOwner ? clinicId : actingClinicId ?? clinicId ?? null;
+
+    const { invitation, token } = await createStaffInvitation(ownerProfessionalId, {
       email,
       role,
-      clinicId,
+      clinicId: targetClinicId,
       expiresAt,
     });
 

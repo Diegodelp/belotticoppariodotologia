@@ -42,6 +42,25 @@ export class AuthService {
     return response.json();
   }
 
+  static async getStaffInvitation(token: string) {
+    const response = await fetch(`/api/auth/invitations?token=${encodeURIComponent(token)}`);
+    return response.json();
+  }
+
+  static async acceptStaffInvitation(data: {
+    token: string;
+    dni: string;
+    name: string;
+    password: string;
+  }) {
+    const response = await fetch('/api/auth/invitations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    return response.json();
+  }
+
   static async getCurrentUser() {
     const response = await fetch('/api/auth/me', {
       credentials: 'include',

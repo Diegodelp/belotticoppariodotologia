@@ -192,6 +192,16 @@ function sanitizeFileName(fileName: string | null | undefined): string | null {
     .slice(-128);
 }
 
+function normalizeSubscriptionPlan(value: unknown): SubscriptionPlan {
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === 'pro') {
+      return 'pro';
+    }
+  }
+  return 'starter';
+}
+
 function resolveFileExtension(
   fileName: string | null | undefined,
   mimeType: string | null | undefined,
@@ -769,6 +779,7 @@ type AppClinicRow = {
 type AppStaffMemberRow = {
   id: string;
   owner_professional_id: string;
+  member_professional_id: string | null;
   clinic_id: string | null;
   full_name: string | null;
   email: string | null;
@@ -832,6 +843,7 @@ function mapStaffMember(
   return {
     id: row.id,
     ownerProfessionalId: row.owner_professional_id,
+    memberProfessionalId: row.member_professional_id,
     clinicId: row.clinic_id,
     clinicName: clinic?.name ?? null,
     fullName: row.full_name ?? 'Usuario invitado',
@@ -1312,14 +1324,25 @@ function mapBudget(row: AppBudgetRow, documentUrl?: string | null): Budget {
   };
 }
 
-export async function registerProfessional(data: {
-  dni: string;
-  name: string;
-  email: string;
-  password: string;
-}): Promise<User> {
+export async function registerProfessional(
+  data: {
+    dni: string;
+    name: string;
+    email: string;
+    password: string;
+  },
+  options?: {
+    ownerProfessionalId?: string | null;
+    subscriptionPlan?: SubscriptionPlan;
+    subscriptionStatus?: SubscriptionStatus;
+    trialStartedAt?: string | null;
+    trialEndsAt?: string | null;
+    subscriptionLockedAt?: string | null;
+  },
+): Promise<User> {
   const client = getClient();
   const { dni, name, email, password } = data;
+  const ownerProfessionalId = options?.ownerProfessionalId ?? null;
 
   const { data: existing } = await client
     .from(PROFESSIONALS_TABLE)
@@ -1332,10 +1355,15 @@ export async function registerProfessional(data: {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
-  const trialStartedAt = new Date().toISOString();
-  const trialEndsAt = new Date(
-    Date.now() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000,
-  ).toISOString();
+  const now = new Date();
+  const trialStartedAt = options?.trialStartedAt ?? now.toISOString();
+  const trialEndsAt = options?.trialEndsAt ??
+    (ownerProfessionalId
+      ? options?.trialEndsAt ?? null
+      : new Date(now.getTime() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000).toISOString());
+  const subscriptionPlan = normalizeSubscriptionPlan(options?.subscriptionPlan ?? null);
+  const subscriptionStatus = options?.subscriptionStatus ?? 'trialing';
+  const subscriptionLockedAt = options?.subscriptionLockedAt ?? null;
 
   const { data: authData, error: authError } = await client.auth.admin.createUser({
     email,
@@ -1367,10 +1395,12 @@ export async function registerProfessional(data: {
       email,
       password_hash: passwordHash,
       time_zone: DEFAULT_TIME_ZONE,
-      subscription_plan: 'starter',
-      subscription_status: 'trialing',
+      subscription_plan: subscriptionPlan,
+      subscription_status: subscriptionStatus,
       trial_started_at: trialStartedAt,
       trial_ends_at: trialEndsAt,
+      subscription_locked_at: subscriptionLockedAt,
+      owner_professional_id: ownerProfessionalId,
     })
     .select('*')
     .single();
@@ -1394,15 +1424,16 @@ export async function registerProfessional(data: {
     province: (inserted as { province?: string | null }).province ?? null,
     locality: (inserted as { locality?: string | null }).locality ?? null,
     timeZone: (inserted as { time_zone?: string | null }).time_zone ?? DEFAULT_TIME_ZONE,
-    subscriptionPlan: 'starter',
+    subscriptionPlan,
     subscriptionStatus: ensureSubscriptionStatus(
-      (inserted as { subscription_status?: SubscriptionStatus | null }).subscription_status ?? 'trialing',
+      (inserted as { subscription_status?: SubscriptionStatus | null }).subscription_status ?? subscriptionStatus,
       (inserted as { trial_ends_at?: string | null }).trial_ends_at ?? trialEndsAt,
     ),
     trialStartedAt: (inserted as { trial_started_at?: string | null }).trial_started_at ?? trialStartedAt,
     trialEndsAt: (inserted as { trial_ends_at?: string | null }).trial_ends_at ?? trialEndsAt,
     subscriptionLockedAt:
-      (inserted as { subscription_locked_at?: string | null }).subscription_locked_at ?? null,
+      (inserted as { subscription_locked_at?: string | null }).subscription_locked_at ?? subscriptionLockedAt,
+    ownerProfessionalId,
   };
 }
 
@@ -1426,6 +1457,9 @@ export type StoredAuthUser = {
   trialStartedAt: string | null;
   trialEndsAt: string | null;
   subscriptionLockedAt: string | null;
+  ownerProfessionalId: string | null;
+  teamRole: StaffRole | null;
+  teamClinicId: string | null;
 };
 
 export async function findUserByDni(
@@ -1441,14 +1475,59 @@ export async function findUserByDni(
       .maybeSingle();
     if (error) throw error;
     if (!data) return null;
-    const rawPlan = (data as { subscription_plan?: string | null }).subscription_plan ?? null;
-    const plan: SubscriptionPlan = rawPlan === 'pro' ? 'pro' : 'starter';
-    const trialStartedAt = (data as { trial_started_at?: string | null }).trial_started_at ?? null;
-    const trialEndsAt = (data as { trial_ends_at?: string | null }).trial_ends_at ?? null;
-    const rawStatus = (data as { subscription_status?: string | null }).subscription_status ?? null;
+    const ownerProfessionalId =
+      (data as { owner_professional_id?: string | null }).owner_professional_id ?? null;
+    let rawPlan = (data as { subscription_plan?: string | null }).subscription_plan ?? null;
+    let rawStatus = (data as { subscription_status?: string | null }).subscription_status ?? null;
+    let trialStartedAtRaw = (data as { trial_started_at?: string | null }).trial_started_at ?? null;
+    let trialEndsAtRaw = (data as { trial_ends_at?: string | null }).trial_ends_at ?? null;
+    let subscriptionLockedAt =
+      (data as { subscription_locked_at?: string | null }).subscription_locked_at ?? null;
+    let teamRole: StaffRole | null = null;
+    let teamClinicId: string | null = null;
+
+    if (ownerProfessionalId) {
+      const { data: staffRow, error: staffError } = await client
+        .from(STAFF_MEMBERS_TABLE)
+        .select('*')
+        .eq('member_professional_id', data.id)
+        .maybeSingle<AppStaffMemberRow>();
+
+      if (staffError) throw staffError;
+      if (!staffRow) {
+        throw new Error('La invitación no está asociada a un equipo válido.');
+      }
+
+      if (staffRow.status !== 'active') {
+        throw new Error('Tu acceso al equipo no está activo. Consultá con el administrador.');
+      }
+
+      teamRole = (staffRow.role as StaffRole) ?? 'assistant';
+      teamClinicId = staffRow.clinic_id ?? null;
+
+      const { data: ownerRow, error: ownerError } = await client
+        .from(PROFESSIONALS_TABLE)
+        .select('*')
+        .eq('id', ownerProfessionalId)
+        .maybeSingle();
+
+      if (ownerError) throw ownerError;
+      if (ownerRow) {
+        rawPlan = (ownerRow as { subscription_plan?: string | null }).subscription_plan ?? rawPlan;
+        rawStatus = (ownerRow as { subscription_status?: string | null }).subscription_status ?? rawStatus;
+        trialStartedAtRaw =
+          (ownerRow as { trial_started_at?: string | null }).trial_started_at ?? trialStartedAtRaw;
+        trialEndsAtRaw = (ownerRow as { trial_ends_at?: string | null }).trial_ends_at ?? trialEndsAtRaw;
+        subscriptionLockedAt =
+          (ownerRow as { subscription_locked_at?: string | null }).subscription_locked_at ??
+          subscriptionLockedAt;
+      }
+    }
+
+    const plan = normalizeSubscriptionPlan(rawPlan);
     const subscriptionStatus = ensureSubscriptionStatus(
       (rawStatus as SubscriptionStatus | null) ?? null,
-      trialEndsAt ?? null,
+      trialEndsAtRaw ?? null,
     );
     return {
       id: data.id,
@@ -1467,10 +1546,12 @@ export async function findUserByDni(
       timeZone: normalizeTimeZone((data as { time_zone?: string | null }).time_zone ?? null),
       subscriptionPlan: plan,
       subscriptionStatus,
-      trialStartedAt,
-      trialEndsAt,
-      subscriptionLockedAt:
-        (data as { subscription_locked_at?: string | null }).subscription_locked_at ?? null,
+      trialStartedAt: trialStartedAtRaw,
+      trialEndsAt: trialEndsAtRaw,
+      subscriptionLockedAt,
+      ownerProfessionalId,
+      teamRole,
+      teamClinicId,
     };
   }
 
@@ -1547,7 +1628,7 @@ export async function getProfessionalSubscriptionSummary(
   if (error) throw error;
 
   const rawPlan = (data as { subscription_plan?: string | null } | null)?.subscription_plan ?? null;
-  const plan: SubscriptionPlan = rawPlan === 'pro' ? 'pro' : 'starter';
+  const plan = normalizeSubscriptionPlan(rawPlan);
   const trialStartedAt =
     (data as { trial_started_at?: string | null } | null)?.trial_started_at ?? null;
   const trialEndsAt = (data as { trial_ends_at?: string | null } | null)?.trial_ends_at ?? null;
@@ -2017,6 +2098,76 @@ export async function listClinicsAndTeam(
   return { clinics, staff, invitations };
 }
 
+export async function getStaffMemberById(
+  ownerProfessionalId: string,
+  staffId: string,
+): Promise<StaffMember | null> {
+  const client = getClient();
+
+  const { data, error } = await client
+    .from(STAFF_MEMBERS_TABLE)
+    .select('*')
+    .eq('owner_professional_id', ownerProfessionalId)
+    .eq('id', staffId)
+    .maybeSingle<AppStaffMemberRow>();
+
+  if (error) throw error;
+  if (!data) {
+    return null;
+  }
+
+  const clinicLookup = new Map<string, Clinic>();
+
+  if (data.clinic_id) {
+    const { data: clinicRow } = await client
+      .from(CLINICS_TABLE)
+      .select('*')
+      .eq('id', data.clinic_id)
+      .maybeSingle<AppClinicRow>();
+
+    if (clinicRow) {
+      clinicLookup.set(clinicRow.id, mapClinic(clinicRow as AppClinicRow));
+    }
+  }
+
+  return mapStaffMember(data, clinicLookup);
+}
+
+export async function getStaffInvitationById(
+  ownerProfessionalId: string,
+  invitationId: string,
+): Promise<StaffInvitation | null> {
+  const client = getClient();
+
+  const { data, error } = await client
+    .from(STAFF_INVITATIONS_TABLE)
+    .select('*')
+    .eq('owner_professional_id', ownerProfessionalId)
+    .eq('id', invitationId)
+    .maybeSingle<AppStaffInvitationRow>();
+
+  if (error) throw error;
+  if (!data) {
+    return null;
+  }
+
+  const clinicLookup = new Map<string, Clinic>();
+
+  if (data.clinic_id) {
+    const { data: clinicRow } = await client
+      .from(CLINICS_TABLE)
+      .select('*')
+      .eq('id', data.clinic_id)
+      .maybeSingle<AppClinicRow>();
+
+    if (clinicRow) {
+      clinicLookup.set(clinicRow.id, mapClinic(clinicRow as AppClinicRow));
+    }
+  }
+
+  return mapStaffInvitation(data, clinicLookup);
+}
+
 export async function getClinicCountForProfessional(professionalId: string): Promise<number> {
   const client = getClient();
   const { count, error } = await client
@@ -2144,6 +2295,194 @@ export async function createStaffInvitation(
     invitation: mapStaffInvitation(data as AppStaffInvitationRow, clinicLookup),
     token,
   };
+}
+
+export async function getStaffInvitationDetails(token: string): Promise<{
+  invitation: StaffInvitation;
+  owner: {
+    id: string;
+    name: string | null;
+    email: string | null;
+    clinicName: string | null;
+    subscriptionPlan: SubscriptionPlan;
+    subscriptionStatus: SubscriptionStatus;
+    trialStartedAt: string | null;
+    trialEndsAt: string | null;
+    subscriptionLockedAt: string | null;
+  };
+}> {
+  const client = getClient();
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  const { data, error } = await client
+    .from(STAFF_INVITATIONS_TABLE)
+    .select(
+      '*,' +
+        'owner:owner_professional_id(' +
+        'id, full_name, email, clinic_name, subscription_plan, subscription_status, trial_started_at, trial_ends_at, subscription_locked_at' +
+        ')',
+    )
+    .eq('token_hash', tokenHash)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) {
+    return null;
+  }
+
+  const status = (data as { status?: string }).status ?? 'pending';
+  if (status !== 'pending') {
+    return null;
+  }
+
+  const expiresAtRaw = (data as { expires_at?: string | null }).expires_at ?? null;
+  if (expiresAtRaw) {
+    const expiresAtDate = new Date(expiresAtRaw);
+    if (!Number.isNaN(expiresAtDate.getTime()) && expiresAtDate.getTime() < Date.now()) {
+      await client
+        .from(STAFF_INVITATIONS_TABLE)
+        .update({ status: 'expired' satisfies StaffInvitationStatus })
+        .eq('id', data.id);
+      return null;
+    }
+  }
+
+  const clinicLookup = new Map<string, Clinic>();
+  if ((data as { clinic_id?: string | null }).clinic_id) {
+    const { data: clinicRow } = await client
+      .from(CLINICS_TABLE)
+      .select('*')
+      .eq('id', (data as { clinic_id?: string | null }).clinic_id)
+      .maybeSingle<AppClinicRow>();
+
+    if (clinicRow) {
+      clinicLookup.set(clinicRow.id, mapClinic(clinicRow as AppClinicRow));
+    }
+  }
+
+  const invitation = mapStaffInvitation(data as AppStaffInvitationRow, clinicLookup);
+  const ownerRow = (data as { owner?: Record<string, unknown> | null }).owner;
+
+  if (!ownerRow) {
+    throw new Error('La invitación no tiene un propietario válido.');
+  }
+
+  const rawPlan = (ownerRow as { subscription_plan?: string | null }).subscription_plan ?? null;
+  const plan = normalizeSubscriptionPlan(rawPlan);
+  const trialStartedAt = (ownerRow as { trial_started_at?: string | null }).trial_started_at ?? null;
+  const trialEndsAt = (ownerRow as { trial_ends_at?: string | null }).trial_ends_at ?? null;
+  const rawStatus = (ownerRow as { subscription_status?: string | null }).subscription_status ?? null;
+  const subscriptionStatus = ensureSubscriptionStatus(
+    (rawStatus as SubscriptionStatus | null) ?? null,
+    trialEndsAt,
+  );
+
+  return {
+    invitation,
+    owner: {
+      id: (ownerRow as { id: string }).id,
+      name: (ownerRow as { full_name?: string | null }).full_name ?? null,
+      email: (ownerRow as { email?: string | null }).email ?? null,
+      clinicName: (ownerRow as { clinic_name?: string | null }).clinic_name ?? null,
+      subscriptionPlan: plan,
+      subscriptionStatus,
+      trialStartedAt,
+      trialEndsAt,
+      subscriptionLockedAt:
+        (ownerRow as { subscription_locked_at?: string | null }).subscription_locked_at ?? null,
+    },
+  };
+}
+
+export async function acceptStaffInvitation({
+  token,
+  dni,
+  name,
+  password,
+}: {
+  token: string;
+  dni: string;
+  name: string;
+  password: string;
+}): Promise<{ user: User; staff: StaffMember; ownerId: string }>
+{
+  const details = await getStaffInvitationDetails(token);
+
+  if (!details) {
+    throw new Error('La invitación no es válida o ya fue utilizada.');
+  }
+
+  const { invitation, owner } = details;
+
+  if (!invitation.email) {
+    throw new Error('La invitación no especifica un correo electrónico.');
+  }
+
+  const client = getClient();
+
+  const ownerSummary = await getProfessionalSubscriptionSummary(owner.id);
+
+  const user = await registerProfessional(
+    {
+      dni,
+      name,
+      email: invitation.email,
+      password,
+    },
+    {
+      ownerProfessionalId: owner.id,
+      subscriptionPlan: ownerSummary.plan,
+      subscriptionStatus: ownerSummary.status,
+      trialStartedAt: ownerSummary.trialStartedAt,
+      trialEndsAt: ownerSummary.trialEndsAt,
+      subscriptionLockedAt: ownerSummary.subscriptionLockedAt,
+    },
+  );
+
+  const acceptedAt = new Date().toISOString();
+
+  const { data: staffRow, error: staffError } = await client
+    .from(STAFF_MEMBERS_TABLE)
+    .upsert(
+      {
+        owner_professional_id: owner.id,
+        member_professional_id: user.id,
+        clinic_id: invitation.clinicId ?? null,
+        email: invitation.email,
+        full_name: name,
+        role: invitation.role,
+        status: 'active' satisfies StaffStatus,
+        invited_at: invitation.invitedAt ?? acceptedAt,
+        accepted_at: acceptedAt,
+      },
+      { onConflict: 'owner_professional_id,email' },
+    )
+    .select('*')
+    .single<AppStaffMemberRow>();
+
+  if (staffError) throw staffError;
+
+  await client
+    .from(STAFF_INVITATIONS_TABLE)
+    .update({ status: 'accepted' satisfies StaffInvitationStatus, accepted_at: acceptedAt })
+    .eq('id', invitation.id);
+
+  const clinicLookup = new Map<string, Clinic>();
+  if (staffRow.clinic_id) {
+    const { data: clinicRow } = await client
+      .from(CLINICS_TABLE)
+      .select('*')
+      .eq('id', staffRow.clinic_id)
+      .maybeSingle<AppClinicRow>();
+
+    if (clinicRow) {
+      clinicLookup.set(clinicRow.id, mapClinic(clinicRow as AppClinicRow));
+    }
+  }
+
+  const staff = mapStaffMember(staffRow, clinicLookup);
+
+  return { user, staff, ownerId: owner.id };
 }
 
 export async function revokeStaffInvitation(
@@ -3664,5 +4003,8 @@ export function toPublicUser(user: {
     trialStartedAt: user.trialStartedAt ?? null,
     trialEndsAt: user.trialEndsAt ?? null,
     subscriptionLockedAt: user.subscriptionLockedAt ?? null,
+    ownerProfessionalId: user.ownerProfessionalId ?? null,
+    teamRole: user.teamRole ?? null,
+    teamClinicId: user.teamClinicId ?? null,
   };
 }

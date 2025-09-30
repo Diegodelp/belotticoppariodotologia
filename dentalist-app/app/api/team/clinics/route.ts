@@ -15,9 +15,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
   }
 
+  if (user.ownerProfessionalId) {
+    return NextResponse.json(
+      { error: 'Solo el administrador de la cuenta puede crear consultorios.' },
+      { status: 403 },
+    );
+  }
+
+  const ownerProfessionalId = user.id;
+
   const [subscription, existingCount] = await Promise.all([
-    getProfessionalSubscriptionSummary(user.id),
-    getClinicCountForProfessional(user.id),
+    getProfessionalSubscriptionSummary(ownerProfessionalId),
+    getClinicCountForProfessional(ownerProfessionalId),
   ]);
 
   if (subscription.plan !== 'pro') {
@@ -51,7 +60,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const clinic = await createClinic(user.id, { name, address: address ?? null });
+    const clinic = await createClinic(ownerProfessionalId, { name, address: address ?? null });
 
     return NextResponse.json({ clinic, success: true });
   } catch (error) {

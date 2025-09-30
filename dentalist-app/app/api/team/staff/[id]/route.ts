@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getUserFromRequest } from '@/lib/auth/get-user';
-import { removeStaffMember } from '@/lib/db/supabase-repository';
+import { getStaffMemberById, removeStaffMember } from '@/lib/db/supabase-repository';
 
 export async function DELETE(
   request: NextRequest,
@@ -16,7 +16,40 @@ export async function DELETE(
   const { id } = await params;
 
   try {
-    await removeStaffMember(user.id, id);
+    const ownerProfessionalId = user.ownerProfessionalId ?? user.id;
+    const isOwner = !user.ownerProfessionalId;
+    const actingRole = user.teamRole ?? (isOwner ? 'admin' : null);
+    const actingClinicId = user.teamClinicId ?? null;
+
+    const staffMember = await getStaffMemberById(ownerProfessionalId, id);
+    if (!staffMember) {
+      return NextResponse.json({ error: 'Integrante no encontrado' }, { status: 404 });
+    }
+
+    if (!isOwner) {
+      if (actingRole !== 'professional') {
+        return NextResponse.json(
+          { error: 'No tenés permisos para modificar el equipo.' },
+          { status: 403 },
+        );
+      }
+
+      if (staffMember.role !== 'assistant') {
+        return NextResponse.json(
+          { error: 'Solo podés gestionar asistentes.' },
+          { status: 403 },
+        );
+      }
+
+      if (actingClinicId && staffMember.clinicId && staffMember.clinicId !== actingClinicId) {
+        return NextResponse.json(
+          { error: 'No podés gestionar integrantes de otros consultorios.' },
+          { status: 403 },
+        );
+      }
+    }
+
+    await removeStaffMember(ownerProfessionalId, id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error al quitar integrante del equipo', error);

@@ -12,9 +12,11 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const ownerProfessionalId = user.ownerProfessionalId ?? user.id;
+
     const [data, subscription] = await Promise.all([
-      listClinicsAndTeam(user.id),
-      getProfessionalSubscriptionSummary(user.id),
+      listClinicsAndTeam(ownerProfessionalId),
+      getProfessionalSubscriptionSummary(ownerProfessionalId),
     ]);
     const plan = subscription.plan ?? 'starter';
     const seatLimit = getStaffSeatLimit(plan);

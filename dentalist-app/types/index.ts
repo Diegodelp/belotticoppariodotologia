@@ -22,6 +22,9 @@ export interface User {
   trialStartedAt?: string | null;
   trialEndsAt?: string | null;
   subscriptionLockedAt?: string | null;
+  ownerProfessionalId?: string | null;
+  teamRole?: StaffRole | null;
+  teamClinicId?: string | null;
 }
 
 export interface Patient {
@@ -61,6 +64,7 @@ export interface Clinic {
 export interface StaffMember {
   id: string;
   ownerProfessionalId: string;
+  memberProfessionalId?: string | null;
   clinicId?: string | null;
   clinicName?: string | null;
   fullName: string;

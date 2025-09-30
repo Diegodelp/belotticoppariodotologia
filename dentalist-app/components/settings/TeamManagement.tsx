@@ -3,10 +3,11 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { TeamOverview, TeamService } from '@/services/team.service';
-import { StaffRole, SubscriptionPlan } from '@/types';
+import { StaffInvitation, StaffMember, StaffRole, SubscriptionPlan, User } from '@/types';
 
 interface TeamManagementProps {
   plan: SubscriptionPlan | null | undefined;
+  currentUser?: User | null;
 }
 
 const STARTER_ROLE: StaffRole = 'assistant';
@@ -18,7 +19,7 @@ function getDefaultRole(plan: SubscriptionPlan | null | undefined): StaffRole {
   return STARTER_ROLE;
 }
 
-export function TeamManagement({ plan }: TeamManagementProps) {
+export function TeamManagement({ plan, currentUser }: TeamManagementProps) {
   const [overview, setOverview] = useState<TeamOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +38,9 @@ export function TeamManagement({ plan }: TeamManagementProps) {
   const resolvedPlan: SubscriptionPlan | null | undefined =
     (overview?.stats.plan as SubscriptionPlan | null | undefined) ?? plan ?? null;
   const isPro = resolvedPlan === 'pro';
+  const isOwner = !currentUser?.ownerProfessionalId;
+  const actingRole = currentUser?.teamRole ?? (isOwner ? 'admin' : null);
+  const actingClinicId = currentUser?.teamClinicId ?? null;
   const clinicsEnabled = overview?.stats.clinicsEnabled ?? false;
   const clinicLimit = overview?.stats.clinicLimit ?? null;
   const clinicsActive = overview?.stats.clinicsActive ?? 0;
@@ -50,8 +54,12 @@ export function TeamManagement({ plan }: TeamManagementProps) {
   const clinicLimitReached = clinicLimit !== null && clinicsRemaining !== null && clinicsRemaining <= 0;
 
   useEffect(() => {
-    setInviteForm((prev) => ({ ...prev, role: getDefaultRole(resolvedPlan) }));
-  }, [resolvedPlan]);
+    setInviteForm((prev) => ({
+      ...prev,
+      role: isOwner ? getDefaultRole(resolvedPlan) : 'assistant',
+      clinicId: !isOwner && actingClinicId ? actingClinicId : prev.clinicId,
+    }));
+  }, [resolvedPlan, isOwner, actingClinicId]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -80,8 +88,39 @@ export function TeamManagement({ plan }: TeamManagementProps) {
     return Math.max(overview.stats.assistantLimit - used, 0);
   }, [overview]);
 
+  const assignedClinic = useMemo(() => {
+    if (!overview || !actingClinicId) {
+      return null;
+    }
+    return overview.clinics.find((clinic) => clinic.id === actingClinicId) ?? null;
+  }, [overview, actingClinicId]);
+
+  const canSendInvites = isOwner || actingRole === 'professional';
+  const targetRoleForInvite = isOwner ? inviteForm.role : 'assistant';
+  const noAssistantSlots = assistantsRemaining !== null && assistantsRemaining <= 0;
+
+  const canManageMember = (member: StaffMember): boolean => {
+    if (isOwner) return true;
+    if (actingRole !== 'professional') return false;
+    if (member.role !== 'assistant') return false;
+    if (actingClinicId && member.clinicId && member.clinicId !== actingClinicId) return false;
+    return true;
+  };
+
+  const canManageInvitation = (invitation: StaffInvitation): boolean => {
+    if (isOwner) return true;
+    if (actingRole !== 'professional') return false;
+    if (invitation.role !== 'assistant') return false;
+    if (actingClinicId && invitation.clinicId && invitation.clinicId !== actingClinicId) return false;
+    return true;
+  };
+
   const handleCreateClinic = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!isOwner) {
+      setInviteMessage({ type: 'error', text: 'Solo el administrador puede crear consultorios.' });
+      return;
+    }
     if (!clinicForm.name.trim()) {
       setInviteMessage({ type: 'error', text: 'Ingresá un nombre para el consultorio.' });
       return;
@@ -106,6 +145,10 @@ export function TeamManagement({ plan }: TeamManagementProps) {
   };
 
   const handleDeleteClinic = async (clinicId: string) => {
+    if (!isOwner) {
+      setInviteMessage({ type: 'error', text: 'Solo el administrador puede eliminar consultorios.' });
+      return;
+    }
     try {
       await TeamService.deleteClinic(clinicId);
       await refresh();
@@ -120,6 +163,10 @@ export function TeamManagement({ plan }: TeamManagementProps) {
 
   const handleInvite = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!isOwner && actingRole !== 'professional') {
+      setInviteMessage({ type: 'error', text: 'No tenés permisos para invitar integrantes.' });
+      return;
+    }
     if (!inviteForm.email.trim()) {
       setInviteMessage({ type: 'error', text: 'Ingresá el email de la persona a invitar.' });
       return;
@@ -127,13 +174,19 @@ export function TeamManagement({ plan }: TeamManagementProps) {
 
     try {
       setInviteLoading(true);
+      const targetRole = isOwner ? inviteForm.role : 'assistant';
+      const targetClinicId = isOwner ? inviteForm.clinicId : actingClinicId ?? '';
       const { inviteUrl, emailSent, emailError } = await TeamService.inviteMember({
         email: inviteForm.email.trim(),
-        role: inviteForm.role,
-        clinicId: inviteForm.clinicId || undefined,
+        role: targetRole as StaffRole,
+        clinicId: targetClinicId || undefined,
       });
       await refresh();
-      setInviteForm({ email: '', role: getDefaultRole(plan), clinicId: '' });
+      setInviteForm({
+        email: '',
+        role: isOwner ? getDefaultRole(plan) : 'assistant',
+        clinicId: isOwner ? '' : actingClinicId ?? '',
+      });
       if (emailSent) {
         setInviteMessage({
           type: 'success',
@@ -257,7 +310,7 @@ export function TeamManagement({ plan }: TeamManagementProps) {
             ) : null}
           </div>
 
-          {isPro && (
+          {isOwner && isPro && (
             <form
               onSubmit={handleCreateClinic}
               className="space-y-4 rounded-2xl border border-white/5 bg-white/5 p-6"
@@ -319,13 +372,15 @@ export function TeamManagement({ plan }: TeamManagementProps) {
                           {overview.staff.filter((member) => member.clinicId === clinic.id).length} integrantes asignados
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteClinic(clinic.id)}
-                        className="rounded-lg border border-white/10 px-3 py-1 text-xs font-medium text-slate-200 transition hover:border-red-400 hover:text-red-300"
-                      >
-                        Eliminar
-                      </button>
+                      {isOwner && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteClinic(clinic.id)}
+                          className="rounded-lg border border-white/10 px-3 py-1 text-xs font-medium text-slate-200 transition hover:border-red-400 hover:text-red-300"
+                        >
+                          Eliminar
+                        </button>
+                      )}
                     </div>
                   </li>
                 ))}
@@ -337,6 +392,11 @@ export function TeamManagement({ plan }: TeamManagementProps) {
             onSubmit={handleInvite}
             className="space-y-4 rounded-2xl border border-white/5 bg-white/5 p-6"
           >
+            {!canSendInvites && (
+              <p className="rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-2 text-xs text-amber-100">
+                Solo el administrador o los profesionales asignados pueden invitar asistentes.
+              </p>
+            )}
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2">
                 <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
@@ -349,6 +409,7 @@ export function TeamManagement({ plan }: TeamManagementProps) {
                   onChange={(event) => setInviteForm((prev) => ({ ...prev, email: event.target.value }))}
                   className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2 text-sm text-white focus:border-cyan-400 focus:outline-none"
                   placeholder="ejemplo@dentalist.com"
+                  disabled={!canSendInvites}
                 />
               </div>
               <div>
@@ -356,23 +417,23 @@ export function TeamManagement({ plan }: TeamManagementProps) {
                   Rol
                 </label>
                 <select
-                  value={inviteForm.role}
+                  value={targetRoleForInvite}
                   onChange={(event) =>
                     setInviteForm((prev) => ({ ...prev, role: event.target.value as StaffRole }))
                   }
                   className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2 text-sm text-white focus:border-cyan-400 focus:outline-none"
-                  disabled={!isPro}
+                  disabled={!isOwner}
                 >
                   <option value="assistant">Asistente</option>
-                  <option value="professional" disabled={!isPro}>
-                    Profesional
-                  </option>
-                  <option value="admin" disabled={!isPro}>
-                    Administrador
-                  </option>
+                  {isOwner && isPro && (
+                    <>
+                      <option value="professional">Profesional</option>
+                      <option value="admin">Administrador</option>
+                    </>
+                  )}
                 </select>
               </div>
-              {isPro && overview.clinics.length > 0 ? (
+              {isOwner && isPro && overview.clinics.length > 0 ? (
                 <div>
                   <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
                     Consultorio (opcional)
@@ -392,13 +453,26 @@ export function TeamManagement({ plan }: TeamManagementProps) {
                     ))}
                   </select>
                 </div>
+              ) : !isOwner && assignedClinic ? (
+                <div>
+                  <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+                    Consultorio asignado
+                  </label>
+                  <p className="mt-1 rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2 text-sm text-slate-200">
+                    {assignedClinic.name}
+                  </p>
+                </div>
               ) : null}
             </div>
             <div className="flex justify-end">
               <button
                 type="submit"
                 className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={inviteLoading || (!isPro && assistantsRemaining === 0)}
+                disabled={
+                  inviteLoading ||
+                  !canSendInvites ||
+                  (targetRoleForInvite === 'assistant' && noAssistantSlots)
+                }
               >
                 {inviteLoading ? 'Enviando…' : 'Enviar invitación'}
               </button>
@@ -430,7 +504,8 @@ export function TeamManagement({ plan }: TeamManagementProps) {
                       <button
                         type="button"
                         onClick={() => handleRemoveMember(member.id)}
-                        className="rounded-lg border border-white/10 px-3 py-1 text-xs font-medium text-slate-200 transition hover:border-red-400 hover:text-red-300"
+                        className="rounded-lg border border-white/10 px-3 py-1 text-xs font-medium text-slate-200 transition hover:border-red-400 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={!canManageMember(member)}
                       >
                         Quitar
                       </button>
@@ -466,7 +541,8 @@ export function TeamManagement({ plan }: TeamManagementProps) {
                       <button
                         type="button"
                         onClick={() => handleRevokeInvitation(invitation.id)}
-                        className="rounded-lg border border-white/10 px-3 py-1 text-xs font-medium text-slate-200 transition hover:border-red-400 hover:text-red-300"
+                        className="rounded-lg border border-white/10 px-3 py-1 text-xs font-medium text-slate-200 transition hover:border-red-400 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={!canManageInvitation(invitation)}
                       >
                         Cancelar
                       </button>

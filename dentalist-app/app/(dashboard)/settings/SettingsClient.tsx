@@ -1163,7 +1163,7 @@ export function SettingsClient() {
         </div>
       </section>
 
-      <TeamManagement plan={user?.subscriptionPlan ?? 'starter'} />
+      <TeamManagement plan={user?.subscriptionPlan ?? 'starter'} currentUser={user} />
 
       <form
         onSubmit={handleNotificationsSubmit}

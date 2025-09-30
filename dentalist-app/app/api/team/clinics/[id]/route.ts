@@ -13,6 +13,13 @@ export async function PUT(
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
   }
 
+  if (user.ownerProfessionalId) {
+    return NextResponse.json(
+      { error: 'Solo el administrador de la cuenta puede editar consultorios.' },
+      { status: 403 },
+    );
+  }
+
   if (user.subscriptionPlan !== 'pro') {
     return NextResponse.json(
       {
@@ -23,6 +30,7 @@ export async function PUT(
   }
 
   const { id } = await params;
+  const ownerProfessionalId = user.id;
 
   try {
     const body = await request.json();
@@ -43,7 +51,7 @@ export async function PUT(
       );
     }
 
-    const clinic = await updateClinic(user.id, id, updates);
+    const clinic = await updateClinic(ownerProfessionalId, id, updates);
 
     return NextResponse.json({ clinic, success: true });
   } catch (error) {
@@ -65,6 +73,13 @@ export async function DELETE(
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
   }
 
+  if (user.ownerProfessionalId) {
+    return NextResponse.json(
+      { error: 'Solo el administrador de la cuenta puede eliminar consultorios.' },
+      { status: 403 },
+    );
+  }
+
   if (user.subscriptionPlan !== 'pro') {
     return NextResponse.json(
       {
@@ -75,9 +90,10 @@ export async function DELETE(
   }
 
   const { id } = await params;
+  const ownerProfessionalId = user.id;
 
   try {
-    await removeClinic(user.id, id);
+    await removeClinic(ownerProfessionalId, id);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error al eliminar consultorio', error);
