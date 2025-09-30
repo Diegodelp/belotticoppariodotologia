@@ -1873,7 +1873,7 @@ export async function updateProfessionalProfile(
 
 export async function listPatients(
   professionalId: string,
-  filters: { search?: string; status?: string } = {},
+  filters: { search?: string; status?: string; clinicId?: string } = {},
 ): Promise<Patient[]> {
   const client = getClient();
   let query = client
@@ -1884,6 +1884,10 @@ export async function listPatients(
 
   if (filters.status === 'active' || filters.status === 'inactive') {
     query = query.eq('status', filters.status);
+  }
+
+  if (filters.clinicId) {
+    query = query.eq('clinic_id', filters.clinicId);
   }
 
   const { data, error } = await query;

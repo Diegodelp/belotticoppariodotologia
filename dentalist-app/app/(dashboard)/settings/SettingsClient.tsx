@@ -953,113 +953,120 @@ export function SettingsClient() {
               disabled={disablePersonalFields}
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-sm text-slate-300" htmlFor="profile-clinic-name">
-              Nombre de la clínica
-            </label>
-            <input
-              id="profile-clinic-name"
-              value={form.clinicName}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, clinicName: event.target.value }))
-              }
-              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
-              autoComplete="organization"
-              disabled={disableClinicFields}
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm text-slate-300" htmlFor="profile-phone">
-              Teléfono de contacto
-            </label>
-            <input
-              id="profile-phone"
-              value={form.phone}
-              onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
-              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
-              autoComplete="tel"
-              disabled={disableClinicFields}
-            />
-          </div>
-          <div className="space-y-2 md:col-span-2">
-            <label className="text-sm text-slate-300" htmlFor="profile-address">
-              Dirección
-            </label>
-            <input
-              id="profile-address"
-              value={form.address}
-              onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
-              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
-              autoComplete="street-address"
-              disabled={disableClinicFields}
-            />
-          </div>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="space-y-2">
-            <label className="text-sm text-slate-300" htmlFor="profile-country">
-              País
-            </label>
-            <input
-              id="profile-country"
-              value={form.country}
-              onChange={(event) => setForm((prev) => ({ ...prev, country: event.target.value }))}
-              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
-              autoComplete="country-name"
-              disabled={disableClinicFields}
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm text-slate-300" htmlFor="profile-province">
-              Provincia / Estado
-            </label>
-            <input
-              id="profile-province"
-              value={form.province}
-              onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))}
-              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
-              autoComplete="address-level1"
-              disabled={disableClinicFields}
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm text-slate-300" htmlFor="profile-locality">
-              Localidad
-            </label>
-            <input
-              id="profile-locality"
-              value={form.locality}
-              onChange={(event) => setForm((prev) => ({ ...prev, locality: event.target.value }))}
-              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
-              autoComplete="address-level2"
-              disabled={disableClinicFields}
-            />
-          </div>
-          <div className="space-y-2 md:col-span-3">
-            <label className="text-sm text-slate-300" htmlFor="profile-timezone">
-              Zona horaria
-            </label>
-            <select
-              id="profile-timezone"
-              value={form.timeZone}
-              onChange={(event) =>
-                setForm((prev) => ({ ...prev, timeZone: normalizeTimeZone(event.target.value) }))
-              }
-              className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
-              disabled={disableClinicFields}
-            >
-              {timeZones.map((zone) => (
-                <option key={zone} value={zone}>
-                  {zone}
-                </option>
-              ))}
-            </select>
-            <p className="text-xs text-slate-400">
-              Dentalist usa esta zona horaria para agendar turnos y sincronizarlos con Google Calendar.
-            </p>
-          </div>
-        </div>
+        {!isInvitedProfessional && (
+          <>
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-sm text-slate-300" htmlFor="profile-clinic-name">
+                  Nombre de la clínica
+                </label>
+                <input
+                  id="profile-clinic-name"
+                  value={form.clinicName}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, clinicName: event.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+                  autoComplete="organization"
+                  disabled={disableClinicFields}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm text-slate-300" htmlFor="profile-phone">
+                  Teléfono de contacto
+                </label>
+                <input
+                  id="profile-phone"
+                  value={form.phone}
+                  onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+                  autoComplete="tel"
+                  disabled={disableClinicFields}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm text-slate-300" htmlFor="profile-address">
+                  Dirección
+                </label>
+                <input
+                  id="profile-address"
+                  value={form.address}
+                  onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+                  autoComplete="street-address"
+                  disabled={disableClinicFields}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-3">
+              <div className="space-y-2">
+                <label className="text-sm text-slate-300" htmlFor="profile-country">
+                  País
+                </label>
+                <input
+                  id="profile-country"
+                  value={form.country}
+                  onChange={(event) => setForm((prev) => ({ ...prev, country: event.target.value }))}
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+                  autoComplete="country-name"
+                  disabled={disableClinicFields}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm text-slate-300" htmlFor="profile-province">
+                  Provincia / Estado
+                </label>
+                <input
+                  id="profile-province"
+                  value={form.province}
+                  onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))}
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+                  autoComplete="address-level1"
+                  disabled={disableClinicFields}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm text-slate-300" htmlFor="profile-locality">
+                  Localidad
+                </label>
+                <input
+                  id="profile-locality"
+                  value={form.locality}
+                  onChange={(event) => setForm((prev) => ({ ...prev, locality: event.target.value }))}
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+                  autoComplete="address-level2"
+                  disabled={disableClinicFields}
+                />
+              </div>
+              <div className="space-y-2 md:col-span-3">
+                <label className="text-sm text-slate-300" htmlFor="profile-timezone">
+                  Zona horaria
+                </label>
+                <select
+                  id="profile-timezone"
+                  value={form.timeZone}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, timeZone: normalizeTimeZone(event.target.value) }))
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+                  disabled={disableClinicFields}
+                >
+                  {timeZones.map((zone) => (
+                    <option key={zone} value={zone}>
+                      {zone}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-400">
+                  Dentalist usa esta zona horaria para agendar turnos y sincronizarlos con Google Calendar.
+                </p>
+              </div>
+            </div>
+          </>
+        )}
 
         <div className="grid gap-4 md:grid-cols-2">
           <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 text-sm text-slate-200">

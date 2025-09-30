@@ -14,9 +14,16 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const search = searchParams.get('search') ?? undefined;
   const status = searchParams.get('status') ?? undefined;
+  const ownerProfessionalId = user.ownerProfessionalId ?? user.id;
+  const restrictClinicId =
+    user.ownerProfessionalId && user.teamRole !== 'admin' ? user.teamClinicId ?? undefined : undefined;
 
   try {
-    const patients = await listPatients(user.id, { search, status });
+    const patients = await listPatients(ownerProfessionalId, {
+      search,
+      status,
+      clinicId: restrictClinicId,
+    });
     return NextResponse.json(patients);
   } catch (error) {
     console.error('Error al obtener pacientes de Supabase', error);
@@ -33,6 +40,7 @@ export async function POST(request: NextRequest) {
     if (!user) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
+    const ownerProfessionalId = user.ownerProfessionalId ?? user.id;
 
     if (userHasLockedSubscription(user)) {
       return NextResponse.json(
@@ -89,7 +97,7 @@ export async function POST(request: NextRequest) {
     if (user.type === 'profesional') {
       const patientLimit = getPatientLimit(user.subscriptionPlan ?? 'starter');
       if (typeof patientLimit === 'number') {
-        const existing = await listPatients(user.id);
+        const existing = await listPatients(ownerProfessionalId);
         if (existing.length >= patientLimit) {
           return NextResponse.json(
             {
@@ -102,7 +110,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const created = await createPatient(user.id, patient);
+    const created = await createPatient(ownerProfessionalId, patient);
 
     return NextResponse.json({ success: true, patient: created });
   } catch (error) {

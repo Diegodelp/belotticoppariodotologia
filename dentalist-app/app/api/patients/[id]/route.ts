@@ -31,8 +31,14 @@ export async function GET(
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
   }
   const params = await context.params;
-  const patient = await getPatientById(user.id, params.id);
+  const ownerProfessionalId = user.ownerProfessionalId ?? user.id;
+  const teamRestricted = Boolean(user.ownerProfessionalId && user.teamRole !== 'admin');
+  const patient = await getPatientById(ownerProfessionalId, params.id);
   if (!patient) {
+    return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
+  }
+
+  if (teamRestricted && user.teamClinicId && patient.clinicId !== user.teamClinicId) {
     return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
   }
 
@@ -47,15 +53,15 @@ export async function GET(
     budgets,
     media,
   ] = await Promise.all([
-    getProfessionalProfile(user.id),
-    listAppointments(user.id, patient.id),
-    listTreatments(user.id, patient.id),
-    listPayments(user.id, patient.id),
-    getClinicalHistory(user.id, patient.id),
-    listPrescriptions(user.id, patient.id),
-    getPatientOrthodonticPlan(user.id, patient.id),
-    listBudgets(user.id, patient.id),
-    listPatientMedia(user.id, patient.id),
+    getProfessionalProfile(ownerProfessionalId),
+    listAppointments(ownerProfessionalId, patient.id),
+    listTreatments(ownerProfessionalId, patient.id),
+    listPayments(ownerProfessionalId, patient.id),
+    getClinicalHistory(ownerProfessionalId, patient.id),
+    listPrescriptions(ownerProfessionalId, patient.id),
+    getPatientOrthodonticPlan(ownerProfessionalId, patient.id),
+    listBudgets(ownerProfessionalId, patient.id),
+    listPatientMedia(ownerProfessionalId, patient.id),
   ]);
 
   const timeZone = normalizeTimeZone(profile?.timeZone ?? user.timeZone ?? DEFAULT_TIME_ZONE);
@@ -84,6 +90,14 @@ export async function PUT(
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
     }
     const params = await context.params;
+    const ownerProfessionalId = user.ownerProfessionalId ?? user.id;
+    const teamRestricted = Boolean(user.ownerProfessionalId && user.teamRole !== 'admin');
+    if (teamRestricted && user.teamClinicId) {
+      const currentPatient = await getPatientById(ownerProfessionalId, params.id);
+      if (!currentPatient || currentPatient.clinicId !== user.teamClinicId) {
+        return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
+      }
+    }
     const body = await request.json();
     const clinicIdProvided = Object.prototype.hasOwnProperty.call(body ?? {}, 'clinicId');
     let clinicIdUpdate: string | null | undefined = undefined;
@@ -125,7 +139,7 @@ export async function PUT(
     if (clinicNameUpdate !== undefined) {
       updates.clinicName = clinicNameUpdate;
     }
-    const updated = await updatePatient(user.id, params.id, updates);
+    const updated = await updatePatient(ownerProfessionalId, params.id, updates);
 
     if (!updated) {
       return NextResponse.json(
@@ -153,7 +167,15 @@ export async function DELETE(
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
   }
   const params = await context.params;
-  const deleted = await removePatient(user.id, params.id);
+  const ownerProfessionalId = user.ownerProfessionalId ?? user.id;
+  const teamRestricted = Boolean(user.ownerProfessionalId && user.teamRole !== 'admin');
+  if (teamRestricted && user.teamClinicId) {
+    const currentPatient = await getPatientById(ownerProfessionalId, params.id);
+    if (!currentPatient || currentPatient.clinicId !== user.teamClinicId) {
+      return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
+    }
+  }
+  const deleted = await removePatient(ownerProfessionalId, params.id);
   if (!deleted) {
     return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
   }
