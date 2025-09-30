@@ -24,9 +24,11 @@ type SidebarProps = {
 export default function Sidebar({ onNavigate, className = '', isMobile = false }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
+  const isOwnerProfessional = user?.type === 'profesional' && !user.ownerProfessionalId;
+  const isTeamProfessional = user?.type === 'profesional' && !!user.ownerProfessionalId;
   const items = [...BASE_MENU_ITEMS];
 
-  if (user?.type === 'profesional') {
+  if (isOwnerProfessional) {
     const billingItem = { href: '/billing', label: 'Suscripción', icon: '💼' };
     const marketingIndex = items.findIndex((item) => item.href === '/marketing');
     if (marketingIndex >= 0) {
@@ -71,7 +73,7 @@ export default function Sidebar({ onNavigate, className = '', isMobile = false }
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
             <p className="font-medium text-white">{user.name}</p>
             <p className="text-slate-300">{user.type === 'profesional' ? 'Profesional' : 'Paciente'}</p>
-            {user.type === 'profesional' && (
+            {isOwnerProfessional && (
               <div className="mt-3 space-y-2 text-xs">
                 <span className="inline-flex items-center gap-2 rounded-full bg-cyan-500/15 px-3 py-1 font-semibold text-cyan-200">
                   {getPlanName(user.subscriptionPlan ?? 'starter')} plan
@@ -85,6 +87,16 @@ export default function Sidebar({ onNavigate, className = '', isMobile = false }
                 >
                   Gestionar suscripción
                 </Link>
+              </div>
+            )}
+            {isTeamProfessional && (
+              <div className="mt-3 space-y-2 text-xs text-slate-300">
+                <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 font-semibold text-slate-100/80">
+                  {user.teamRole === 'assistant' ? 'Asistente' : 'Profesional invitado'}
+                </span>
+                <p>
+                  Tu suscripción depende del administrador del consultorio. Podés gestionar tu acceso desde el panel de equipo.
+                </p>
               </div>
             )}
           </div>

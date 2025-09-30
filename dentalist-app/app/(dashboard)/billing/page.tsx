@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useMemo } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import {
   describeTrialStatus,
@@ -40,11 +41,66 @@ const COMPARISON_POINTS = [
 ];
 
 export default function BillingPage() {
-  const { user } = useAuth();
-  const currentPlan = getPlanDefinition(user?.subscriptionPlan ?? 'starter');
+  const { user, loading } = useAuth();
+  const currentPlan = useMemo(
+    () => getPlanDefinition(user?.subscriptionPlan ?? 'starter'),
+    [user?.subscriptionPlan],
+  );
   const proPlan = PLAN_DEFINITIONS.pro;
   const { daysLeft } = getTrialCountdown(user?.trialEndsAt ?? null);
   const trialStatus = describeTrialStatus(user?.trialEndsAt ?? null, user?.subscriptionStatus ?? null);
+
+  if (loading) {
+    return (
+      <section className="flex min-h-[320px] items-center justify-center">
+        <p className="text-sm text-slate-300">Cargando información de tu suscripción…</p>
+      </section>
+    );
+  }
+
+  if (!user || user.type !== 'profesional') {
+    return (
+      <section className="space-y-6">
+        <header className="space-y-2">
+          <h1 className="text-3xl font-semibold text-white">Acceso restringido</h1>
+          <p className="text-sm text-slate-300">
+            Solo los profesionales titulares pueden administrar una suscripción en Dentalist.
+          </p>
+        </header>
+        <Link
+          href="/dashboard"
+          className="inline-flex w-fit items-center justify-center rounded-full border border-white/20 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/40 hover:text-cyan-100"
+        >
+          Volver al panel principal
+        </Link>
+      </section>
+    );
+  }
+
+  if (user.ownerProfessionalId) {
+    return (
+      <section className="space-y-6">
+        <header className="space-y-2">
+          <h1 className="text-3xl font-semibold text-white">Suscripción administrada por tu equipo</h1>
+          <p className="text-sm text-slate-300">
+            Esta cuenta pertenece al equipo de otro profesional. Solo el titular puede contratar o modificar planes.
+          </p>
+        </header>
+        <div className="rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-200">
+          <p>
+            Si necesitás cambios en la suscripción comunicate con el administrador del consultorio o desvinculate desde la
+            configuración del equipo.
+          </p>
+          <Link
+            href="/settings"
+            className="mt-4 inline-flex w-fit items-center justify-center rounded-full border border-white/15 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:border-white/30 hover:text-cyan-100"
+          >
+            Ir a configuración
+          </Link>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="space-y-10">
