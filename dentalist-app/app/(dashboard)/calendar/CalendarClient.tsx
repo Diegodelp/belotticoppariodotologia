@@ -244,7 +244,7 @@ export function CalendarClient() {
                 patients={filteredPatients}
                 defaultPatientId={defaultPatientId}
                 clinics={clinics}
-                allowClinicSelection={!isAdminProfessional}
+                allowClinicSelection={isAdminProfessional}
                 onCreated={(appointment, patient) => {
                   clearMessages();
                   setAppointments((previous) => [
@@ -289,7 +289,7 @@ export function CalendarClient() {
                 patients={filteredPatients}
                 appointment={editingAppointment}
                 clinics={clinics}
-                allowClinicSelection={!isAdminProfessional}
+                allowClinicSelection={isAdminProfessional}
                 mode="edit"
                 onUpdated={(appointment, patient) => {
                   clearMessages();
