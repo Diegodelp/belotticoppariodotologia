@@ -1604,6 +1604,9 @@ export async function findUserByDni(
     trialStartedAt: null,
     trialEndsAt: null,
     subscriptionLockedAt: null,
+    ownerProfessionalId: row.professional_id ?? null,
+    teamRole: null,
+    teamClinicId: null,
   };
 }
 
