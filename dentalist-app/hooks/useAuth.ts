@@ -1,17 +1,32 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { AuthService } from '@/services/auth.service';
+import { User } from '@/types';
 
 export function useAuth() {
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const token = AuthService.getToken();
-    if (token) {
-      // TODO: Validate token and get user
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const current = await AuthService.getCurrentUser();
+      setUser(current);
+    } catch (error) {
+      console.error('Error al obtener la sesión', error);
+      setUser(null);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, []);
 
-  return { user, loading };
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return {
+    user,
+    loading,
+    isAuthenticated: !!user,
+    refresh,
+  };
 }
