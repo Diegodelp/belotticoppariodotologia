@@ -804,6 +804,22 @@ type AppStaffInvitationRow = {
   token_hash: string;
 };
 
+type AppStaffInvitationWithOwnerRow = AppStaffInvitationRow & {
+  owner:
+    | {
+        id: string;
+        full_name: string | null;
+        email: string | null;
+        clinic_name: string | null;
+        subscription_plan: string | null;
+        subscription_status: string | null;
+        trial_started_at: string | null;
+        trial_ends_at: string | null;
+        subscription_locked_at: string | null;
+      }
+    | null;
+};
+
 function mapProfessionalProfile(row: AppProfessionalRow): ProfessionalProfile {
   return {
     id: row.id,
@@ -2331,19 +2347,19 @@ export async function getStaffInvitationDetails(
         ')',
     )
     .eq('token_hash', tokenHash)
-    .maybeSingle();
+    .maybeSingle<AppStaffInvitationWithOwnerRow>();
 
   if (error) throw error;
   if (!data) {
     return null;
   }
 
-  const status = (data as { status?: string }).status ?? 'pending';
+  const status = (data.status as StaffInvitationStatus | undefined) ?? 'pending';
   if (status !== 'pending') {
     return null;
   }
 
-  const expiresAtRaw = (data as { expires_at?: string | null }).expires_at ?? null;
+  const expiresAtRaw = data.expires_at ?? null;
   if (expiresAtRaw) {
     const expiresAtDate = new Date(expiresAtRaw);
     if (!Number.isNaN(expiresAtDate.getTime()) && expiresAtDate.getTime() < Date.now()) {
@@ -2356,11 +2372,11 @@ export async function getStaffInvitationDetails(
   }
 
   const clinicLookup = new Map<string, Clinic>();
-  if ((data as { clinic_id?: string | null }).clinic_id) {
+  if (data.clinic_id) {
     const { data: clinicRow } = await client
       .from(CLINICS_TABLE)
       .select('*')
-      .eq('id', (data as { clinic_id?: string | null }).clinic_id)
+      .eq('id', data.clinic_id)
       .maybeSingle<AppClinicRow>();
 
     if (clinicRow) {
@@ -2368,18 +2384,18 @@ export async function getStaffInvitationDetails(
     }
   }
 
-  const invitation = mapStaffInvitation(data as AppStaffInvitationRow, clinicLookup);
-  const ownerRow = (data as { owner?: Record<string, unknown> | null }).owner;
+  const invitation = mapStaffInvitation(data, clinicLookup);
+  const ownerRow = data.owner;
 
   if (!ownerRow) {
     throw new Error('La invitación no tiene un propietario válido.');
   }
 
-  const rawPlan = (ownerRow as { subscription_plan?: string | null }).subscription_plan ?? null;
+  const rawPlan = ownerRow.subscription_plan ?? null;
   const plan = normalizeSubscriptionPlan(rawPlan);
-  const trialStartedAt = (ownerRow as { trial_started_at?: string | null }).trial_started_at ?? null;
-  const trialEndsAt = (ownerRow as { trial_ends_at?: string | null }).trial_ends_at ?? null;
-  const rawStatus = (ownerRow as { subscription_status?: string | null }).subscription_status ?? null;
+  const trialStartedAt = ownerRow.trial_started_at ?? null;
+  const trialEndsAt = ownerRow.trial_ends_at ?? null;
+  const rawStatus = ownerRow.subscription_status ?? null;
   const subscriptionStatus = ensureSubscriptionStatus(
     (rawStatus as SubscriptionStatus | null) ?? null,
     trialEndsAt,
@@ -2388,16 +2404,15 @@ export async function getStaffInvitationDetails(
   return {
     invitation,
     owner: {
-      id: (ownerRow as { id: string }).id,
-      name: (ownerRow as { full_name?: string | null }).full_name ?? null,
-      email: (ownerRow as { email?: string | null }).email ?? null,
-      clinicName: (ownerRow as { clinic_name?: string | null }).clinic_name ?? null,
+      id: ownerRow.id,
+      name: ownerRow.full_name ?? null,
+      email: ownerRow.email ?? null,
+      clinicName: ownerRow.clinic_name ?? null,
       subscriptionPlan: plan,
       subscriptionStatus,
       trialStartedAt,
       trialEndsAt,
-      subscriptionLockedAt:
-        (ownerRow as { subscription_locked_at?: string | null }).subscription_locked_at ?? null,
+      subscriptionLockedAt: ownerRow.subscription_locked_at ?? null,
     },
   };
 }
