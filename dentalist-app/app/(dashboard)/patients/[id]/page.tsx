@@ -10,6 +10,8 @@ import { PatientService } from '@/services/patient.service';
 import { PaymentService } from '@/services/payment.service';
 import { TreatmentService } from '@/services/treatment.service';
 import { OrthodonticPlanService } from '@/services/orthodontic-plan.service';
+import { TeamService } from '@/services/team.service';
+import { useAuth } from '@/hooks/useAuth';
 import {
   Appointment,
   Budget,
@@ -19,6 +21,7 @@ import {
   ClinicalMedia,
   CreateBudgetInput,
   CreatePrescriptionInput,
+  Clinic,
   OrthodonticPlan,
   Patient,
   PatientOrthodonticPlan,
@@ -99,6 +102,7 @@ interface PatientDetailResponse {
 export default function PatientDetailPage({ params: routeParams }: { params: { id: string } }) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { user } = useAuth();
   const [data, setData] = useState<PatientDetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -158,6 +162,10 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
   const [budgetPaymentSaving, setBudgetPaymentSaving] = useState(false);
   const [budgetPaymentError, setBudgetPaymentError] = useState<string | null>(null);
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
+  const [clinicOptions, setClinicOptions] = useState<Clinic[]>([]);
+  const [clinicOptionsLoading, setClinicOptionsLoading] = useState(false);
+  const [clinicOptionsError, setClinicOptionsError] = useState<string | null>(null);
+  const [clinicSelection, setClinicSelection] = useState('');
   const [assignedPlan, setAssignedPlan] = useState<PatientOrthodonticPlan | null>(null);
   const [activeSection, setActiveSection] = useState<PatientSectionKey>('overview');
   const currencyFormatter = new Intl.NumberFormat('es-AR', {
@@ -242,6 +250,12 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     fetchData();
   }, [routeParams.id]);
 
+  useEffect(() => {
+    if (data?.patient) {
+      setClinicSelection(data.patient.clinicId ?? '');
+    }
+  }, [data?.patient]);
+
   const editParam = searchParams.get('edit');
 
   useEffect(() => {
@@ -309,6 +323,52 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     }
   }, [isEditing, data?.patient]);
 
+  const isProfessional = user?.type === 'profesional';
+  const isTeamMember = Boolean(user?.ownerProfessionalId);
+  const isTeamAdmin = isTeamMember && user?.teamRole === 'admin';
+  const isOwnerProfessional = isProfessional && !isTeamMember;
+  const isProPlan = user?.subscriptionPlan === 'pro';
+  const canEditClinicAssignment = Boolean(isProfessional && isProPlan && (isOwnerProfessional || isTeamAdmin));
+
+  useEffect(() => {
+    if (!canEditClinicAssignment || !isEditing) {
+      setClinicOptions([]);
+      setClinicOptionsError(null);
+      setClinicOptionsLoading(false);
+      return;
+    }
+
+    let active = true;
+
+    const loadClinics = async () => {
+      try {
+        setClinicOptionsLoading(true);
+        setClinicOptionsError(null);
+        const overview = await TeamService.getOverview();
+        if (!active) {
+          return;
+        }
+        setClinicOptions(overview.clinics);
+      } catch (fetchError) {
+        console.error('Error al cargar consultorios', fetchError);
+        if (active) {
+          setClinicOptions([]);
+          setClinicOptionsError('No pudimos cargar los consultorios disponibles.');
+        }
+      } finally {
+        if (active) {
+          setClinicOptionsLoading(false);
+        }
+      }
+    };
+
+    loadClinics();
+
+    return () => {
+      active = false;
+    };
+  }, [canEditClinicAssignment, isEditing]);
+
   const handleFieldChange = (
     event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
   ) => {
@@ -338,6 +398,10 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
 
   const handlePlanSelectionChange = (event: ChangeEvent<HTMLSelectElement>) => {
     setSelectedPlanId(event.target.value);
+  };
+
+  const handleClinicSelectionChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    setClinicSelection(event.target.value);
   };
 
   const handleAssignPlan = async () => {
@@ -789,6 +853,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     router.replace(`/patients/${routeParams.id}${query ? `?${query}` : ''}`, {
       scroll: false,
     });
+    setClinicSelection(data?.patient?.clinicId ?? '');
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
@@ -801,7 +866,13 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     setPageAlert(null);
 
     try {
-      const response = await PatientService.update(data.patient.id, formState);
+      const payload: Partial<Patient> = { ...formState };
+
+      if (canEditClinicAssignment) {
+        payload.clinicId = clinicSelection.trim().length > 0 ? clinicSelection.trim() : null;
+      }
+
+      const response = await PatientService.update(data.patient.id, payload);
       if (!response?.success) {
         throw new Error(response?.error ?? 'No pudimos actualizar el paciente.');
       }
@@ -1398,6 +1469,30 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
               <option value="inactive">Inactivo</option>
             </select>
           </label>
+          {canEditClinicAssignment && (
+            <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+              Consultorio asignado
+              <select
+                name="clinicId"
+                value={clinicSelection}
+                onChange={handleClinicSelectionChange}
+                disabled={clinicOptionsLoading}
+                className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+              >
+                <option value="">Sin consultorio asignado</option>
+                {clinicOptions.map((clinic) => (
+                  <option key={clinic.id} value={clinic.id}>
+                    {clinic.name}
+                  </option>
+                ))}
+              </select>
+              {clinicOptionsLoading ? (
+                <p className="mt-1 text-[11px] text-slate-400">Cargando consultorios...</p>
+              ) : clinicOptionsError ? (
+                <p className="mt-1 text-[11px] text-rose-300">{clinicOptionsError}</p>
+              ) : null}
+            </label>
+          )}
         </div>
 
         {formError && (
@@ -1445,6 +1540,10 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
               {patient.healthInsurance || 'Particular'}
               {patient.affiliateNumber ? ` • Afiliado ${patient.affiliateNumber}` : ''}
             </dd>
+          </div>
+          <div>
+            <dt className="text-slate-400">Consultorio asignado</dt>
+            <dd>{patient.clinicName || 'Sin consultorio asignado'}</dd>
           </div>
           <div>
             <dt className="text-slate-400">Estado</dt>
