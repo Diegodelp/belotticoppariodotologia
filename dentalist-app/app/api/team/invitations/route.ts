@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getUserFromRequest } from '@/lib/auth/get-user';
 import { createStaffInvitation, listClinicsAndTeam } from '@/lib/db/supabase-repository';
+import { sendStaffInvitationEmail } from '@/lib/email/mailer';
 import { getStaffSeatLimit } from '@/lib/utils/subscription';
 import { StaffRole } from '@/types';
 
@@ -80,6 +81,19 @@ export async function POST(request: NextRequest) {
 
     const origin = request.headers.get('origin') ?? new URL(request.url).origin;
     const inviteUrl = `${origin}/register?invite=${token}`;
+
+    try {
+      await sendStaffInvitationEmail({
+        to: email,
+        invitedByName: user.name,
+        role,
+        clinicName: invitation.clinicName ?? user.clinicName ?? null,
+        inviteUrl,
+        expiresAt,
+      });
+    } catch (emailError) {
+      console.error('Error al enviar la invitación por correo', emailError);
+    }
 
     return NextResponse.json({ invitation: { ...invitation, token }, inviteUrl, success: true });
   } catch (error) {

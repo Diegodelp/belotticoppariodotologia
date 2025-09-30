@@ -1,5 +1,7 @@
 import nodemailer, { Transporter } from 'nodemailer';
 
+import { StaffRole } from '@/types';
+
 interface MailerConfig {
   host: string;
   port: number;
@@ -254,6 +256,139 @@ export async function sendBudgetIssuedEmail({
         Guardá el archivo si necesitás consultarlo más adelante.
       </p>
       <p>Saludos.</p>
+    </div>
+  `;
+
+  await sendMail({
+    to,
+    subject,
+    text: textBody,
+    html: htmlBody,
+  });
+}
+
+const STAFF_ROLE_LABELS: Record<StaffRole, { es: string; en: string }> = {
+  admin: { es: 'administrador', en: 'administrator' },
+  professional: { es: 'profesional', en: 'professional' },
+  assistant: { es: 'asistente', en: 'assistant' },
+};
+
+function formatInvitationExpiration({
+  expiresAt,
+  locale,
+}: {
+  expiresAt?: Date | null;
+  locale: 'es' | 'en';
+}): string {
+  if (!expiresAt) {
+    return locale === 'en'
+      ? 'This invitation link will expire soon.'
+      : 'Este enlace de invitación vencerá pronto.';
+  }
+
+  try {
+    const formatter = new Intl.DateTimeFormat(locale === 'en' ? 'en-US' : 'es-AR', {
+      dateStyle: 'long',
+      timeStyle: 'short',
+    });
+
+    return locale === 'en'
+      ? `This invitation expires on ${formatter.format(expiresAt)}.`
+      : `Esta invitación vence el ${formatter.format(expiresAt)}.`;
+  } catch {
+    return locale === 'en'
+      ? 'This invitation link will expire soon.'
+      : 'Este enlace de invitación vencerá pronto.';
+  }
+}
+
+export async function sendStaffInvitationEmail({
+  to,
+  invitedByName,
+  role,
+  inviteUrl,
+  clinicName,
+  expiresAt,
+  locale = 'es',
+}: {
+  to: string;
+  invitedByName?: string | null;
+  role: StaffRole;
+  inviteUrl: string;
+  clinicName?: string | null;
+  expiresAt?: Date | null;
+  locale?: 'es' | 'en';
+}) {
+  const labels = STAFF_ROLE_LABELS[role];
+  const roleLabel = labels ? labels[locale] : role;
+  const inviter = invitedByName?.trim().length
+    ? invitedByName.trim()
+    : locale === 'en'
+      ? 'A colleague'
+      : 'Un colega';
+  const clinicLine = clinicName?.trim().length
+    ? locale === 'en'
+      ? ` for the clinic ${clinicName.trim()}`
+      : ` para el consultorio ${clinicName.trim()}`
+    : '';
+  const expirationLine = formatInvitationExpiration({ expiresAt: expiresAt ?? null, locale });
+
+  const subject =
+    locale === 'en'
+      ? 'You have been invited to Dentalist'
+      : 'Te invitaron a un equipo en Dentalist';
+
+  const textBody =
+    locale === 'en'
+      ? [
+          `${inviter} invited you to join as ${roleLabel}${clinicLine}.`,
+          '',
+          'Accept the invitation using the following link:',
+          inviteUrl,
+          '',
+          expirationLine,
+          '',
+          'If you were not expecting this email, you can ignore it.',
+        ].join('\n')
+      : [
+          `${inviter} te invitó a sumarte como ${roleLabel}${clinicLine}.`,
+          '',
+          'Aceptá la invitación usando el siguiente enlace:',
+          inviteUrl,
+          '',
+          expirationLine,
+          '',
+          'Si no esperabas este correo, podés ignorarlo.',
+        ].join('\n');
+
+  const htmlBody =
+    locale === 'en'
+      ? `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+      <h2 style="color: #0ea5e9;">Dentalist invitation</h2>
+      <p>${inviter} invited you to join as <strong>${roleLabel}</strong>${clinicLine}.</p>
+      <p>
+        Click the following button to accept the invitation:
+      </p>
+      <p style="margin: 16px 0;">
+        <a href="${inviteUrl}" style="background: #0ea5e9; color: #fff; padding: 12px 24px; border-radius: 9999px; text-decoration: none; display: inline-block;">Accept invitation</a>
+      </p>
+      <p style="font-size: 14px; color: #64748b;">${expirationLine}</p>
+      <p style="font-size: 12px; color: #94a3b8;">If you were not expecting this email, you can safely ignore it.</p>
+    </div>
+  `
+      : `
+    <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+      <h2 style="color: #0ea5e9;">Invitación a Dentalist</h2>
+      <p>${inviter} te invitó a sumarte como <strong>${roleLabel}</strong>${clinicLine}.</p>
+      <p>
+        Hacé clic en el siguiente botón para aceptar la invitación:
+      </p>
+      <p style="margin: 16px 0;">
+        <a href="${inviteUrl}" style="background: #0ea5e9; color: #fff; padding: 12px 24px; border-radius: 9999px; text-decoration: none; display: inline-block;">Aceptar invitación</a>
+      </p>
+      <p style="font-size: 14px; color: #64748b;">${expirationLine}</p>
+      <p style="font-size: 12px; color: #94a3b8;">Si no esperabas este correo, podés ignorarlo con seguridad.</p>
     </div>
   `;
 
