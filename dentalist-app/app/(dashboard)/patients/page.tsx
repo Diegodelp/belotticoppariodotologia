@@ -24,6 +24,8 @@ export default function PatientsPage() {
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [clinicsLoading, setClinicsLoading] = useState(false);
   const [clinicFilter, setClinicFilter] = useState<'all' | '__none__' | string>('all');
+  const isAdminProfessional =
+    user?.type === 'profesional' && (!user.ownerProfessionalId || user.teamRole === 'admin');
 
   useEffect(() => {
     const fetchPatients = async () => {
@@ -47,7 +49,12 @@ export default function PatientsPage() {
   useEffect(() => {
     let active = true;
 
-    if (!user || user.type !== 'profesional' || user.subscriptionPlan !== 'pro') {
+    if (
+      !user ||
+      user.type !== 'profesional' ||
+      user.subscriptionPlan !== 'pro' ||
+      !isAdminProfessional
+    ) {
       setClinics([]);
       setClinicFilter('all');
       return () => {
@@ -78,7 +85,7 @@ export default function PatientsPage() {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [user, isAdminProfessional]);
 
   useEffect(() => {
     if (clinicFilter === 'all' || clinicFilter === '__none__') {
@@ -89,8 +96,12 @@ export default function PatientsPage() {
     }
   }, [clinicFilter, clinics]);
 
-  const enableClinicFilter = user?.subscriptionPlan === 'pro' && clinics.length > 1;
-  const hasUnassignedPatients = useMemo(() => patients.some((patient) => !patient.clinicId), [patients]);
+  const enableClinicFilter =
+    isAdminProfessional && user?.subscriptionPlan === 'pro' && clinics.length > 1;
+  const hasUnassignedPatients = useMemo(
+    () => isAdminProfessional && patients.some((patient) => !patient.clinicId),
+    [isAdminProfessional, patients],
+  );
 
   const filteredPatients = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
