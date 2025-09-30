@@ -27,6 +27,7 @@ export function SettingsClient() {
     return Array.from(new Set(enriched)).sort((a, b) => a.localeCompare(b));
   }, [detectedTimeZone]);
   const [profile, setProfile] = useState<ProfessionalProfile | null>(null);
+  const [ownerProfile, setOwnerProfile] = useState<ProfessionalProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(true);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -139,18 +140,25 @@ export function SettingsClient() {
           return;
         }
         setProfile(response.profile);
+        setOwnerProfile(response.ownerProfile ?? null);
+        const clinicSource =
+          isInvitedProfessional && response.ownerProfile
+            ? response.ownerProfile
+            : response.profile;
         setForm({
           fullName: response.profile.fullName ?? '',
-          clinicName: response.profile.clinicName ?? '',
+          clinicName: clinicSource.clinicName ?? '',
           licenseNumber: response.profile.licenseNumber ?? '',
-          phone: response.profile.phone ?? '',
-          address: response.profile.address ?? '',
-          country: response.profile.country ?? '',
-          province: response.profile.province ?? '',
-          locality: response.profile.locality ?? '',
-          timeZone: normalizeTimeZone(response.profile.timeZone ?? detectedTimeZone),
+          phone: clinicSource.phone ?? '',
+          address: clinicSource.address ?? '',
+          country: clinicSource.country ?? '',
+          province: clinicSource.province ?? '',
+          locality: clinicSource.locality ?? '',
+          timeZone: normalizeTimeZone(
+            response.profile.timeZone ?? clinicSource.timeZone ?? detectedTimeZone,
+          ),
         });
-        setLogoUrl(response.profile.logoUrl ?? null);
+        setLogoUrl(clinicSource.logoUrl ?? null);
         setProfileError(null);
       } catch (error) {
         console.error('Error al cargar el perfil profesional', error);
@@ -169,7 +177,7 @@ export function SettingsClient() {
     return () => {
       active = false;
     };
-  }, [detectedTimeZone]);
+  }, [detectedTimeZone, isInvitedProfessional]);
 
   useEffect(() => {
     let active = true;
@@ -608,18 +616,23 @@ export function SettingsClient() {
 
       const response = await ProfessionalService.updateProfile(payload);
       setProfile(response.profile);
+      setOwnerProfile(response.ownerProfile ?? null);
+      const clinicSource =
+        isInvitedProfessional && response.ownerProfile ? response.ownerProfile : response.profile;
       setForm({
         fullName: response.profile.fullName ?? '',
-        clinicName: response.profile.clinicName ?? '',
+        clinicName: clinicSource.clinicName ?? '',
         licenseNumber: response.profile.licenseNumber ?? '',
-        phone: response.profile.phone ?? '',
-        address: response.profile.address ?? '',
-        country: response.profile.country ?? '',
-        province: response.profile.province ?? '',
-        locality: response.profile.locality ?? '',
-        timeZone: normalizeTimeZone(response.profile.timeZone ?? detectedTimeZone),
+        phone: clinicSource.phone ?? '',
+        address: clinicSource.address ?? '',
+        country: clinicSource.country ?? '',
+        province: clinicSource.province ?? '',
+        locality: clinicSource.locality ?? '',
+        timeZone: normalizeTimeZone(
+          response.profile.timeZone ?? clinicSource.timeZone ?? detectedTimeZone,
+        ),
       });
-      setLogoUrl(response.profile.logoUrl ?? null);
+      setLogoUrl(clinicSource.logoUrl ?? null);
       setProfileError(null);
       setBanner({ type: 'success', text: 'Datos del profesional actualizados.' });
       await refreshUser();
@@ -644,6 +657,7 @@ export function SettingsClient() {
   const disableClinicFields = profileLoading || savingProfile || isInvitedProfessional;
   const disableBrandingActions = profileLoading || logoUploading || isInvitedProfessional;
   const disableLogoRemoval = logoDeleting || isInvitedProfessional;
+  const clinicProfile = isInvitedProfessional ? ownerProfile ?? profile : profile;
 
   return (
     <section className="space-y-8">
@@ -879,32 +893,32 @@ export function SettingsClient() {
           />
         </div>
 
-        {isInvitedProfessional && profile && (
+        {isInvitedProfessional && clinicProfile && (
           <div className="grid gap-4 rounded-2xl border border-white/10 bg-slate-900/60 p-4 text-sm text-slate-200">
             <div>
               <p className="text-xs uppercase tracking-wide text-slate-400">Consultorio asignado</p>
-              <p className="text-lg font-semibold text-white">{profile.clinicName ?? 'Sin nombre'}</p>
+              <p className="text-lg font-semibold text-white">{clinicProfile.clinicName ?? 'Sin nombre'}</p>
             </div>
             <dl className="grid gap-2 sm:grid-cols-2">
               <div>
                 <dt className="text-xs text-slate-400">Dirección</dt>
-                <dd className="text-sm text-slate-200">{profile.address || 'Sin dirección'}</dd>
+                <dd className="text-sm text-slate-200">{clinicProfile.address || 'Sin dirección'}</dd>
               </div>
               <div>
                 <dt className="text-xs text-slate-400">Teléfono</dt>
-                <dd className="text-sm text-slate-200">{profile.phone || 'Sin teléfono'}</dd>
+                <dd className="text-sm text-slate-200">{clinicProfile.phone || 'Sin teléfono'}</dd>
               </div>
               <div>
                 <dt className="text-xs text-slate-400">Localidad</dt>
-                <dd className="text-sm text-slate-200">{profile.locality || 'Sin localidad'}</dd>
+                <dd className="text-sm text-slate-200">{clinicProfile.locality || 'Sin localidad'}</dd>
               </div>
               <div>
                 <dt className="text-xs text-slate-400">Provincia / Estado</dt>
-                <dd className="text-sm text-slate-200">{profile.province || 'Sin provincia'}</dd>
+                <dd className="text-sm text-slate-200">{clinicProfile.province || 'Sin provincia'}</dd>
               </div>
               <div>
                 <dt className="text-xs text-slate-400">País</dt>
-                <dd className="text-sm text-slate-200">{profile.country || 'Sin país'}</dd>
+                <dd className="text-sm text-slate-200">{clinicProfile.country || 'Sin país'}</dd>
               </div>
             </dl>
           </div>

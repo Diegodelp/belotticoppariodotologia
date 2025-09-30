@@ -20,8 +20,13 @@ async function parseJson(response: Response) {
   }
 }
 
+type ProfessionalProfileResponse = {
+  profile: ProfessionalProfile;
+  ownerProfile?: ProfessionalProfile | null;
+};
+
 export class ProfessionalService {
-  static async getProfile(): Promise<{ profile: ProfessionalProfile }> {
+  static async getProfile(): Promise<{ profile: ProfessionalProfile; ownerProfile: ProfessionalProfile | null }> {
     const response = await fetch('/api/professionals/me', {
       headers: {
         ...authHeaders(),
@@ -34,8 +39,8 @@ export class ProfessionalService {
       throw new Error((data as { error?: string } | null)?.error ?? 'No pudimos cargar los datos del profesional.');
     }
 
-    const data = (await response.json()) as { profile: ProfessionalProfile };
-    return data;
+    const data = (await response.json()) as ProfessionalProfileResponse;
+    return { profile: data.profile, ownerProfile: data.ownerProfile ?? null };
   }
 
   static async updateProfile(
@@ -45,7 +50,7 @@ export class ProfessionalService {
         'fullName' | 'clinicName' | 'licenseNumber' | 'phone' | 'address' | 'country' | 'province' | 'locality' | 'timeZone'
       >
     >,
-  ): Promise<{ profile: ProfessionalProfile }> {
+  ): Promise<{ profile: ProfessionalProfile; ownerProfile: ProfessionalProfile | null }> {
     const response = await fetch('/api/professionals/me', {
       method: 'PUT',
       headers: {
@@ -61,8 +66,8 @@ export class ProfessionalService {
       throw new Error((data as { error?: string } | null)?.error ?? 'No pudimos actualizar los datos.');
     }
 
-    const data = (await response.json()) as { profile: ProfessionalProfile };
-    return data;
+    const data = (await response.json()) as ProfessionalProfileResponse & { success?: boolean };
+    return { profile: data.profile, ownerProfile: data.ownerProfile ?? null };
   }
 
   static async getLogo(): Promise<{ hasLogo: boolean; logoUrl: string | null }> {

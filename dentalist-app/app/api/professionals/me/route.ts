@@ -103,13 +103,18 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const profile = await getProfessionalProfile(user.id);
+    const [profile, ownerProfile] = await Promise.all([
+      getProfessionalProfile(user.id),
+      user.ownerProfessionalId
+        ? getProfessionalProfile(user.ownerProfessionalId)
+        : Promise.resolve(null),
+    ]);
 
     if (!profile) {
       return NextResponse.json({ error: 'Profesional no encontrado' }, { status: 404 });
     }
 
-    return NextResponse.json({ profile });
+    return NextResponse.json({ profile, ownerProfile });
   } catch (error) {
     console.error('Error al obtener el perfil profesional', error);
     return NextResponse.json({ error: 'No pudimos cargar los datos' }, { status: 500 });
@@ -142,8 +147,12 @@ export async function PUT(request: NextRequest) {
     }
 
     const profile = await updateProfessionalProfile(user.id, updates);
+    const ownerProfile =
+      isInvitedProfessional && user.ownerProfessionalId
+        ? await getProfessionalProfile(user.ownerProfessionalId)
+        : null;
 
-    return NextResponse.json({ success: true, profile });
+    return NextResponse.json({ success: true, profile, ownerProfile });
   } catch (error) {
     if (error instanceof Error) {
       if (
