@@ -73,6 +73,7 @@ export function SettingsClient() {
   const [logoDeleting, setLogoDeleting] = useState(false);
   const [logoError, setLogoError] = useState<string | null>(null);
   const logoInputRef = useRef<HTMLInputElement | null>(null);
+  const isInvitedProfessional = Boolean(user?.ownerProfessionalId && user.teamRole === 'professional');
   const currencyFormatter = new Intl.NumberFormat('es-AR', {
     style: 'currency',
     currency: 'ARS',
@@ -469,6 +470,12 @@ export function SettingsClient() {
       return;
     }
 
+    if (isInvitedProfessional) {
+      setLogoError('Tu administrador gestiona el logo de la clínica.');
+      resetLogoInput();
+      return;
+    }
+
     setLogoUploading(true);
     setLogoError(null);
     setBanner(null);
@@ -498,6 +505,11 @@ export function SettingsClient() {
   };
 
   const handleLogoDelete = async () => {
+    if (isInvitedProfessional) {
+      setBanner({ type: 'error', text: 'Tu administrador gestiona el logo de la clínica.' });
+      return;
+    }
+
     if (!window.confirm('¿Seguro que querés eliminar el logo de la clínica?')) {
       return;
     }
@@ -563,6 +575,11 @@ export function SettingsClient() {
   };
 
   const openLogoPicker = () => {
+    if (isInvitedProfessional) {
+      setBanner({ type: 'error', text: 'Tu administrador gestiona el logo de la clínica.' });
+      return;
+    }
+
     setLogoError(null);
     logoInputRef.current?.click();
   };
@@ -572,17 +589,24 @@ export function SettingsClient() {
     setBanner(null);
     try {
       setSavingProfile(true);
-      const response = await ProfessionalService.updateProfile({
-        fullName: form.fullName,
-        clinicName: form.clinicName,
-        licenseNumber: form.licenseNumber,
-        phone: form.phone,
-        address: form.address,
-        country: form.country,
-        province: form.province,
-        locality: form.locality,
-        timeZone: form.timeZone,
-      });
+      const payload = isInvitedProfessional
+        ? {
+            fullName: form.fullName,
+            licenseNumber: form.licenseNumber,
+          }
+        : {
+            fullName: form.fullName,
+            clinicName: form.clinicName,
+            licenseNumber: form.licenseNumber,
+            phone: form.phone,
+            address: form.address,
+            country: form.country,
+            province: form.province,
+            locality: form.locality,
+            timeZone: form.timeZone,
+          };
+
+      const response = await ProfessionalService.updateProfile(payload);
       setProfile(response.profile);
       setForm({
         fullName: response.profile.fullName ?? '',
@@ -615,6 +639,11 @@ export function SettingsClient() {
     event.preventDefault();
     setBanner({ type: 'success', text: 'Preferencias de comunicación guardadas.' });
   };
+
+  const disablePersonalFields = profileLoading || savingProfile;
+  const disableClinicFields = profileLoading || savingProfile || isInvitedProfessional;
+  const disableBrandingActions = profileLoading || logoUploading || isInvitedProfessional;
+  const disableLogoRemoval = logoDeleting || isInvitedProfessional;
 
   return (
     <section className="space-y-8">
@@ -793,6 +822,12 @@ export function SettingsClient() {
           </p>
         )}
 
+        {isInvitedProfessional && !profileLoading && (
+          <p className="rounded-2xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            Los datos del consultorio los administra tu administrador. Solo podés actualizar tu nombre y matrícula profesional.
+          </p>
+        )}
+
         <div className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-slate-900/50 p-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-4">
             <div className="flex h-20 w-20 items-center justify-center overflow-hidden rounded-2xl border border-white/10 bg-slate-950/60">
@@ -817,7 +852,7 @@ export function SettingsClient() {
             <button
               type="button"
               onClick={openLogoPicker}
-              disabled={logoUploading || profileLoading}
+              disabled={disableBrandingActions}
               className="rounded-full bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {logoUploading ? 'Subiendo logo…' : logoUrl ? 'Actualizar logo' : 'Subir logo'}
@@ -826,7 +861,7 @@ export function SettingsClient() {
               <button
                 type="button"
                 onClick={handleLogoDelete}
-                disabled={logoDeleting}
+                disabled={disableLogoRemoval}
                 className="rounded-full border border-rose-500/40 px-4 py-2 text-xs font-semibold text-rose-200 transition hover:border-rose-400 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {logoDeleting ? 'Eliminando…' : 'Eliminar logo'}
@@ -853,7 +888,7 @@ export function SettingsClient() {
               onChange={(event) => setForm((prev) => ({ ...prev, fullName: event.target.value }))}
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
               autoComplete="name"
-              disabled={profileLoading || savingProfile}
+              disabled={disablePersonalFields}
             />
           </div>
           <div className="space-y-2">
@@ -868,7 +903,7 @@ export function SettingsClient() {
               }
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
               autoComplete="off"
-              disabled={profileLoading || savingProfile}
+              disabled={disablePersonalFields}
             />
           </div>
           <div className="space-y-2">
@@ -883,7 +918,7 @@ export function SettingsClient() {
               }
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
               autoComplete="organization"
-              disabled={profileLoading || savingProfile}
+              disabled={disableClinicFields}
             />
           </div>
           <div className="space-y-2">
@@ -896,7 +931,7 @@ export function SettingsClient() {
               onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
               autoComplete="tel"
-              disabled={profileLoading || savingProfile}
+              disabled={disableClinicFields}
             />
           </div>
           <div className="space-y-2 md:col-span-2">
@@ -909,7 +944,7 @@ export function SettingsClient() {
               onChange={(event) => setForm((prev) => ({ ...prev, address: event.target.value }))}
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
               autoComplete="street-address"
-              disabled={profileLoading || savingProfile}
+              disabled={disableClinicFields}
             />
           </div>
         </div>
@@ -925,7 +960,7 @@ export function SettingsClient() {
               onChange={(event) => setForm((prev) => ({ ...prev, country: event.target.value }))}
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
               autoComplete="country-name"
-              disabled={profileLoading || savingProfile}
+              disabled={disableClinicFields}
             />
           </div>
           <div className="space-y-2">
@@ -938,7 +973,7 @@ export function SettingsClient() {
               onChange={(event) => setForm((prev) => ({ ...prev, province: event.target.value }))}
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
               autoComplete="address-level1"
-              disabled={profileLoading || savingProfile}
+              disabled={disableClinicFields}
             />
           </div>
           <div className="space-y-2">
@@ -951,7 +986,7 @@ export function SettingsClient() {
               onChange={(event) => setForm((prev) => ({ ...prev, locality: event.target.value }))}
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
               autoComplete="address-level2"
-              disabled={profileLoading || savingProfile}
+              disabled={disableClinicFields}
             />
           </div>
           <div className="space-y-2 md:col-span-3">
@@ -965,7 +1000,7 @@ export function SettingsClient() {
                 setForm((prev) => ({ ...prev, timeZone: normalizeTimeZone(event.target.value) }))
               }
               className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
-              disabled={profileLoading || savingProfile}
+              disabled={disableClinicFields}
             >
               {timeZones.map((zone) => (
                 <option key={zone} value={zone}>

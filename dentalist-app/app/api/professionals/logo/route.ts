@@ -39,6 +39,14 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Solo disponible para profesionales' }, { status: 403 });
   }
 
+  const isInvitedProfessional = Boolean(user.ownerProfessionalId && user.teamRole === 'professional');
+  if (isInvitedProfessional) {
+    return NextResponse.json(
+      { error: 'Tu administrador es quien gestiona el logo del consultorio.' },
+      { status: 403 },
+    );
+  }
+
   try {
     const formData = await request.formData();
     const file = formData.get('file');
@@ -69,6 +77,14 @@ export async function DELETE(request: NextRequest) {
   }
   if (user.type !== 'profesional') {
     return NextResponse.json({ error: 'Solo disponible para profesionales' }, { status: 403 });
+  }
+
+  const isInvitedProfessional = Boolean(user.ownerProfessionalId && user.teamRole === 'professional');
+  if (isInvitedProfessional) {
+    return NextResponse.json(
+      { error: 'Tu administrador es quien gestiona el logo del consultorio.' },
+      { status: 403 },
+    );
   }
 
   try {

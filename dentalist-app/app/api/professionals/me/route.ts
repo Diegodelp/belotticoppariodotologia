@@ -130,6 +130,17 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json();
     const updates = parseUpdates(body);
+    const isInvitedProfessional = Boolean(user.ownerProfessionalId && user.teamRole === 'professional');
+
+    if (isInvitedProfessional) {
+      const allowed: Array<keyof ProfessionalProfileUpdate> = ['fullName', 'licenseNumber'];
+      (Object.keys(updates) as Array<keyof ProfessionalProfileUpdate>).forEach((key) => {
+        if (!allowed.includes(key)) {
+          delete updates[key];
+        }
+      });
+    }
+
     const profile = await updateProfessionalProfile(user.id, updates);
 
     return NextResponse.json({ success: true, profile });
