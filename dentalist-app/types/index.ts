@@ -1,3 +1,7 @@
+export type SubscriptionPlan = 'starter' | 'pro';
+
+export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'trial_expired' | 'cancelled';
+
 export interface User {
   id: string;
   dni: string;
@@ -13,6 +17,11 @@ export interface User {
   locality?: string | null;
   timeZone?: string | null;
   logoUrl?: string | null;
+  subscriptionPlan?: SubscriptionPlan | null;
+  subscriptionStatus?: SubscriptionStatus | null;
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
+  subscriptionLockedAt?: string | null;
 }
 
 export interface Patient {

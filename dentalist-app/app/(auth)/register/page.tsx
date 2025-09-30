@@ -3,6 +3,7 @@ import { FormEvent, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { AuthService } from '@/services/auth.service';
+import { TRIAL_DURATION_DAYS } from '@/lib/utils/subscription';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -43,7 +44,7 @@ export default function RegisterPage() {
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-semibold text-white">Crear cuenta en APP - Dentalist</h1>
             <p className="mt-2 text-sm text-slate-300">
-              Configurá tu usuario profesional y comenzá a gestionar tu consultorio.
+              Configurá tu usuario profesional y accedé a {TRIAL_DURATION_DAYS} días de prueba gratuita con todas las funciones.
             </p>
           </div>
 

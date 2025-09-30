@@ -31,6 +31,8 @@ import {
   User,
   ProfessionalProfile,
   ProfessionalKeyStatus,
+  SubscriptionPlan,
+  SubscriptionStatus,
 } from '@/types';
 import {
   DEFAULT_TIME_ZONE,
@@ -38,6 +40,7 @@ import {
   normalizeTimeZone,
   parseDateTimeInTimeZone,
 } from '@/lib/utils/timezone';
+import { ensureSubscriptionStatus, TRIAL_DURATION_DAYS } from '@/lib/utils/subscription';
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -538,6 +541,11 @@ type AppProfessionalRow = {
   logo_path: string | null;
   updated_at: string | null;
   time_zone?: string | null;
+  subscription_plan?: string | null;
+  subscription_status?: string | null;
+  trial_started_at?: string | null;
+  trial_ends_at?: string | null;
+  subscription_locked_at?: string | null;
 };
 
 type AppPatientRow = {
@@ -1225,6 +1233,10 @@ export async function registerProfessional(data: {
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
+  const trialStartedAt = new Date().toISOString();
+  const trialEndsAt = new Date(
+    Date.now() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
 
   const { data: authData, error: authError } = await client.auth.admin.createUser({
     email,
@@ -1256,6 +1268,10 @@ export async function registerProfessional(data: {
       email,
       password_hash: passwordHash,
       time_zone: DEFAULT_TIME_ZONE,
+      subscription_plan: 'starter',
+      subscription_status: 'trialing',
+      trial_started_at: trialStartedAt,
+      trial_ends_at: trialEndsAt,
     })
     .select('*')
     .single();
@@ -1279,6 +1295,15 @@ export async function registerProfessional(data: {
     province: (inserted as { province?: string | null }).province ?? null,
     locality: (inserted as { locality?: string | null }).locality ?? null,
     timeZone: (inserted as { time_zone?: string | null }).time_zone ?? DEFAULT_TIME_ZONE,
+    subscriptionPlan: 'starter',
+    subscriptionStatus: ensureSubscriptionStatus(
+      (inserted as { subscription_status?: SubscriptionStatus | null }).subscription_status ?? 'trialing',
+      (inserted as { trial_ends_at?: string | null }).trial_ends_at ?? trialEndsAt,
+    ),
+    trialStartedAt: (inserted as { trial_started_at?: string | null }).trial_started_at ?? trialStartedAt,
+    trialEndsAt: (inserted as { trial_ends_at?: string | null }).trial_ends_at ?? trialEndsAt,
+    subscriptionLockedAt:
+      (inserted as { subscription_locked_at?: string | null }).subscription_locked_at ?? null,
   };
 }
 
@@ -1297,6 +1322,11 @@ export type StoredAuthUser = {
   province: string | null;
   locality: string | null;
   timeZone: string | null;
+  subscriptionPlan: SubscriptionPlan | null;
+  subscriptionStatus: SubscriptionStatus | null;
+  trialStartedAt: string | null;
+  trialEndsAt: string | null;
+  subscriptionLockedAt: string | null;
 };
 
 export async function findUserByDni(
@@ -1312,6 +1342,15 @@ export async function findUserByDni(
       .maybeSingle();
     if (error) throw error;
     if (!data) return null;
+    const rawPlan = (data as { subscription_plan?: string | null }).subscription_plan ?? null;
+    const plan: SubscriptionPlan = rawPlan === 'pro' ? 'pro' : 'starter';
+    const trialStartedAt = (data as { trial_started_at?: string | null }).trial_started_at ?? null;
+    const trialEndsAt = (data as { trial_ends_at?: string | null }).trial_ends_at ?? null;
+    const rawStatus = (data as { subscription_status?: string | null }).subscription_status ?? null;
+    const subscriptionStatus = ensureSubscriptionStatus(
+      (rawStatus as SubscriptionStatus | null) ?? null,
+      trialEndsAt ?? null,
+    );
     return {
       id: data.id,
       dni: data.dni,
@@ -1327,6 +1366,12 @@ export async function findUserByDni(
       province: data.province ?? null,
       locality: data.locality ?? null,
       timeZone: normalizeTimeZone((data as { time_zone?: string | null }).time_zone ?? null),
+      subscriptionPlan: plan,
+      subscriptionStatus,
+      trialStartedAt,
+      trialEndsAt,
+      subscriptionLockedAt:
+        (data as { subscription_locked_at?: string | null }).subscription_locked_at ?? null,
     };
   }
 
@@ -1374,6 +1419,11 @@ export async function findUserByDni(
     province: null,
     locality: null,
     timeZone: null,
+    subscriptionPlan: null,
+    subscriptionStatus: null,
+    trialStartedAt: null,
+    trialEndsAt: null,
+    subscriptionLockedAt: null,
   };
 }
 
@@ -3246,7 +3296,18 @@ export function toPublicUser(user: {
   locality?: string | null;
   timeZone?: string | null;
   logoUrl?: string | null;
+  subscriptionPlan?: SubscriptionPlan | null;
+  subscriptionStatus?: SubscriptionStatus | null;
+  trialStartedAt?: string | null;
+  trialEndsAt?: string | null;
+  subscriptionLockedAt?: string | null;
 }): User {
+  const resolvedPlan =
+    user.subscriptionPlan ?? (user.type === 'profesional' ? 'starter' : null);
+  const resolvedStatus = ensureSubscriptionStatus(
+    user.subscriptionStatus ?? null,
+    user.trialEndsAt ?? null,
+  );
   return {
     id: user.id,
     dni: user.dni,
@@ -3262,5 +3323,10 @@ export function toPublicUser(user: {
     locality: user.locality ?? null,
     timeZone: user.timeZone ?? null,
     logoUrl: user.logoUrl ?? null,
+    subscriptionPlan: resolvedPlan,
+    subscriptionStatus: resolvedStatus,
+    trialStartedAt: user.trialStartedAt ?? null,
+    trialEndsAt: user.trialEndsAt ?? null,
+    subscriptionLockedAt: user.subscriptionLockedAt ?? null,
   };
 }

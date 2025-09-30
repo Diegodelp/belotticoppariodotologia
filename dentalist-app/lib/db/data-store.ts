@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs';
 import { Appointment, Patient, Payment, Treatment, User } from '@/types';
+import { ensureSubscriptionStatus, TRIAL_DURATION_DAYS } from '@/lib/utils/subscription';
 
 interface StoredUser extends User {
   passwordHash: string;
@@ -176,6 +177,8 @@ function createInitialPayments(patients: Patient[]): Payment[] {
 function createInitialUsers(patients: Patient[]): StoredUser[] {
   const professionalPassword = bcrypt.hashSync('dentalist123', 10);
   const patientPassword = bcrypt.hashSync('paciente123', 10);
+  const trialStartedAt = new Date().toISOString();
+  const trialEndsAt = new Date(Date.now() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000).toISOString();
 
   return [
     {
@@ -184,8 +187,13 @@ function createInitialUsers(patients: Patient[]): StoredUser[] {
       name: 'Dra. Sofía Belotti',
       email: 'sofia.belotti@dentalist.com',
       type: 'profesional',
+      subscriptionPlan: 'starter',
+      subscriptionStatus: 'trialing',
+      trialStartedAt,
+      trialEndsAt,
+      subscriptionLockedAt: null,
       passwordHash: professionalPassword,
-      createdAt: new Date().toISOString(),
+      createdAt: trialStartedAt,
     },
     {
       id: crypto.randomUUID(),
@@ -193,6 +201,11 @@ function createInitialUsers(patients: Patient[]): StoredUser[] {
       name: `${patients[0].name} ${patients[0].lastName}`,
       email: patients[0].email,
       type: 'paciente',
+      subscriptionPlan: null,
+      subscriptionStatus: null,
+      trialStartedAt: null,
+      trialEndsAt: null,
+      subscriptionLockedAt: null,
       passwordHash: patientPassword,
       createdAt: new Date().toISOString(),
     },
@@ -340,5 +353,17 @@ export function toPublicUser(user: StoredUser): User {
   const { passwordHash, createdAt, ...rest } = user;
   void passwordHash;
   void createdAt;
-  return rest;
+  const subscriptionStatus = ensureSubscriptionStatus(
+    rest.subscriptionStatus ?? null,
+    rest.trialEndsAt ?? null,
+  );
+  return {
+    ...rest,
+    subscriptionPlan:
+      rest.subscriptionPlan ?? (rest.type === 'profesional' ? 'starter' : null),
+    subscriptionStatus,
+    trialStartedAt: rest.trialStartedAt ?? null,
+    trialEndsAt: rest.trialEndsAt ?? null,
+    subscriptionLockedAt: rest.subscriptionLockedAt ?? null,
+  };
 }

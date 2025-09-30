@@ -2,7 +2,9 @@
 import Sidebar from '@/components/layout/Sidebar';
 import { useAuth } from '@/hooks/useAuth';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
+import { userHasLockedSubscription } from '@/lib/utils/subscription';
 
 function DashboardTopBar({ onToggleMenu }: { onToggleMenu: () => void }) {
   const { user } = useAuth();
@@ -47,6 +49,43 @@ function DashboardTopBar({ onToggleMenu }: { onToggleMenu: () => void }) {
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (loading || !user || user.type !== 'profesional') {
+      return;
+    }
+
+    if (userHasLockedSubscription(user)) {
+      if (!pathname?.startsWith('/billing') && !pathname?.startsWith('/pricing')) {
+        router.replace('/billing?state=trial_expired');
+      }
+    }
+  }, [loading, user, pathname, router]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-200">
+        Cargando panel...
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-950 text-slate-100">
+        <p className="text-center text-lg font-medium">Tu sesión expiró. Iniciá sesión para continuar.</p>
+        <Link
+          href="/login"
+          className="rounded-full border border-white/20 px-5 py-2 font-semibold text-white transition hover:border-cyan-400 hover:text-cyan-200"
+        >
+          Ir al login
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-screen bg-slate-950 text-slate-100">

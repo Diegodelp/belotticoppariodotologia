@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { PLAN_DEFINITIONS, PLAN_ORDER, TRIAL_DURATION_DAYS } from '@/lib/utils/subscription';
 
 const features = [
   {
@@ -31,12 +32,20 @@ export default function Home() {
             </span>
             <span className="hidden sm:block">Gestión inteligente para odontología</span>
           </div>
-          <Link
-            href="/login"
-            className="rounded-full border border-white/10 px-4 py-2 font-medium text-slate-100 transition hover:border-cyan-400/60 hover:text-cyan-200"
-          >
-            Ingresar
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/pricing"
+              className="rounded-full border border-white/10 px-4 py-2 font-medium text-slate-100 transition hover:border-cyan-400/60 hover:text-cyan-200"
+            >
+              Planes
+            </Link>
+            <Link
+              href="/login"
+              className="rounded-full border border-white/10 px-4 py-2 font-medium text-slate-100 transition hover:border-cyan-400/60 hover:text-cyan-200"
+            >
+              Ingresar
+            </Link>
+          </div>
         </nav>
 
         <div className="mt-16 grid gap-16 lg:grid-cols-2 lg:items-center">
@@ -51,6 +60,9 @@ export default function Home() {
               Organizá pacientes, turnos, tratamientos y pagos desde una experiencia
               diseñada para el equipo odontológico. Integrá recordatorios automatizados,
               indicadores de negocio y colaborá en tiempo real con tu staff.
+            </p>
+            <p className="text-sm text-cyan-200/90">
+              {`Incluye ${TRIAL_DURATION_DAYS} días de prueba gratuita sin pedir tarjeta.`}
             </p>
             <div className="flex flex-wrap gap-4">
               <Link
@@ -121,6 +133,75 @@ export default function Home() {
               <p className="text-sm text-slate-300 leading-relaxed">{feature.description}</p>
             </div>
           ))}
+        </div>
+      </section>
+
+      <section id="planes" className="border-t border-white/5 bg-slate-950/60 py-20 backdrop-blur">
+        <div className="mx-auto max-w-6xl space-y-12 px-6 sm:px-12">
+          <div className="space-y-4 text-center">
+            <p className="text-xs uppercase tracking-[0.35em] text-cyan-300">Planes y precios</p>
+            <h2 className="text-3xl font-semibold text-white sm:text-4xl">Elegí el plan que acompaña tu crecimiento</h2>
+            <p className="text-sm text-slate-300">
+              Comenzá con una demo completa de {TRIAL_DURATION_DAYS} días y activá el plan que mejor se adapte a tu consultorio cuando estés listo.
+            </p>
+          </div>
+          <div className="grid gap-8 md:grid-cols-2">
+            {PLAN_ORDER.map((planId) => {
+              const plan = PLAN_DEFINITIONS[planId];
+              const isPro = plan.id === 'pro';
+              return (
+                <div
+                  key={plan.id}
+                  className={`flex h-full flex-col gap-5 rounded-3xl border p-8 shadow-lg transition ${
+                    isPro
+                      ? 'border-cyan-400/40 bg-cyan-500/10 shadow-cyan-500/20'
+                      : 'border-white/10 bg-white/5 shadow-cyan-500/10'
+                  }`}
+                >
+                  <div className="space-y-3">
+                    <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-widest ${
+                      isPro ? 'bg-cyan-500/20 text-cyan-100' : 'bg-white/10 text-slate-200'
+                    }`}>
+                      {plan.name}
+                    </span>
+                    <h3 className="text-2xl font-semibold text-white">{plan.headline}</h3>
+                    <p className="text-sm text-slate-300">{plan.description}</p>
+                    <p className="text-sm font-semibold text-cyan-100">{plan.priceLabel}</p>
+                    <p className="text-xs text-cyan-200/80">{plan.highlight}</p>
+                  </div>
+                  <ul className="flex flex-1 flex-col gap-2 text-sm text-slate-200">
+                    {plan.features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2">
+                        <span className="mt-0.5 text-cyan-300">{isPro || feature.includes('ilimitad') ? '✨' : '✅'}</span>
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex flex-col gap-3">
+                    <Link
+                      href={isPro ? '/pricing' : '/register'}
+                      className={`inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition ${
+                        isPro
+                          ? 'bg-white text-slate-900 hover:bg-slate-100'
+                          : 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
+                      }`}
+                    >
+                      {isPro ? 'Hablar con nuestro equipo' : 'Comenzar prueba gratuita'}
+                    </Link>
+                    {isPro ? (
+                      <p className="text-xs text-slate-300">
+                        Incluye onboarding personalizado y soporte prioritario 24/7.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-400">
+                        Acceso completo durante {TRIAL_DURATION_DAYS} días. Cancelás cuando quieras.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </div>
       </section>
 

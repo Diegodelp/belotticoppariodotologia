@@ -1,6 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useAuth } from '@/hooks/useAuth';
+import {
+  describeTrialStatus,
+  getPlanDefinition,
+  getTrialCountdown,
+} from '@/lib/utils/subscription';
 
 interface DashboardOverview {
   totals: {
@@ -29,6 +35,7 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     const loadOverview = async () => {
@@ -51,6 +58,80 @@ export default function DashboardPage() {
 
   return (
     <section className="space-y-10">
+      {user?.type === 'profesional' && (
+        <div className="rounded-3xl border border-cyan-500/30 bg-cyan-500/10 p-6 text-slate-100 shadow-lg shadow-cyan-500/10">
+          {(() => {
+            const plan = getPlanDefinition(user.subscriptionPlan ?? 'starter');
+            const { daysLeft } = getTrialCountdown(user.trialEndsAt ?? null);
+            const planHighlights = [
+              {
+                label:
+                  plan.capabilities.patientLimit && plan.capabilities.patientLimit > 0
+                    ? `Hasta ${plan.capabilities.patientLimit} pacientes activos`
+                    : 'Pacientes ilimitados',
+                enabled: true,
+              },
+              {
+                label: 'Automatizaciones de marketing en WhatsApp e Instagram',
+                enabled: plan.capabilities.marketingAutomation,
+              },
+              {
+                label: 'Insights predictivos por IA',
+                enabled: plan.capabilities.aiInsights,
+              },
+              {
+                label: `${plan.capabilities.storageGb} GB de almacenamiento clínico seguro`,
+                enabled: true,
+              },
+            ];
+
+            return (
+              <>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="space-y-2">
+                    <span className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-cyan-200">
+                      Plan actual
+                    </span>
+                    <h2 className="text-2xl font-semibold text-white sm:text-3xl">{plan.name}</h2>
+                    <p className="max-w-2xl text-sm text-cyan-100/80">{plan.highlight}</p>
+                    <p className="text-xs text-slate-200/80">
+                      {describeTrialStatus(user.trialEndsAt ?? null, user.subscriptionStatus ?? null)}
+                      {typeof daysLeft === 'number' && daysLeft > 0 && user.subscriptionStatus !== 'active' && (
+                        <span className="ml-2 inline-flex rounded-full bg-white/10 px-2 py-0.5 text-[11px] text-white">
+                          Quedan {daysLeft} días de prueba
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex flex-col items-start gap-2 text-sm text-cyan-100 sm:items-end">
+                    <span className="text-xl font-semibold text-white">{plan.priceLabel}</span>
+                    <Link
+                      href="/billing"
+                      className="inline-flex items-center gap-1 rounded-full border border-white/20 px-4 py-2 text-xs font-semibold text-white transition hover:border-white/40 hover:text-cyan-200"
+                    >
+                      Ver opciones de suscripción →
+                    </Link>
+                  </div>
+                </div>
+                <div className="mt-5 grid gap-3 text-xs text-cyan-100 sm:grid-cols-2 lg:grid-cols-4">
+                  {planHighlights.map((highlight) => (
+                    <div
+                      key={highlight.label}
+                      className={`flex items-start gap-2 rounded-2xl border border-white/10 bg-slate-900/40 px-3 py-3 ${
+                        highlight.enabled ? 'text-cyan-100' : 'text-slate-400'
+                      }`}
+                    >
+                      <span>{highlight.enabled ? '✅' : '🔒'}</span>
+                      <span>{highlight.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
       <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-4">
         {loading && <p className="text-slate-300">Cargando indicadores...</p>}
         {error && <p className="rounded-2xl bg-rose-500/10 p-4 text-sm text-rose-200">{error}</p>}

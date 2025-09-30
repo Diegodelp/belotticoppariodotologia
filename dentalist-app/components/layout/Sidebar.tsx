@@ -3,8 +3,9 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { AuthService } from '@/services/auth.service';
 import { useAuth } from '@/hooks/useAuth';
+import { describeTrialStatus, getPlanName } from '@/lib/utils/subscription';
 
-const menuItems = [
+const BASE_MENU_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
   { href: '/patients', label: 'Pacientes', icon: '👥' },
   { href: '/calendar', label: 'Calendario', icon: '📅' },
@@ -23,6 +24,17 @@ type SidebarProps = {
 export default function Sidebar({ onNavigate, className = '', isMobile = false }: SidebarProps) {
   const pathname = usePathname();
   const { user } = useAuth();
+  const items = [...BASE_MENU_ITEMS];
+
+  if (user?.type === 'profesional') {
+    const billingItem = { href: '/billing', label: 'Suscripción', icon: '💼' };
+    const marketingIndex = items.findIndex((item) => item.href === '/marketing');
+    if (marketingIndex >= 0) {
+      items.splice(marketingIndex, 0, billingItem);
+    } else {
+      items.push(billingItem);
+    }
+  }
 
   const handleLogout = () => {
     AuthService.logout();
@@ -59,12 +71,28 @@ export default function Sidebar({ onNavigate, className = '', isMobile = false }
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm">
             <p className="font-medium text-white">{user.name}</p>
             <p className="text-slate-300">{user.type === 'profesional' ? 'Profesional' : 'Paciente'}</p>
+            {user.type === 'profesional' && (
+              <div className="mt-3 space-y-2 text-xs">
+                <span className="inline-flex items-center gap-2 rounded-full bg-cyan-500/15 px-3 py-1 font-semibold text-cyan-200">
+                  {getPlanName(user.subscriptionPlan ?? 'starter')} plan
+                </span>
+                <p className="text-slate-300">
+                  {describeTrialStatus(user.trialEndsAt ?? null, user.subscriptionStatus ?? null)}
+                </p>
+                <Link
+                  href="/billing"
+                  className="inline-flex text-xs font-medium text-cyan-200 underline-offset-4 hover:underline"
+                >
+                  Gestionar suscripción
+                </Link>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       <nav className="flex-1 space-y-1 px-4 py-6">
-        {menuItems.map((item) => {
+        {items.map((item) => {
           const isActive =
             pathname === item.href ||
             (item.href !== '/dashboard' && pathname?.startsWith(item.href));

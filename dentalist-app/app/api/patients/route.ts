@@ -5,6 +5,7 @@ import {
   listPatients,
 } from '@/lib/db/supabase-repository';
 import { Patient } from '@/types';
+import { getPatientLimit, userHasLockedSubscription } from '@/lib/utils/subscription';
 
 export async function GET(request: NextRequest) {
   const user = getUserFromRequest(request);
@@ -33,6 +34,16 @@ export async function POST(request: NextRequest) {
     const user = getUserFromRequest(request);
     if (!user) {
       return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+    }
+
+    if (userHasLockedSubscription(user)) {
+      return NextResponse.json(
+        {
+          error:
+            'Tu prueba gratuita finalizó. Activá o renová tu suscripción para seguir incorporando pacientes.',
+        },
+        { status: 402 },
+      );
     }
 
     const body = await request.json();
@@ -66,6 +77,22 @@ export async function POST(request: NextRequest) {
       affiliateNumber: affiliateNumber ?? undefined,
       status,
     };
+
+    if (user.type === 'profesional') {
+      const patientLimit = getPatientLimit(user.subscriptionPlan ?? 'starter');
+      if (typeof patientLimit === 'number') {
+        const existing = await listPatients(user.id);
+        if (existing.length >= patientLimit) {
+          return NextResponse.json(
+            {
+              error:
+                'Llegaste al límite de pacientes de tu plan Starter. Actualizá a Dentalist Pro para seguir creciendo.',
+            },
+            { status: 403 },
+          );
+        }
+      }
+    }
 
     const created = await createPatient(user.id, patient);
 
