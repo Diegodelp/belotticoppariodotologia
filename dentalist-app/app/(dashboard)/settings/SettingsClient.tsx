@@ -718,8 +718,21 @@ export function SettingsClient() {
             <div>
               <p className="font-semibold">Calendario conectado</p>
               <p className="text-emerald-100/80">
-                Usaremos la agenda de <span className="font-medium">{calendarStatus.email}</span> ({calendarStatus.calendarId})
-                para sincronizar tus turnos.
+                {calendarStatus.usingOwnerCredentials ? (
+                  <>
+                    Los turnos se sincronizan con la agenda del administrador{' '}
+                    <span className="font-medium">
+                      {calendarStatus.ownerName ?? calendarStatus.email ?? 'principal'}
+                    </span>{' '}
+                    ({calendarStatus.email ?? 'sin correo'}) del consultorio.
+                  </>
+                ) : (
+                  <>
+                    Tus turnos se sincronizan con{' '}
+                    <span className="font-medium">{calendarStatus.email ?? 'tu cuenta de Google'}</span>
+                    {calendarStatus.calendarId ? ` (${calendarStatus.calendarId})` : ''} automáticamente.
+                  </>
+                )}
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
@@ -736,8 +749,9 @@ export function SettingsClient() {
         ) : (
           <div className="flex flex-col gap-4 rounded-2xl border border-white/15 bg-slate-900/60 p-4 text-sm text-slate-200">
             <p>
-              Aún no vinculaste tu calendario. Conectalo para que cada turno creado desde Dentalist aparezca automáticamente en
-              tu Google Calendar personal.
+              {calendarStatus?.usingOwnerCredentials
+                ? 'El administrador aún no vinculó su Google Calendar. Pedile que complete la conexión desde su cuenta principal para sincronizar los turnos.'
+                : 'Aún no vinculaste tu calendario. Conectalo para que cada turno creado desde Dentalist aparezca automáticamente en tu Google Calendar personal.'}
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <button

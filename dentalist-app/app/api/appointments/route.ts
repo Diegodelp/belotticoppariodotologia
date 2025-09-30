@@ -10,9 +10,10 @@ import {
   getProfessionalProfile,
   listAppointments,
   listPatients,
+  updateClinic,
   upsertProfessionalGoogleCredentials,
 } from '@/lib/db/supabase-repository';
-import { createCalendarEvent, isCalendarReady, OAuthTokenSet } from '@/lib/google/calendar';
+import { createCalendar, createCalendarEvent, isCalendarReady, OAuthTokenSet } from '@/lib/google/calendar';
 import { Appointment, Patient } from '@/types';
 import {
   DEFAULT_TIME_ZONE,
@@ -77,6 +78,33 @@ export async function GET(request: NextRequest) {
       { status: 500 },
     );
   }
+}
+
+function isCalendarNotFoundError(error: unknown) {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const anyError = error as { code?: number; status?: number; response?: { status?: number; data?: unknown }; errors?: unknown };
+
+  if (anyError.code === 404 || anyError.status === 404 || anyError.response?.status === 404) {
+    return true;
+  }
+
+  const errorPayloads: unknown[] = [];
+
+  if (Array.isArray((anyError as { errors?: unknown[] }).errors)) {
+    errorPayloads.push(...((anyError as { errors?: unknown[] }).errors as unknown[]));
+  }
+
+  const responseData = anyError.response?.data as { error?: { errors?: unknown[] } } | undefined;
+  if (Array.isArray(responseData?.error?.errors)) {
+    errorPayloads.push(...(responseData?.error?.errors as unknown[]));
+  }
+
+  return errorPayloads.some((item) =>
+    Boolean(item && typeof item === 'object' && 'reason' in item && (item as { reason?: string }).reason === 'notFound'),
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -190,74 +218,118 @@ export async function POST(request: NextRequest) {
       clinicId: appointmentClinicId,
     });
 
-    try {
-      const tokenSet: OAuthTokenSet = {
-        accessToken: credentials.accessToken,
-        refreshToken: credentials.refreshToken,
-        scope: credentials.scope,
-        tokenType: credentials.tokenType,
-        expiryDate: credentials.expiryDate,
-      };
+    const eventDetails = {
+      summary: `${type} con ${patient ? `${patient.name} ${patient.lastName}` : 'paciente'}`,
+      description: [
+        patient ? `Paciente: ${patient.name} ${patient.lastName}` : null,
+        patient?.dni ? `DNI: ${patient.dni}` : null,
+        patient?.email ? `Email: ${patient.email}` : null,
+        patient?.phone ? `Teléfono: ${patient.phone}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n'),
+      start: startAt,
+      end: endAt,
+      timeZone,
+      attendees:
+        patient?.email
+          ? [
+              {
+                email: patient.email,
+                displayName: `${patient.name} ${patient.lastName}`.trim(),
+              },
+            ]
+          : undefined,
+    } satisfies Parameters<typeof createCalendarEvent>[1];
 
-      const { event, latestCredentials } = await createCalendarEvent(tokenSet, {
-        calendarId: targetCalendarId,
-        summary: `${type} con ${patient ? `${patient.name} ${patient.lastName}` : 'paciente'}`,
-        description: [
-          patient ? `Paciente: ${patient.name} ${patient.lastName}` : null,
-          patient?.dni ? `DNI: ${patient.dni}` : null,
-          patient?.email ? `Email: ${patient.email}` : null,
-          patient?.phone ? `Teléfono: ${patient.phone}` : null,
-        ]
-          .filter(Boolean)
-          .join('\n'),
-        start: startAt,
-        end: endAt,
-        timeZone,
-        attendees:
-          patient?.email
-            ? [
-                {
-                  email: patient.email,
-                  displayName: `${patient.name} ${patient.lastName}`.trim(),
-                },
-              ]
-            : undefined,
-      });
+    let activeTokenSet: OAuthTokenSet = {
+      accessToken: credentials.accessToken,
+      refreshToken: credentials.refreshToken,
+      scope: credentials.scope,
+      tokenType: credentials.tokenType,
+      expiryDate: credentials.expiryDate,
+    };
 
-      if (!event.id) {
-        throw new Error('La API de Google Calendar no devolvió un ID de evento.');
-      }
-
+    const persistLatestCredentials = async (latest: OAuthTokenSet) => {
       const credentialsChanged =
-        latestCredentials.accessToken !== credentials.accessToken ||
-        latestCredentials.refreshToken !== credentials.refreshToken ||
-        latestCredentials.scope !== credentials.scope ||
-        latestCredentials.tokenType !== credentials.tokenType ||
-        latestCredentials.expiryDate !== credentials.expiryDate;
+        latest.accessToken !== activeTokenSet.accessToken ||
+        latest.refreshToken !== activeTokenSet.refreshToken ||
+        latest.scope !== activeTokenSet.scope ||
+        latest.tokenType !== activeTokenSet.tokenType ||
+        latest.expiryDate !== activeTokenSet.expiryDate;
 
       if (credentialsChanged) {
         await upsertProfessionalGoogleCredentials(ownerProfessionalId, {
           googleUserId: credentials.googleUserId,
           email: credentials.email,
           calendarId: credentials.calendarId ?? 'primary',
-          accessToken: latestCredentials.accessToken,
-          refreshToken: latestCredentials.refreshToken,
-          scope: latestCredentials.scope,
-          tokenType: latestCredentials.tokenType,
-          expiryDate: latestCredentials.expiryDate,
+          accessToken: latest.accessToken,
+          refreshToken: latest.refreshToken,
+          scope: latest.scope,
+          tokenType: latest.tokenType,
+          expiryDate: latest.expiryDate,
         });
+        activeTokenSet = latest;
+      }
+    };
+
+    const syncWithCalendar = async (calendarIdToUse: string) => {
+      const { event, latestCredentials } = await createCalendarEvent(activeTokenSet, {
+        ...eventDetails,
+        calendarId: calendarIdToUse,
+      });
+
+      await persistLatestCredentials(latestCredentials);
+
+      if (!event.id) {
+        throw new Error('La API de Google Calendar no devolvió un ID de evento.');
       }
 
       const updated = await attachAppointmentGoogleEvent(
         ownerProfessionalId,
         appointment.id,
         event.id,
-        targetCalendarId,
+        calendarIdToUse,
       );
-      const responseAppointment = formatAppointmentForTimeZone(updated ?? appointment, timeZone);
 
+      return formatAppointmentForTimeZone(updated ?? appointment, timeZone);
+    };
+
+    try {
+      const responseAppointment = await syncWithCalendar(targetCalendarId);
       return NextResponse.json({ success: true, appointment: responseAppointment });
-    } catch (calendarError) {
+    } catch (error) {
+      let calendarError: unknown = error;
+
+      if (selectedClinic && targetCalendarId !== 'primary' && isCalendarNotFoundError(calendarError)) {
+        try {
+          const recreatedCalendar = await createCalendar(activeTokenSet, {
+            summary: selectedClinic.name,
+            description: `Agenda recreada automáticamente para el consultorio ${selectedClinic.name}`,
+            timeZone,
+          });
+
+          const newCalendarId = recreatedCalendar.calendar.id;
+
+          if (!newCalendarId) {
+            throw new Error('Google no devolvió un nuevo identificador de calendario.');
+          }
+
+          await persistLatestCredentials(recreatedCalendar.latestCredentials);
+          const updatedClinic = await updateClinic(ownerProfessionalId, selectedClinic.id, {
+            calendarId: newCalendarId,
+          });
+          selectedClinic = updatedClinic;
+          targetCalendarId = newCalendarId;
+
+          const responseAppointment = await syncWithCalendar(targetCalendarId);
+          return NextResponse.json({ success: true, appointment: responseAppointment });
+        } catch (recoveryError) {
+          console.error('No se pudo recrear el calendario del consultorio', recoveryError);
+          calendarError = recoveryError;
+        }
+      }
+
       console.error('Error al crear evento en Google Calendar', calendarError);
       await deleteAppointment(ownerProfessionalId, appointment.id).catch(() => undefined);
       return NextResponse.json(

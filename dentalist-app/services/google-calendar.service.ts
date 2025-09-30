@@ -16,6 +16,8 @@ export interface GoogleCalendarStatus {
   email: string | null;
   calendarId: string | null;
   expiresAt: string | null;
+  usingOwnerCredentials: boolean;
+  ownerName: string | null;
 }
 
 export class GoogleCalendarService {

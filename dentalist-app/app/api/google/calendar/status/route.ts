@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth/get-user';
-import { getProfessionalGoogleCredentials } from '@/lib/db/supabase-repository';
+import { getProfessionalGoogleCredentials, getProfessionalProfile } from '@/lib/db/supabase-repository';
 import { isCalendarReady } from '@/lib/google/calendar';
 
 export async function GET(request: NextRequest) {
@@ -9,7 +9,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
   }
 
-  const credentials = await getProfessionalGoogleCredentials(user.id);
+  const ownerProfessionalId = user.ownerProfessionalId ?? user.id;
+  const [credentials, ownerProfile] = await Promise.all([
+    getProfessionalGoogleCredentials(ownerProfessionalId),
+    getProfessionalProfile(ownerProfessionalId).catch(() => null),
+  ]);
 
   return NextResponse.json({
     configured: isCalendarReady(),
@@ -17,5 +21,7 @@ export async function GET(request: NextRequest) {
     email: credentials?.email ?? null,
     calendarId: credentials?.calendarId ?? 'primary',
     expiresAt: credentials?.expiryDate ?? null,
+    usingOwnerCredentials: Boolean(user.ownerProfessionalId),
+    ownerName: ownerProfile?.fullName ?? ownerProfile?.clinicName ?? null,
   });
 }
