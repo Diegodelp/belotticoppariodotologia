@@ -115,6 +115,32 @@ export function TeamManagement({ plan, currentUser }: TeamManagementProps) {
     return true;
   };
 
+  const visibleStaff = useMemo(() => {
+    if (!overview) return [] as StaffMember[];
+    if (isOwner) return overview.staff;
+    if (actingRole !== 'professional') return [] as StaffMember[];
+
+    return overview.staff.filter((member) => {
+      if (member.role !== 'assistant') return false;
+      if (actingClinicId && member.clinicId && member.clinicId !== actingClinicId) return false;
+      return true;
+    });
+  }, [overview, isOwner, actingRole, actingClinicId]);
+
+  const visibleInvitations = useMemo(() => {
+    if (!overview) return [] as StaffInvitation[];
+
+    const pendingInvites = overview.invitations.filter((invitation) => invitation.status === 'pending');
+    if (isOwner) return pendingInvites;
+    if (actingRole !== 'professional') return [] as StaffInvitation[];
+
+    return pendingInvites.filter((invitation) => {
+      if (invitation.role !== 'assistant') return false;
+      if (actingClinicId && invitation.clinicId && invitation.clinicId !== actingClinicId) return false;
+      return true;
+    });
+  }, [overview, isOwner, actingRole, actingClinicId]);
+
   const handleCreateClinic = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!isOwner) {
@@ -353,7 +379,7 @@ export function TeamManagement({ plan, currentUser }: TeamManagementProps) {
             </form>
           )}
 
-          {overview.clinics.length > 0 && (
+          {isOwner && overview.clinics.length > 0 && (
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-white">Consultorios</h3>
               <ul className="grid gap-4 sm:grid-cols-2">
@@ -482,13 +508,13 @@ export function TeamManagement({ plan, currentUser }: TeamManagementProps) {
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-white">Integrantes activos</h3>
-              {overview.staff.length === 0 ? (
+              {visibleStaff.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-white/10 p-4 text-sm text-slate-300">
-                  Aún no agregaste integrantes.
+                  {isOwner ? 'Aún no agregaste integrantes.' : 'Aún no invitaste asistentes.'}
                 </p>
               ) : (
                 <ul className="space-y-3">
-                  {overview.staff.map((member) => (
+                  {visibleStaff.map((member) => (
                     <li
                       key={member.id}
                       className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-900/60 p-4"
@@ -517,13 +543,15 @@ export function TeamManagement({ plan, currentUser }: TeamManagementProps) {
 
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-white">Invitaciones pendientes</h3>
-              {overview.invitations.length === 0 ? (
+              {visibleInvitations.length === 0 ? (
                 <p className="rounded-xl border border-dashed border-white/10 p-4 text-sm text-slate-300">
-                  No tenés invitaciones enviadas recientemente.
+                  {isOwner
+                    ? 'No tenés invitaciones enviadas recientemente.'
+                    : 'No tenés invitaciones pendientes para tus asistentes.'}
                 </p>
               ) : (
                 <ul className="space-y-3">
-                  {overview.invitations.map((invitation) => (
+                  {visibleInvitations.map((invitation) => (
                     <li
                       key={invitation.id}
                       className="flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-slate-900/60 p-4"
