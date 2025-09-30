@@ -119,6 +119,7 @@ export interface Appointment {
   endAt?: string;
   googleEventId?: string;
   calendarId?: string | null;
+  clinicId?: string | null;
 }
 
 export type ClinicalMediaCategory = 'photo' | 'radiograph' | 'document';

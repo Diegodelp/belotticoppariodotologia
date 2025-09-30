@@ -47,6 +47,7 @@ export async function PUT(
 
     const zonedCurrent = formatAppointmentForTimeZone(current, timeZone);
     const { status, type, date, time, patientId } = body ?? {};
+    const requestedClinicId = typeof body?.clinicId === 'string' ? body.clinicId.trim() : '';
 
     const nextPatientId =
       typeof patientId === 'string' && patientId.length > 0 ? patientId : zonedCurrent.patientId ?? undefined;
@@ -56,20 +57,50 @@ export async function PUT(
       return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
     }
 
-    if (clinicScope && nextPatient?.clinicId !== clinicScope) {
+    let selectedClinic: Awaited<ReturnType<typeof getClinicByIdForOwner>> | null = null;
+
+    if (requestedClinicId) {
+      const clinic = await getClinicByIdForOwner(ownerProfessionalId, requestedClinicId);
+      if (!clinic) {
+        return NextResponse.json({ error: 'El consultorio seleccionado no existe.' }, { status: 404 });
+      }
+      selectedClinic = clinic;
+    }
+
+    if (clinicScope) {
+      const guardClinicId = selectedClinic?.id ?? nextPatient?.clinicId ?? zonedCurrent.clinicId ?? null;
+      if (guardClinicId && guardClinicId !== clinicScope) {
+        return NextResponse.json(
+          { error: 'No tenés permisos para gestionar turnos de ese consultorio.' },
+          { status: 403 },
+        );
+      }
+    }
+
+    if (selectedClinic && nextPatient?.clinicId && nextPatient.clinicId !== selectedClinic.id) {
       return NextResponse.json(
-        { error: 'No tenés permisos para gestionar turnos de ese consultorio.' },
-        { status: 403 },
+        {
+          error:
+            'El paciente está asignado a otro consultorio. Actualizá la ficha antes de mover el turno a una sede diferente.',
+        },
+        { status: 409 },
       );
     }
 
     const credentials = await getProfessionalGoogleCredentials(ownerProfessionalId);
     const fallbackCalendarId = credentials?.calendarId ?? 'primary';
     let targetCalendarId = zonedCurrent.calendarId ?? fallbackCalendarId;
-    if (nextPatient?.clinicId) {
+    let targetClinicId: string | null = zonedCurrent.clinicId ?? null;
+
+    if (selectedClinic) {
+      targetClinicId = selectedClinic.id;
+      targetCalendarId = selectedClinic.calendarId ?? fallbackCalendarId;
+    } else if (nextPatient?.clinicId) {
       const clinic = await getClinicByIdForOwner(ownerProfessionalId, nextPatient.clinicId);
+      targetClinicId = clinic?.id ?? nextPatient.clinicId;
       targetCalendarId = clinic?.calendarId ?? fallbackCalendarId;
     } else if (!nextPatient?.clinicId) {
+      targetClinicId = null;
       targetCalendarId = fallbackCalendarId;
     }
 
@@ -83,6 +114,7 @@ export async function PUT(
         time,
         patientId: nextPatientId,
         calendarId: targetCalendarId,
+        clinicId: targetClinicId,
       },
       { timeZone },
     );
@@ -108,6 +140,7 @@ export async function PUT(
           time: zonedCurrent.time,
           patientId: zonedCurrent.patientId,
           calendarId: zonedCurrent.calendarId ?? null,
+          clinicId: zonedCurrent.clinicId ?? null,
         },
         { timeZone },
       ).catch(() => undefined);
@@ -194,6 +227,7 @@ export async function PUT(
           time: zonedCurrent.time,
           patientId: zonedCurrent.patientId,
           calendarId: zonedCurrent.calendarId ?? null,
+          clinicId: zonedCurrent.clinicId ?? null,
         },
         { timeZone },
       ).catch(() => undefined);
@@ -241,6 +275,17 @@ export async function DELETE(
           { status: 403 },
         );
       }
+      if (!patient && current.clinicId && current.clinicId !== clinicScope) {
+        return NextResponse.json(
+          { error: 'No tenés permisos para gestionar turnos de ese consultorio.' },
+          { status: 403 },
+        );
+      }
+    } else if (current.clinicId && current.clinicId !== clinicScope) {
+      return NextResponse.json(
+        { error: 'No tenés permisos para gestionar turnos de ese consultorio.' },
+        { status: 403 },
+      );
     }
   }
 

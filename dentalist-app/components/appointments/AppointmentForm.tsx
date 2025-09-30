@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Appointment, Patient } from '@/types';
+import { Appointment, Clinic, Patient } from '@/types';
 import { AppointmentService } from '@/services/appointment.service';
 
 interface AppointmentFormProps {
@@ -9,6 +9,7 @@ interface AppointmentFormProps {
   defaultPatientId?: string;
   appointment?: Appointment;
   mode?: 'create' | 'edit';
+  clinics?: Clinic[];
   onCreated?: (appointment: Appointment, patient?: Patient) => void;
   onUpdated?: (appointment: Appointment, patient?: Patient) => void;
   onCancel?: () => void;
@@ -21,6 +22,7 @@ export function AppointmentForm({
   defaultPatientId,
   appointment,
   mode = 'create',
+  clinics,
   onCreated,
   onUpdated,
   onCancel,
@@ -34,6 +36,7 @@ export function AppointmentForm({
   const [status, setStatus] = useState<Appointment['status']>(
     appointment?.status ?? defaultStatus,
   );
+  const [clinicId, setClinicId] = useState(appointment?.clinicId ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -41,8 +44,12 @@ export function AppointmentForm({
   useEffect(() => {
     if (defaultPatientId && !appointment) {
       setPatientId(defaultPatientId);
+      const defaultPatient = patients.find((item) => item.id === defaultPatientId);
+      if (defaultPatient?.clinicId) {
+        setClinicId(defaultPatient.clinicId);
+      }
     }
-  }, [defaultPatientId, appointment]);
+  }, [defaultPatientId, appointment, patients]);
 
   useEffect(() => {
     if (appointment && mode === 'edit') {
@@ -51,12 +58,28 @@ export function AppointmentForm({
       setTime(appointment.time);
       setType(appointment.type);
       setStatus(appointment.status);
+      setClinicId(appointment.clinicId ?? '');
     }
   }, [appointment, mode]);
 
   const patientOptions = useMemo(() => {
     return [...patients].sort((a, b) => a.name.localeCompare(b.name));
   }, [patients]);
+
+  const clinicOptions = useMemo(() => clinics ?? [], [clinics]);
+
+  const selectedPatient = useMemo(() => {
+    return patientOptions.find((item) => item.id === patientId);
+  }, [patientId, patientOptions]);
+
+  useEffect(() => {
+    if (mode === 'create') {
+      const patientClinic = selectedPatient?.clinicId ?? '';
+      const fallbackClinic =
+        patientClinic || (clinicOptions.length === 1 ? clinicOptions[0].id : '');
+      setClinicId((previous) => (fallbackClinic === previous ? previous : fallbackClinic));
+    }
+  }, [clinicOptions, mode, selectedPatient?.clinicId]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -72,6 +95,8 @@ export function AppointmentForm({
       setLoading(true);
       const selectedPatient = patientOptions.find((item) => item.id === patientId);
 
+      const normalizedClinicId = clinicId && clinicId.length > 0 ? clinicId : undefined;
+
       if (mode === 'edit' && appointment) {
         const response = await AppointmentService.update(appointment.id, {
           patientId,
@@ -79,6 +104,7 @@ export function AppointmentForm({
           time,
           type,
           status,
+          clinicId: normalizedClinicId ?? null,
         });
 
         if (!response?.success) {
@@ -94,6 +120,7 @@ export function AppointmentForm({
           time,
           type,
           status,
+          clinicId: normalizedClinicId ?? null,
         });
 
         if (!response?.success) {
@@ -106,6 +133,9 @@ export function AppointmentForm({
         setTime('');
         setType('Consulta de control');
         setStatus(defaultStatus);
+        const fallbackClinic =
+          selectedPatient?.clinicId ?? (clinicOptions.length === 1 ? clinicOptions[0].id : '');
+        setClinicId(fallbackClinic ?? '');
       }
     } catch (formError) {
       setError(formError instanceof Error ? formError.message : 'Ocurrió un error inesperado.');
@@ -134,6 +164,24 @@ export function AppointmentForm({
             ))}
           </select>
         </label>
+
+        {clinicOptions.length > 0 && (
+          <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+            Consultorio
+            <select
+              value={clinicId}
+              onChange={(event) => setClinicId(event.target.value)}
+              className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-900/60 px-4 py-2 text-sm text-white focus:border-cyan-400 focus:outline-none"
+            >
+              <option value="">Sin asignar</option>
+              {clinicOptions.map((clinic) => (
+                <option key={clinic.id} value={clinic.id}>
+                  {clinic.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
           Fecha

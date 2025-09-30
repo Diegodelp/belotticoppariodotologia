@@ -65,7 +65,8 @@ export async function GET(request: NextRequest) {
         if (!clinicScope) {
           return true;
         }
-        return appointment.patient?.clinicId === clinicScope;
+        const appointmentClinic = appointment.patient?.clinicId ?? appointment.clinicId ?? null;
+        return appointmentClinic === clinicScope;
       });
 
     return NextResponse.json(withPatient);
@@ -88,6 +89,7 @@ export async function POST(request: NextRequest) {
     const clinicScope = user.ownerProfessionalId && user.teamRole !== 'admin' ? user.teamClinicId ?? null : null;
     const body = await request.json();
     const { patientId, date, time, type, status = 'pending' } = body ?? {};
+    const requestedClinicId = typeof body?.clinicId === 'string' ? body.clinicId.trim() : '';
 
     if (!patientId || !date || !time || !type) {
       return NextResponse.json(
@@ -116,10 +118,33 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Paciente no encontrado' }, { status: 404 });
     }
 
-    if (clinicScope && patient.clinicId !== clinicScope) {
+    let selectedClinic: Awaited<ReturnType<typeof getClinicByIdForOwner>> | null = null;
+
+    if (requestedClinicId) {
+      const clinic = await getClinicByIdForOwner(ownerProfessionalId, requestedClinicId);
+      if (!clinic) {
+        return NextResponse.json({ error: 'El consultorio seleccionado no existe.' }, { status: 404 });
+      }
+      selectedClinic = clinic;
+    }
+
+    if (clinicScope) {
+      const targetClinicId = selectedClinic?.id ?? patient.clinicId ?? null;
+      if (targetClinicId && targetClinicId !== clinicScope) {
+        return NextResponse.json(
+          { error: 'No tenés permisos para agendar turnos en ese consultorio.' },
+          { status: 403 },
+        );
+      }
+    }
+
+    if (selectedClinic && patient.clinicId && patient.clinicId !== selectedClinic.id) {
       return NextResponse.json(
-        { error: 'No tenés permisos para agendar turnos en ese consultorio.' },
-        { status: 403 },
+        {
+          error:
+            'El paciente está asignado a otro consultorio. Actualizá su ficha antes de agendar en una sede diferente.',
+        },
+        { status: 409 },
       );
     }
 
@@ -138,10 +163,20 @@ export async function POST(request: NextRequest) {
     const endAt = new Date(startAt.getTime() + 60 * 60 * 1000);
 
     let targetCalendarId = credentials.calendarId ?? 'primary';
-    if (patient.clinicId) {
+    let appointmentClinicId: string | null = null;
+
+    if (selectedClinic) {
+      appointmentClinicId = selectedClinic.id;
+      if (selectedClinic.calendarId) {
+        targetCalendarId = selectedClinic.calendarId;
+      }
+    } else if (patient.clinicId) {
       const clinic = await getClinicByIdForOwner(ownerProfessionalId, patient.clinicId);
-      if (clinic?.calendarId) {
-        targetCalendarId = clinic.calendarId;
+      if (clinic) {
+        appointmentClinicId = clinic.id;
+        if (clinic.calendarId) {
+          targetCalendarId = clinic.calendarId;
+        }
       }
     }
 
@@ -152,6 +187,7 @@ export async function POST(request: NextRequest) {
       startAt: startAt.toISOString(),
       endAt: endAt.toISOString(),
       calendarId: targetCalendarId,
+      clinicId: appointmentClinicId,
     });
 
     try {

@@ -1589,6 +1589,7 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
               <AppointmentForm
                 patients={[patient]}
                 defaultPatientId={patient.id}
+                clinics={clinicOptions}
                 onCreated={(appointment) => {
                   setData((currentData) =>
                     currentData

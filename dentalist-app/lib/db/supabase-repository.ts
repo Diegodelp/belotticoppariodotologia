@@ -602,6 +602,7 @@ type AppAppointmentRow = {
   end_at: string;
   google_event_id?: string | null;
   calendar_id?: string | null;
+  clinic_id?: string | null;
 };
 
 type AppTreatmentRow = {
@@ -962,6 +963,7 @@ function mapAppointment(record: AppAppointmentRow): Appointment {
     endAt: new Date(record.end_at ?? record.start_at).toISOString(),
     googleEventId: record.google_event_id ?? undefined,
     calendarId: record.calendar_id ?? null,
+    clinicId: record.clinic_id ?? null,
   };
 }
 
@@ -2304,6 +2306,20 @@ export async function getClinicByIdForOwner(
   return data ? mapClinic(data as AppClinicRow) : null;
 }
 
+export async function listClinicsForProfessional(ownerProfessionalId: string): Promise<Clinic[]> {
+  const client = getClient();
+  const { data, error } = await client
+    .from(CLINICS_TABLE)
+    .select('*')
+    .eq('owner_professional_id', ownerProfessionalId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+
+  const rows = (data ?? []) as AppClinicRow[];
+  return rows.map(mapClinic);
+}
+
 export async function createStaffInvitation(
   professionalId: string,
   invitation: {
@@ -3039,6 +3055,7 @@ export async function createAppointment(
     startAt: string;
     endAt: string;
     calendarId?: string | null;
+    clinicId?: string | null;
   },
 ) {
   const client = getClient();
@@ -3052,6 +3069,7 @@ export async function createAppointment(
       start_at: appointment.startAt,
       end_at: appointment.endAt,
       calendar_id: appointment.calendarId ?? null,
+      clinic_id: appointment.clinicId ?? null,
     })
     .select('*')
     .single();
@@ -3196,6 +3214,10 @@ export async function updateAppointment(
 
   if (updates.calendarId !== undefined) {
     payload.calendar_id = updates.calendarId ?? null;
+  }
+
+  if (updates.clinicId !== undefined) {
+    payload.clinic_id = updates.clinicId ?? null;
   }
 
   if (updates.date || updates.time) {

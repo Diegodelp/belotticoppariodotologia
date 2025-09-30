@@ -6,8 +6,9 @@ import { useRouter, useSearchParams } from 'next/navigation';
 
 import { AppointmentForm } from '@/components/appointments/AppointmentForm';
 import { AppointmentService } from '@/services/appointment.service';
+import { ClinicService } from '@/services/clinic.service';
 import { PatientService } from '@/services/patient.service';
-import { Appointment, Patient } from '@/types';
+import { Appointment, Clinic, Patient } from '@/types';
 
 interface AppointmentWithPatient extends Appointment {
   patient?: Patient;
@@ -26,6 +27,7 @@ export function CalendarClient() {
   const searchParams = useSearchParams();
   const [appointments, setAppointments] = useState<AppointmentWithPatient[]>([]);
   const [patients, setPatients] = useState<Patient[]>([]);
+  const [clinics, setClinics] = useState<Clinic[]>([]);
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<'all' | 'confirmed' | 'pending' | 'cancelled'>('all');
   const [showForm, setShowForm] = useState(false);
@@ -66,6 +68,18 @@ export function CalendarClient() {
   }, []);
 
   useEffect(() => {
+    const loadClinics = async () => {
+      try {
+        const data = await ClinicService.list();
+        setClinics(data);
+      } catch (error) {
+        console.error('No pudimos obtener los consultorios', error);
+      }
+    };
+    loadClinics();
+  }, []);
+
+  useEffect(() => {
     if (defaultPatientId) {
       setShowForm(true);
     }
@@ -94,6 +108,10 @@ export function CalendarClient() {
       return acc;
     }, {});
   }, [filteredAppointments]);
+
+  const clinicMap = useMemo(() => {
+    return new Map(clinics.map((clinic) => [clinic.id, clinic.name] as [string, string]));
+  }, [clinics]);
 
   const editingAppointment = useMemo(() => {
     if (!editingId) return null;
@@ -185,6 +203,7 @@ export function CalendarClient() {
               <AppointmentForm
                 patients={patients}
                 defaultPatientId={defaultPatientId}
+                clinics={clinics}
                 onCreated={(appointment, patient) => {
                   clearMessages();
                   setAppointments((previous) => [
@@ -228,6 +247,7 @@ export function CalendarClient() {
               <AppointmentForm
                 patients={patients}
                 appointment={editingAppointment}
+                clinics={clinics}
                 mode="edit"
                 onUpdated={(appointment, patient) => {
                   clearMessages();
@@ -317,6 +337,11 @@ export function CalendarClient() {
                         <p className="text-xs text-slate-300">
                           {appointment.type || 'Tipo de turno no especificado'}
                         </p>
+                        {appointment.clinicId && (
+                          <p className="text-[11px] text-slate-400">
+                            Consultorio: {clinicMap.get(appointment.clinicId) ?? 'Sin nombre'}
+                          </p>
+                        )}
                         {appointment.patient?.id && (
                           <Link
                             href={`/patients/${appointment.patient.id}`}

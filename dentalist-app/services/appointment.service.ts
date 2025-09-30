@@ -37,6 +37,7 @@ export class AppointmentService {
     time: string;
     type: string;
     status: Appointment['status'];
+    clinicId?: string | null;
   }) {
     const response = await fetch('/api/appointments', {
       method: 'POST',
@@ -50,7 +51,10 @@ export class AppointmentService {
     return response.json();
   }
 
-  static async update(id: string, data: Partial<Appointment> & { date?: string; time?: string; type?: string }) {
+  static async update(
+    id: string,
+    data: Partial<Appointment> & { date?: string; time?: string; type?: string; clinicId?: string | null },
+  ) {
     const response = await fetch(`/api/appointments/${id}`, {
       method: 'PUT',
       headers: {
