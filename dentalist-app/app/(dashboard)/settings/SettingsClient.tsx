@@ -848,26 +848,28 @@ export function SettingsClient() {
               )}
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              onClick={openLogoPicker}
-              disabled={disableBrandingActions}
-              className="rounded-full bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {logoUploading ? 'Subiendo logo…' : logoUrl ? 'Actualizar logo' : 'Subir logo'}
-            </button>
-            {logoUrl && (
+          {!isInvitedProfessional && (
+            <div className="flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                onClick={handleLogoDelete}
-                disabled={disableLogoRemoval}
-                className="rounded-full border border-rose-500/40 px-4 py-2 text-xs font-semibold text-rose-200 transition hover:border-rose-400 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={openLogoPicker}
+                disabled={disableBrandingActions}
+                className="rounded-full bg-cyan-500 px-4 py-2 text-xs font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
-                {logoDeleting ? 'Eliminando…' : 'Eliminar logo'}
+                {logoUploading ? 'Subiendo logo…' : logoUrl ? 'Actualizar logo' : 'Subir logo'}
               </button>
-            )}
-          </div>
+              {logoUrl && (
+                <button
+                  type="button"
+                  onClick={handleLogoDelete}
+                  disabled={disableLogoRemoval}
+                  className="rounded-full border border-rose-500/40 px-4 py-2 text-xs font-semibold text-rose-200 transition hover:border-rose-400 hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {logoDeleting ? 'Eliminando…' : 'Eliminar logo'}
+                </button>
+              )}
+            </div>
+          )}
           <input
             ref={logoInputRef}
             type="file"
@@ -876,6 +878,37 @@ export function SettingsClient() {
             onChange={handleLogoChange}
           />
         </div>
+
+        {isInvitedProfessional && profile && (
+          <div className="grid gap-4 rounded-2xl border border-white/10 bg-slate-900/60 p-4 text-sm text-slate-200">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Consultorio asignado</p>
+              <p className="text-lg font-semibold text-white">{profile.clinicName ?? 'Sin nombre'}</p>
+            </div>
+            <dl className="grid gap-2 sm:grid-cols-2">
+              <div>
+                <dt className="text-xs text-slate-400">Dirección</dt>
+                <dd className="text-sm text-slate-200">{profile.address || 'Sin dirección'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-400">Teléfono</dt>
+                <dd className="text-sm text-slate-200">{profile.phone || 'Sin teléfono'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-400">Localidad</dt>
+                <dd className="text-sm text-slate-200">{profile.locality || 'Sin localidad'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-400">Provincia / Estado</dt>
+                <dd className="text-sm text-slate-200">{profile.province || 'Sin provincia'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs text-slate-400">País</dt>
+                <dd className="text-sm text-slate-200">{profile.country || 'Sin país'}</dd>
+              </div>
+            </dl>
+          </div>
+        )}
 
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-2">
