@@ -49,6 +49,8 @@ export default function PaymentsPage() {
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [clinicsLoading, setClinicsLoading] = useState(false);
   const [clinicFilter, setClinicFilter] = useState<'all' | '__none__' | string>('all');
+  const isAdminProfessional =
+    user?.type === 'profesional' && (!user.ownerProfessionalId || user.teamRole === 'admin');
 
   useEffect(() => {
     let active = true;
@@ -100,7 +102,7 @@ export default function PaymentsPage() {
   useEffect(() => {
     let active = true;
 
-    if (!user || user.type !== 'profesional' || user.subscriptionPlan !== 'pro') {
+    if (!user || user.type !== 'profesional' || user.subscriptionPlan !== 'pro' || !isAdminProfessional) {
       setClinics([]);
       setClinicFilter('all');
       return () => {
@@ -131,7 +133,7 @@ export default function PaymentsPage() {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [user, isAdminProfessional]);
 
   useEffect(() => {
     if (clinicFilter === 'all' || clinicFilter === '__none__') {
@@ -147,8 +149,12 @@ export default function PaymentsPage() {
     [patients],
   );
 
-  const enableClinicFilter = user?.subscriptionPlan === 'pro' && clinics.length > 1;
-  const hasUnassignedPatients = useMemo(() => patients.some((patient) => !patient.clinicId), [patients]);
+  const enableClinicFilter =
+    isAdminProfessional && user?.subscriptionPlan === 'pro' && clinics.length > 1;
+  const hasUnassignedPatients = useMemo(
+    () => isAdminProfessional && patients.some((patient) => !patient.clinicId),
+    [isAdminProfessional, patients],
+  );
 
   const filteredPayments = useMemo(() => {
     const selectedClinicId = clinicFilter !== 'all' && clinicFilter !== '__none__' ? clinicFilter : null;
