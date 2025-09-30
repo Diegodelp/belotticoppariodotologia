@@ -12,7 +12,7 @@ export type PlanCapabilityKey =
 
 export interface PlanCapabilities {
   patientLimit: number | null;
-  staffSeats: number;
+  staffSeats: number | null;
   storageGb: number;
   aiInsights: boolean;
   marketingAutomation: boolean;
@@ -75,7 +75,7 @@ export const PLAN_DEFINITIONS: Record<SubscriptionPlan, PlanDefinition> = {
     ],
     capabilities: {
       patientLimit: null,
-      staffSeats: 10,
+      staffSeats: null,
       storageGb: 200,
       aiInsights: true,
       marketingAutomation: true,
@@ -93,6 +93,10 @@ export function getPlanDefinition(plan: SubscriptionPlan | null | undefined): Pl
 
 export function getPatientLimit(plan: SubscriptionPlan | null | undefined): number | null {
   return getPlanDefinition(plan).capabilities.patientLimit;
+}
+
+export function getStaffSeatLimit(plan: SubscriptionPlan | null | undefined): number | null {
+  return getPlanDefinition(plan).capabilities.staffSeats;
 }
 
 export function getPlanName(plan: SubscriptionPlan | null | undefined): string {
@@ -116,7 +120,10 @@ export function planSupportsCapability(
     case 'patientLimit':
       return Boolean(definition.capabilities.patientLimit === null);
     case 'staffSeats':
-      return definition.capabilities.staffSeats > 1;
+      return (
+        definition.capabilities.staffSeats === null ||
+        definition.capabilities.staffSeats > PLAN_DEFINITIONS.starter.capabilities.staffSeats
+      );
     case 'storage':
       return definition.capabilities.storageGb > PLAN_DEFINITIONS.starter.capabilities.storageGb;
     case 'aiInsights':

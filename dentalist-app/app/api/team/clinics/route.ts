@@ -1,0 +1,44 @@
+import { NextRequest, NextResponse } from 'next/server';
+
+import { getUserFromRequest } from '@/lib/auth/get-user';
+import { createClinic } from '@/lib/db/supabase-repository';
+
+export async function POST(request: NextRequest) {
+  const user = getUserFromRequest(request);
+
+  if (!user || user.type !== 'profesional') {
+    return NextResponse.json({ error: 'No autenticado' }, { status: 401 });
+  }
+
+  if (user.subscriptionPlan !== 'pro') {
+    return NextResponse.json(
+      {
+        error: 'La gestión de consultorios múltiples es parte del plan Pro. Actualizá tu suscripción para habilitarla.',
+      },
+      { status: 403 },
+    );
+  }
+
+  try {
+    const body = await request.json();
+    const name = (body?.name as string | undefined)?.trim();
+    const address = (body?.address as string | undefined)?.trim();
+
+    if (!name) {
+      return NextResponse.json(
+        { error: 'Ingresá un nombre para el consultorio o clínica.' },
+        { status: 400 },
+      );
+    }
+
+    const clinic = await createClinic(user.id, { name, address: address ?? null });
+
+    return NextResponse.json({ clinic, success: true });
+  } catch (error) {
+    console.error('Error al crear consultorio', error);
+    return NextResponse.json(
+      { error: 'No pudimos crear el consultorio. Intentá nuevamente.' },
+      { status: 500 },
+    );
+  }
+}

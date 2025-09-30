@@ -14,6 +14,12 @@ import {
   ClinicalStage,
   CreateBudgetInput,
   PatientInvite,
+  Clinic,
+  StaffMember,
+  StaffInvitation,
+  StaffInvitationStatus,
+  StaffRole,
+  StaffStatus,
   EncryptedPayload,
   FamilyHistory,
   MedicalBackground,
@@ -128,6 +134,14 @@ const PATIENT_INVITES_TABLE =
   'patient_invites';
 const PROFESSIONAL_KEYS_TABLE =
   process.env.SUPABASE_TABLE_PROFESSIONAL_KEYS ?? 'professional_keys';
+const CLINICS_TABLE =
+  process.env.SUPABASE_TABLE_CONSULTORIOS ??
+  process.env.SUPABASE_TABLE_CLINICS ??
+  'clinics';
+const STAFF_MEMBERS_TABLE =
+  process.env.SUPABASE_TABLE_STAFF_MEMBERS ?? 'staff_members';
+const STAFF_INVITATIONS_TABLE =
+  process.env.SUPABASE_TABLE_STAFF_INVITATIONS ?? 'staff_invitations';
 
 const CLINICAL_STAGES: ClinicalStage[] = ['initial', 'intermediate', 'final'];
 const ODONTOGRAM_CONDITIONS: OdontogramCondition[] = [
@@ -743,6 +757,42 @@ type AppBudgetRow = {
   items?: AppBudgetItemRow[] | null;
 };
 
+type AppClinicRow = {
+  id: string;
+  owner_professional_id: string;
+  name: string;
+  address: string | null;
+  created_at: string;
+  updated_at: string | null;
+};
+
+type AppStaffMemberRow = {
+  id: string;
+  owner_professional_id: string;
+  clinic_id: string | null;
+  full_name: string | null;
+  email: string | null;
+  role: string;
+  status: string;
+  invited_at: string | null;
+  accepted_at: string | null;
+  created_at: string;
+  updated_at: string | null;
+};
+
+type AppStaffInvitationRow = {
+  id: string;
+  owner_professional_id: string;
+  clinic_id: string | null;
+  email: string | null;
+  role: string;
+  status: string;
+  invited_at: string;
+  expires_at: string | null;
+  accepted_at: string | null;
+  token_hash: string;
+};
+
 function mapProfessionalProfile(row: AppProfessionalRow): ProfessionalProfile {
   return {
     id: row.id,
@@ -760,6 +810,55 @@ function mapProfessionalProfile(row: AppProfessionalRow): ProfessionalProfile {
     logoPath: row.logo_path ?? null,
     logoUrl: null,
     updatedAt: row.updated_at ?? null,
+  };
+}
+
+function mapClinic(row: AppClinicRow): Clinic {
+  return {
+    id: row.id,
+    ownerProfessionalId: row.owner_professional_id,
+    name: row.name,
+    address: row.address,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapStaffMember(
+  row: AppStaffMemberRow,
+  clinicLookup: Map<string, Clinic>,
+): StaffMember {
+  const clinic = row.clinic_id ? clinicLookup.get(row.clinic_id) ?? null : null;
+  return {
+    id: row.id,
+    ownerProfessionalId: row.owner_professional_id,
+    clinicId: row.clinic_id,
+    clinicName: clinic?.name ?? null,
+    fullName: row.full_name ?? 'Usuario invitado',
+    email: row.email ?? '',
+    role: (row.role as StaffRole) ?? 'assistant',
+    status: (row.status as StaffStatus) ?? 'active',
+    invitedAt: row.invited_at,
+    acceptedAt: row.accepted_at,
+  };
+}
+
+function mapStaffInvitation(
+  row: AppStaffInvitationRow,
+  clinicLookup: Map<string, Clinic>,
+): StaffInvitation {
+  const clinic = row.clinic_id ? clinicLookup.get(row.clinic_id) ?? null : null;
+  return {
+    id: row.id,
+    ownerProfessionalId: row.owner_professional_id,
+    clinicId: row.clinic_id,
+    clinicName: clinic?.name ?? null,
+    email: row.email ?? '',
+    role: (row.role as StaffRole) ?? 'assistant',
+    status: (row.status as StaffInvitationStatus) ?? 'pending',
+    invitedAt: row.invited_at,
+    expiresAt: row.expires_at,
+    acceptedAt: row.accepted_at,
   };
 }
 
@@ -1836,6 +1935,198 @@ export async function createPatientInvite(
     invite: mapPatientInvite(data as AppPatientInviteRow),
     token,
   };
+}
+
+export async function listClinicsAndTeam(
+  professionalId: string,
+): Promise<{
+  clinics: Clinic[];
+  staff: StaffMember[];
+  invitations: StaffInvitation[];
+}> {
+  const client = getClient();
+
+  const { data: clinicRows, error: clinicError } = await client
+    .from(CLINICS_TABLE)
+    .select('*')
+    .eq('owner_professional_id', professionalId)
+    .order('name', { ascending: true });
+
+  if (clinicError) throw clinicError;
+
+  const clinics = (clinicRows ?? []).map((row) => mapClinic(row as AppClinicRow));
+  const clinicLookup = new Map(clinics.map((clinic) => [clinic.id, clinic] as const));
+
+  const { data: staffRows, error: staffError } = await client
+    .from(STAFF_MEMBERS_TABLE)
+    .select('*')
+    .eq('owner_professional_id', professionalId)
+    .order('full_name', { ascending: true });
+
+  if (staffError) throw staffError;
+
+  const staff = (staffRows ?? []).map((row) =>
+    mapStaffMember(row as AppStaffMemberRow, clinicLookup),
+  );
+
+  const { data: invitationRows, error: invitationError } = await client
+    .from(STAFF_INVITATIONS_TABLE)
+    .select('*')
+    .eq('owner_professional_id', professionalId)
+    .order('invited_at', { ascending: false });
+
+  if (invitationError) throw invitationError;
+
+  const invitations = (invitationRows ?? []).map((row) =>
+    mapStaffInvitation(row as AppStaffInvitationRow, clinicLookup),
+  );
+
+  return { clinics, staff, invitations };
+}
+
+export async function createClinic(
+  professionalId: string,
+  clinic: { name: string; address?: string | null },
+): Promise<Clinic> {
+  const client = getClient();
+  const payload = {
+    owner_professional_id: professionalId,
+    name: clinic.name,
+    address: clinic.address ?? null,
+  };
+
+  const { data, error } = await client
+    .from(CLINICS_TABLE)
+    .insert(payload)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+
+  return mapClinic(data as AppClinicRow);
+}
+
+export async function updateClinic(
+  professionalId: string,
+  clinicId: string,
+  clinic: { name?: string; address?: string | null },
+): Promise<Clinic> {
+  const client = getClient();
+  const updates: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+
+  if (typeof clinic.name === 'string') {
+    updates.name = clinic.name;
+  }
+  if (clinic.address !== undefined) {
+    updates.address = clinic.address ?? null;
+  }
+
+  const { data, error } = await client
+    .from(CLINICS_TABLE)
+    .update(updates)
+    .eq('id', clinicId)
+    .eq('owner_professional_id', professionalId)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+
+  return mapClinic(data as AppClinicRow);
+}
+
+export async function removeClinic(professionalId: string, clinicId: string): Promise<void> {
+  const client = getClient();
+  const { error } = await client
+    .from(CLINICS_TABLE)
+    .delete()
+    .eq('id', clinicId)
+    .eq('owner_professional_id', professionalId);
+
+  if (error) throw error;
+}
+
+export async function createStaffInvitation(
+  professionalId: string,
+  invitation: {
+    email: string;
+    role: StaffRole;
+    clinicId?: string | null;
+    expiresAt?: Date | null;
+  },
+): Promise<{ invitation: StaffInvitation; token: string }> {
+  const client = getClient();
+  const token = crypto.randomBytes(24).toString('hex');
+  const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+  const insertPayload = {
+    owner_professional_id: professionalId,
+    clinic_id: invitation.clinicId ?? null,
+    email: invitation.email,
+    role: invitation.role,
+    status: 'pending' satisfies StaffInvitationStatus,
+    invited_at: new Date().toISOString(),
+    expires_at: invitation.expiresAt ? invitation.expiresAt.toISOString() : null,
+    token_hash: tokenHash,
+  };
+
+  const { data, error } = await client
+    .from(STAFF_INVITATIONS_TABLE)
+    .insert(insertPayload)
+    .select('*')
+    .single();
+
+  if (error) throw error;
+
+  const clinicLookup = new Map<string, Clinic>();
+
+  if (invitation.clinicId) {
+    const { data: clinicRow } = await client
+      .from(CLINICS_TABLE)
+      .select('*')
+      .eq('id', invitation.clinicId)
+      .eq('owner_professional_id', professionalId)
+      .maybeSingle();
+
+    if (clinicRow) {
+      const clinic = mapClinic(clinicRow as AppClinicRow);
+      clinicLookup.set(clinic.id, clinic);
+    }
+  }
+
+  return {
+    invitation: mapStaffInvitation(data as AppStaffInvitationRow, clinicLookup),
+    token,
+  };
+}
+
+export async function revokeStaffInvitation(
+  professionalId: string,
+  invitationId: string,
+): Promise<void> {
+  const client = getClient();
+  const { error } = await client
+    .from(STAFF_INVITATIONS_TABLE)
+    .update({ status: 'revoked' satisfies StaffInvitationStatus })
+    .eq('id', invitationId)
+    .eq('owner_professional_id', professionalId);
+
+  if (error) throw error;
+}
+
+export async function removeStaffMember(
+  professionalId: string,
+  staffId: string,
+): Promise<void> {
+  const client = getClient();
+  const { error } = await client
+    .from(STAFF_MEMBERS_TABLE)
+    .delete()
+    .eq('id', staffId)
+    .eq('owner_professional_id', professionalId);
+
+  if (error) throw error;
 }
 
 export async function listOrthodonticPlans(professionalId: string): Promise<OrthodonticPlan[]> {

@@ -45,6 +45,48 @@ export interface PatientInvite {
   usedAt?: string | null;
 }
 
+export type StaffRole = 'admin' | 'professional' | 'assistant';
+
+export type StaffStatus = 'invited' | 'active';
+
+export interface Clinic {
+  id: string;
+  ownerProfessionalId: string;
+  name: string;
+  address?: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+}
+
+export interface StaffMember {
+  id: string;
+  ownerProfessionalId: string;
+  clinicId?: string | null;
+  clinicName?: string | null;
+  fullName: string;
+  email: string;
+  role: StaffRole;
+  status: StaffStatus;
+  invitedAt: string | null;
+  acceptedAt?: string | null;
+}
+
+export type StaffInvitationStatus = 'pending' | 'accepted' | 'expired' | 'revoked';
+
+export interface StaffInvitation {
+  id: string;
+  ownerProfessionalId: string;
+  clinicId?: string | null;
+  clinicName?: string | null;
+  email: string;
+  role: StaffRole;
+  status: StaffInvitationStatus;
+  invitedAt: string;
+  expiresAt?: string | null;
+  acceptedAt?: string | null;
+  token?: string;
+}
+
 export interface EncryptedPayload {
   ciphertext: string;
   iv: string;
