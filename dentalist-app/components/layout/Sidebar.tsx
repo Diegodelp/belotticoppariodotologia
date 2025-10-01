@@ -26,15 +26,20 @@ export default function Sidebar({ onNavigate, className = '', isMobile = false }
   const { user } = useAuth();
   const isOwnerProfessional = user?.type === 'profesional' && !user.ownerProfessionalId;
   const isTeamProfessional = user?.type === 'profesional' && !!user.ownerProfessionalId;
-  const items = [...BASE_MENU_ITEMS];
-  
+  const canAccessMarketing =
+    user?.type === 'profesional' && !user?.ownerProfessionalId && user?.subscriptionPlan === 'pro';
+  const items = BASE_MENU_ITEMS.filter((item) => item.href !== '/marketing' || canAccessMarketing);
+
+  // Create a mutable copy for subsequent insertions
+  const menuItems = [...items];
+
   if (isOwnerProfessional) {
     const billingItem = { href: '/billing', label: 'Suscripción', icon: '💼' };
-    const marketingIndex = items.findIndex((item) => item.href === '/marketing');
+    const marketingIndex = menuItems.findIndex((item) => item.href === '/marketing');
     if (marketingIndex >= 0) {
-      items.splice(marketingIndex, 0, billingItem);
+      menuItems.splice(marketingIndex, 0, billingItem);
     } else {
-      items.push(billingItem);
+      menuItems.push(billingItem);
     }
   }
 
@@ -43,11 +48,11 @@ export default function Sidebar({ onNavigate, className = '', isMobile = false }
 
   if (canViewTeam) {
     const teamItem = { href: '/team', label: 'Equipo', icon: '🤝' };
-    const settingsIndex = items.findIndex((item) => item.href === '/settings');
+    const settingsIndex = menuItems.findIndex((item) => item.href === '/settings');
     if (settingsIndex >= 0) {
-      items.splice(settingsIndex, 0, teamItem);
+      menuItems.splice(settingsIndex, 0, teamItem);
     } else {
-      items.push(teamItem);
+      menuItems.push(teamItem);
     }
   }
 
@@ -117,7 +122,7 @@ export default function Sidebar({ onNavigate, className = '', isMobile = false }
       </div>
 
       <nav className="flex-1 space-y-1 px-4 py-6">
-        {items.map((item) => {
+        {menuItems.map((item) => {
           const isActive =
             pathname === item.href ||
             (item.href !== '/dashboard' && pathname?.startsWith(item.href));

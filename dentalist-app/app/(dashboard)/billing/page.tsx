@@ -276,7 +276,7 @@ export default function BillingPage() {
           <div className="mt-4 flex flex-col gap-3">
             <Link
               href="mailto:hola@dentalist.com"
-              className="inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+              className="inline-flex items-center justify-center rounded-full bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-slate-100"
             >
               Contactar ventas
             </Link>

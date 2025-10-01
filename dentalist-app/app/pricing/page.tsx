@@ -68,7 +68,7 @@ export default function PricingPage() {
                   <Link
                     href={isPro ? 'https://wa.me/5491156754321?text=Quiero%20Dentalist%20Pro' : '/register'}
                     className={`inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition ${
-                      isPro ? 'bg-white text-slate-900 hover:bg-slate-100' : 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
+                      isPro ? 'bg-white text-slate-950 hover:bg-slate-100' : 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
                     }`}
                   >
                     {isPro ? 'Agendar una demo personalizada' : 'Crear cuenta y comenzar ahora'}
