@@ -52,7 +52,7 @@ export interface PatientInvite {
 
 export type StaffRole = 'admin' | 'professional' | 'assistant';
 
-export type StaffStatus = 'invited' | 'active';
+export type StaffStatus = 'invited' | 'active' | 'inactive' | 'removed';
 
 export interface Clinic {
   id: string;
@@ -76,6 +76,8 @@ export interface StaffMember {
   status: StaffStatus;
   invitedAt: string | null;
   acceptedAt?: string | null;
+  statusReason?: string | null;
+  statusChangedAt?: string | null;
 }
 
 export type StaffInvitationStatus = 'pending' | 'accepted' | 'expired' | 'revoked';

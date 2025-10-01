@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateTwoFactorCode } from '@/lib/auth/two-factor';
-import { findUserByDni, storeTwoFactorCode } from '@/lib/db/supabase-repository';
+import { findUserByDni, StaffAccessError, storeTwoFactorCode } from '@/lib/db/supabase-repository';
 import { sendTwoFactorCodeEmail } from '@/lib/email/mailer';
 
 export async function POST(request: NextRequest) {
@@ -14,7 +14,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await findUserByDni(dni, type);
+    let user = null;
+    try {
+      user = await findUserByDni(dni, type);
+    } catch (error) {
+      if (error instanceof StaffAccessError) {
+        return NextResponse.json({ error: error.message }, { status: 403 });
+      }
+      throw error;
+    }
     if (!user) {
       return NextResponse.json(
         { error: 'No encontramos una cuenta asociada' },

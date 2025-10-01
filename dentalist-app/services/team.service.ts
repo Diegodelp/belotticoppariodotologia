@@ -1,4 +1,4 @@
-import { Clinic, StaffInvitation, StaffMember, StaffRole, SubscriptionPlan } from '@/types';
+import { Clinic, StaffInvitation, StaffMember, StaffRole, StaffStatus, SubscriptionPlan } from '@/types';
 
 function authHeaders(): HeadersInit | undefined {
   if (typeof window === 'undefined') {
@@ -131,18 +131,30 @@ export class TeamService {
     }
   }
 
-  static async removeMember(staffId: string): Promise<void> {
+  static async updateMember(
+    staffId: string,
+    payload: {
+      status?: StaffStatus;
+      reason?: string | null;
+      clinicId?: string | null;
+    },
+  ): Promise<StaffMember> {
     const response = await fetch(`/api/team/staff/${staffId}`, {
-      method: 'DELETE',
+      method: 'PATCH',
       headers: {
+        'Content-Type': 'application/json',
         ...authHeaders(),
       },
       credentials: 'include',
+      body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
       const data = await parseJson(response);
-      throw new Error((data as { error?: string } | null)?.error ?? 'No pudimos quitar al integrante.');
+      throw new Error((data as { error?: string } | null)?.error ?? 'No pudimos actualizar al integrante.');
     }
+
+    const data = (await response.json()) as { member: StaffMember };
+    return data.member;
   }
 }

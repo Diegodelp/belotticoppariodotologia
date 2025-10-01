@@ -77,6 +77,13 @@ function hashSensitiveValue(value: string | null | undefined): string | null {
 function maskIfPresent(value: string | null | undefined): string | null {
   return value && value.trim() ? ENCRYPTED_PLACEHOLDER : null;
 }
+
+export class StaffAccessError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'StaffAccessError';
+  }
+}
 const APPOINTMENTS_TABLE =
   process.env.SUPABASE_TABLE_TURNOS ??
   process.env.SUPABASE_TABLE_APPOINTMENTS ??
@@ -794,6 +801,8 @@ type AppStaffMemberRow = {
   accepted_at: string | null;
   created_at: string;
   updated_at: string | null;
+  status_reason: string | null;
+  status_changed_at: string | null;
 };
 
 type AppStaffInvitationRow = {
@@ -862,6 +871,7 @@ function mapStaffMember(
   clinicLookup: Map<string, Clinic>,
 ): StaffMember {
   const clinic = row.clinic_id ? clinicLookup.get(row.clinic_id) ?? null : null;
+  const status = (row.status as StaffStatus) ?? 'active';
   return {
     id: row.id,
     ownerProfessionalId: row.owner_professional_id,
@@ -871,9 +881,11 @@ function mapStaffMember(
     fullName: row.full_name ?? 'Usuario invitado',
     email: row.email ?? '',
     role: (row.role as StaffRole) ?? 'assistant',
-    status: (row.status as StaffStatus) ?? 'active',
+    status,
     invitedAt: row.invited_at,
     acceptedAt: row.accepted_at,
+    statusReason: row.status_reason ?? null,
+    statusChangedAt: row.status_changed_at ?? null,
   };
 }
 
@@ -1486,6 +1498,9 @@ export type StoredAuthUser = {
   ownerProfessionalId: string | null;
   teamRole: StaffRole | null;
   teamClinicId: string | null;
+  staffStatus: StaffStatus | null;
+  staffStatusReason: string | null;
+  staffStatusChangedAt: string | null;
 };
 
 export async function findUserByDni(
@@ -1511,6 +1526,9 @@ export async function findUserByDni(
       (data as { subscription_locked_at?: string | null }).subscription_locked_at ?? null;
     let teamRole: StaffRole | null = null;
     let teamClinicId: string | null = null;
+    let staffStatus: StaffStatus | null = null;
+    let staffStatusReason: string | null = null;
+    let staffStatusChangedAt: string | null = null;
 
     if (ownerProfessionalId) {
       const { data: staffRow, error: staffError } = await client
@@ -1524,8 +1542,19 @@ export async function findUserByDni(
         throw new Error('La invitación no está asociada a un equipo válido.');
       }
 
-      if (staffRow.status !== 'active') {
-        throw new Error('Tu acceso al equipo no está activo. Consultá con el administrador.');
+      const normalizedStaffStatus = (staffRow.status as StaffStatus) ?? 'active';
+      const normalizedReason = staffRow.status_reason?.trim() ?? '';
+      staffStatus = normalizedStaffStatus;
+      staffStatusReason = normalizedStaffStatus === 'active' ? null : normalizedReason || null;
+      staffStatusChangedAt = staffRow.status_changed_at ?? null;
+
+      if (normalizedStaffStatus !== 'active') {
+        const messageReason = staffStatusReason ?? 'Sin motivo registrado.';
+        const blockMessage =
+          `Se ha inactivado o removido tu cuenta del consultorio.\n` +
+          `Contactate con el administrador de la clínica.\n` +
+          `Motivo: ${messageReason}`;
+        throw new StaffAccessError(blockMessage);
       }
 
       teamRole = (staffRow.role as StaffRole) ?? 'assistant';
@@ -1578,6 +1607,9 @@ export async function findUserByDni(
       ownerProfessionalId,
       teamRole,
       teamClinicId,
+      staffStatus,
+      staffStatusReason,
+      staffStatusChangedAt,
     };
   }
 
@@ -1633,6 +1665,9 @@ export async function findUserByDni(
     ownerProfessionalId: row.professional_id ?? null,
     teamRole: null,
     teamClinicId: null,
+    staffStatus: null,
+    staffStatusReason: null,
+    staffStatusChangedAt: null,
   };
 }
 
@@ -2580,18 +2615,59 @@ export async function revokeStaffInvitation(
   if (error) throw error;
 }
 
-export async function removeStaffMember(
-  professionalId: string,
+export async function updateStaffMember(
+  ownerProfessionalId: string,
   staffId: string,
-): Promise<void> {
+  updates: {
+    status?: StaffStatus;
+    statusReason?: string | null;
+    clinicId?: string | null;
+  },
+): Promise<StaffMember> {
   const client = getClient();
-  const { error } = await client
+  const now = new Date().toISOString();
+  const payload: Record<string, unknown> = { updated_at: now };
+
+  if (typeof updates.clinicId !== 'undefined') {
+    payload.clinic_id = updates.clinicId ?? null;
+  }
+
+  if (typeof updates.status !== 'undefined') {
+    payload.status = updates.status;
+    payload.status_changed_at = now;
+    payload.status_reason = updates.status === 'active' ? null : updates.statusReason ?? null;
+  } else if (typeof updates.statusReason !== 'undefined') {
+    payload.status_reason = updates.statusReason;
+  }
+
+  const { data, error } = await client
     .from(STAFF_MEMBERS_TABLE)
-    .delete()
+    .update(payload)
     .eq('id', staffId)
-    .eq('owner_professional_id', professionalId);
+    .eq('owner_professional_id', ownerProfessionalId)
+    .select('*')
+    .maybeSingle<AppStaffMemberRow>();
 
   if (error) throw error;
+  if (!data) {
+    throw new Error('No se encontró el integrante a actualizar.');
+  }
+
+  const clinicLookup = new Map<string, Clinic>();
+
+  if (data.clinic_id) {
+    const { data: clinicRow } = await client
+      .from(CLINICS_TABLE)
+      .select('*')
+      .eq('id', data.clinic_id)
+      .maybeSingle<AppClinicRow>();
+
+    if (clinicRow) {
+      clinicLookup.set(clinicRow.id, mapClinic(clinicRow as AppClinicRow));
+    }
+  }
+
+  return mapStaffMember(data, clinicLookup);
 }
 
 export async function listOrthodonticPlans(professionalId: string): Promise<OrthodonticPlan[]> {

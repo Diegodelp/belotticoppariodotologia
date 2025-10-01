@@ -79,7 +79,7 @@ export default function LoginPage() {
           </div>
 
           {message && (
-            <p className="mb-6 rounded-2xl border border-cyan-400/40 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100">
+            <p className="mb-6 rounded-2xl border border-cyan-400/40 bg-cyan-500/10 px-4 py-3 text-sm text-cyan-100 whitespace-pre-line">
               {message}
             </p>
           )}

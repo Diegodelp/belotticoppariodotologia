@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import { findUserByDni, storeTwoFactorCode, toPublicUser } from '@/lib/db/supabase-repository';
+import {
+  findUserByDni,
+  StaffAccessError,
+  storeTwoFactorCode,
+  toPublicUser,
+} from '@/lib/db/supabase-repository';
 import { sendTwoFactorCodeEmail } from '@/lib/email/mailer';
 import { generateTwoFactorCode } from '@/lib/auth/two-factor';
 
@@ -16,7 +21,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await findUserByDni(dni, type);
+    let user = null;
+    try {
+      user = await findUserByDni(dni, type);
+    } catch (error) {
+      if (error instanceof StaffAccessError) {
+        return NextResponse.json({ error: error.message }, { status: 403 });
+      }
+      throw error;
+    }
 
     if (!user) {
       return NextResponse.json(

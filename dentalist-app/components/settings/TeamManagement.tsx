@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { TeamOverview, TeamService } from '@/services/team.service';
-import { StaffInvitation, StaffMember, StaffRole, SubscriptionPlan, User } from '@/types';
+import { Clinic, StaffInvitation, StaffMember, StaffRole, StaffStatus, SubscriptionPlan, User } from '@/types';
 
 interface TeamManagementProps {
   plan: SubscriptionPlan | null | undefined;
@@ -11,6 +11,20 @@ interface TeamManagementProps {
 }
 
 const STARTER_ROLE: StaffRole = 'assistant';
+
+const STATUS_LABELS: Record<StaffStatus, string> = {
+  active: 'Activo',
+  inactive: 'Inactivo',
+  removed: 'Removido',
+  invited: 'Invitado',
+};
+
+const STATUS_STYLES: Record<StaffStatus, string> = {
+  active: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-200',
+  inactive: 'border-amber-500/30 bg-amber-500/10 text-amber-200',
+  removed: 'border-red-500/30 bg-red-500/10 text-red-200',
+  invited: 'border-slate-500/30 bg-slate-500/10 text-slate-200',
+};
 
 function getDefaultRole(plan: SubscriptionPlan | null | undefined): StaffRole {
   if (plan === 'pro') {
@@ -34,6 +48,14 @@ export function TeamManagement({ plan, currentUser }: TeamManagementProps) {
   const [inviteMessage, setInviteMessage] = useState<
     { type: 'success' | 'error' | 'warning'; text: string; inviteUrl?: string }
   | null>(null);
+  const [manageModal, setManageModal] = useState<{
+    member: StaffMember;
+    status: StaffStatus;
+    clinicId: string;
+    reason: string;
+    submitting: boolean;
+    error: string | null;
+  } | null>(null);
 
   const resolvedPlan: SubscriptionPlan | null | undefined =
     (overview?.stats.plan as SubscriptionPlan | null | undefined) ?? plan ?? null;
@@ -94,6 +116,19 @@ export function TeamManagement({ plan, currentUser }: TeamManagementProps) {
     }
     return overview.clinics.find((clinic) => clinic.id === actingClinicId) ?? null;
   }, [overview, actingClinicId]);
+
+  const clinicsForSelect = useMemo<Clinic[]>(() => {
+    if (!overview) {
+      return [];
+    }
+    if (isOwner) {
+      return overview.clinics;
+    }
+    if (actingRole === 'professional' && actingClinicId) {
+      return overview.clinics.filter((clinic) => clinic.id === actingClinicId);
+    }
+    return [];
+  }, [overview, isOwner, actingRole, actingClinicId]);
 
   const canSendInvites = isOwner || actingRole === 'professional';
   const targetRoleForInvite = isOwner ? inviteForm.role : 'assistant';
@@ -251,21 +286,156 @@ export function TeamManagement({ plan, currentUser }: TeamManagementProps) {
     }
   };
 
-  const handleRemoveMember = async (staffId: string) => {
+  const openManageModal = (member: StaffMember) => {
+    const initialStatus: StaffStatus = member.status === 'invited' ? 'active' : member.status;
+    setManageModal({
+      member,
+      status: initialStatus,
+      clinicId: member.clinicId ?? '',
+      reason: member.statusReason ?? '',
+      submitting: false,
+      error: null,
+    });
+  };
+
+  const closeManageModal = () => {
+    setManageModal(null);
+  };
+
+  const handleManageSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!manageModal) return;
+
+    const { member } = manageModal;
+    const normalizedOriginalStatus: StaffStatus =
+      member.status === 'invited' ? 'active' : member.status;
+    const selectedStatus = manageModal.status;
+    const requiresReason = selectedStatus === 'inactive' || selectedStatus === 'removed';
+    const trimmedReason = manageModal.reason.trim();
+    const originalReason = (member.statusReason ?? '').trim();
+    const clinicOriginal = member.clinicId ?? '';
+    const clinicChanged = manageModal.clinicId !== clinicOriginal;
+    const statusChanged = selectedStatus !== normalizedOriginalStatus;
+    const reasonChanged = requiresReason && trimmedReason !== originalReason;
+    const clearingReason =
+      selectedStatus === 'active' && (member.statusReason ?? null) !== null;
+
+    if (requiresReason && !trimmedReason) {
+      setManageModal((prev) =>
+        prev
+          ? {
+              ...prev,
+              error: 'Ingresá el motivo de la inactivación o remoción.',
+            }
+          : prev,
+      );
+      return;
+    }
+
+    const payload: { status?: StaffStatus; reason?: string | null; clinicId?: string | null } = {};
+
+    if (statusChanged) {
+      payload.status = selectedStatus;
+      payload.reason = selectedStatus === 'active' ? null : trimmedReason;
+    } else if (requiresReason && reasonChanged) {
+      payload.reason = trimmedReason;
+    } else if (clearingReason) {
+      payload.reason = null;
+    }
+
+    if (clinicChanged) {
+      payload.clinicId = manageModal.clinicId ? manageModal.clinicId : null;
+    }
+
+    if (
+      typeof payload.status === 'undefined' &&
+      typeof payload.reason === 'undefined' &&
+      typeof payload.clinicId === 'undefined'
+    ) {
+      setManageModal((prev) =>
+        prev ? { ...prev, error: 'No hay cambios para guardar.' } : prev,
+      );
+      return;
+    }
+
+    const confirmActions: string[] = [];
+    if (statusChanged) {
+      confirmActions.push(
+        selectedStatus === 'active'
+          ? 'reactivar a la persona seleccionada'
+          : selectedStatus === 'inactive'
+            ? 'inactivar a la persona seleccionada'
+            : 'remover a la persona seleccionada',
+      );
+    } else if (requiresReason && reasonChanged) {
+      confirmActions.push('actualizar el motivo registrado');
+    } else if (clearingReason && typeof payload.reason !== 'undefined') {
+      confirmActions.push('limpiar el motivo registrado');
+    }
+    if (clinicChanged) {
+      confirmActions.push('modificar el consultorio asignado');
+    }
+    if (confirmActions.length === 0) {
+      confirmActions.push('guardar los cambios');
+    }
+
+    const confirmMessage = `¿Confirmás ${confirmActions.join(' y ')} de ${
+      member.fullName
+    }?\nEsta acción será visible para la persona afectada.`;
+
+    if (typeof window !== 'undefined' && !window.confirm(confirmMessage)) {
+      return;
+    }
+
+    setManageModal((prev) =>
+      prev
+        ? {
+            ...prev,
+            submitting: true,
+            error: null,
+          }
+        : prev,
+    );
+
     try {
-      await TeamService.removeMember(staffId);
+      await TeamService.updateMember(member.id, payload);
       await refresh();
-      setInviteMessage({ type: 'success', text: 'Integrante eliminado del equipo.' });
+
+      let successText = 'Cambios guardados correctamente.';
+      if (statusChanged) {
+        successText =
+          selectedStatus === 'active'
+            ? 'Integrante reactivado correctamente.'
+            : selectedStatus === 'inactive'
+              ? 'Integrante inactivado. El motivo quedará registrado.'
+              : 'Integrante removido del consultorio. El motivo quedará registrado.';
+      } else if (clinicChanged) {
+        successText = 'Consultorio actualizado para la persona seleccionada.';
+      } else if (requiresReason && (reasonChanged || clearingReason)) {
+        successText = 'Motivo actualizado correctamente.';
+      }
+
+      setInviteMessage({ type: 'success', text: successText });
+      setManageModal(null);
     } catch (err) {
-      setInviteMessage({
-        type: 'error',
-        text: err instanceof Error ? err.message : 'No pudimos quitar al integrante.',
-      });
+      setManageModal((prev) =>
+        prev
+          ? {
+              ...prev,
+              submitting: false,
+              error:
+                err instanceof Error
+                  ? err.message
+                  : 'No pudimos actualizar al integrante.',
+            }
+          : prev,
+      );
     }
   };
 
   return (
-    <section className="space-y-6">
+    <>
+      <section className="space-y-6">
       <header className="space-y-2">
         <h2 className="text-xl font-semibold text-white">Equipo y consultorios</h2>
         <p className="text-sm text-slate-300">
@@ -526,14 +696,31 @@ export function TeamManagement({ plan, currentUser }: TeamManagementProps) {
                           Rol: {member.role === 'assistant' ? 'Asistente' : member.role === 'professional' ? 'Profesional' : 'Administrador'}
                           {member.clinicName ? ` · ${member.clinicName}` : ''}
                         </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <span
+                            className={`inline-flex items-center rounded-full border px-2 py-1 text-[11px] font-medium ${STATUS_STYLES[member.status]}`}
+                          >
+                            {STATUS_LABELS[member.status]}
+                          </span>
+                          {member.status === 'inactive' || member.status === 'removed' ? (
+                            <span className="text-[11px] text-amber-200">
+                              Motivo: {member.statusReason ? member.statusReason : 'Sin motivo registrado.'}
+                            </span>
+                          ) : null}
+                        </div>
+                        {member.status !== 'active' && member.statusChangedAt ? (
+                          <p className="mt-1 text-[11px] text-slate-500">
+                            Actualizado el {new Date(member.statusChangedAt).toLocaleString('es-AR')}
+                          </p>
+                        ) : null}
                       </div>
                       <button
                         type="button"
-                        onClick={() => handleRemoveMember(member.id)}
-                        className="rounded-lg border border-white/10 px-3 py-1 text-xs font-medium text-slate-200 transition hover:border-red-400 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
-                        disabled={!canManageMember(member)}
+                        onClick={() => openManageModal(member)}
+                        className="rounded-lg border border-white/10 px-3 py-1 text-xs font-medium text-slate-200 transition hover:border-cyan-400 hover:text-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+                        disabled={!canManageMember(member) || member.status === 'invited'}
                       >
-                        Quitar
+                        Gestionar
                       </button>
                     </li>
                   ))}
@@ -582,6 +769,160 @@ export function TeamManagement({ plan, currentUser }: TeamManagementProps) {
           </div>
         </div>
       ) : null}
-    </section>
+      </section>
+      {manageModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 px-4 py-8">
+          <form
+            onSubmit={handleManageSubmit}
+            className="w-full max-w-lg space-y-4 rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl shadow-cyan-500/10"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-semibold text-white">Gestionar integrante</h3>
+                <p className="text-sm text-slate-300">
+                  {manageModal.member.fullName} ·{' '}
+                  {manageModal.member.role === 'assistant'
+                    ? 'Asistente'
+                    : manageModal.member.role === 'professional'
+                      ? 'Profesional'
+                      : 'Administrador'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={closeManageModal}
+                className="rounded-lg border border-white/10 px-3 py-1 text-xs font-medium text-slate-300 transition hover:border-slate-300 hover:text-white disabled:cursor-not-allowed"
+                disabled={manageModal.submitting}
+              >
+                Cerrar
+              </button>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+                  Estado
+                </label>
+                <select
+                  value={manageModal.status}
+                  onChange={(event) => {
+                    const nextStatus = event.target.value as StaffStatus;
+                    setManageModal((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            status: nextStatus,
+                            error: null,
+                            reason:
+                              nextStatus === 'active'
+                                ? ''
+                                : prev.reason || prev.member.statusReason || '',
+                          }
+                        : prev,
+                    );
+                  }}
+                  disabled={manageModal.submitting}
+                  className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2 text-sm text-white focus:border-cyan-400 focus:outline-none"
+                >
+                  <option value="active">Activo</option>
+                  <option value="inactive">Inactivo</option>
+                  <option value="removed">Removido</option>
+                </select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+                  Consultorio asignado
+                </label>
+                <select
+                  value={manageModal.clinicId}
+                  onChange={(event) =>
+                    setManageModal((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            clinicId: event.target.value,
+                            error: null,
+                          }
+                        : prev,
+                    )
+                  }
+                  disabled={manageModal.submitting || (!isOwner && actingRole !== 'professional')}
+                  className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2 text-sm text-white focus:border-cyan-400 focus:outline-none"
+                >
+                  {isOwner && <option value="">Sin asignar</option>}
+                  {clinicsForSelect.map((clinic) => (
+                    <option key={clinic.id} value={clinic.id}>
+                      {clinic.name}
+                    </option>
+                  ))}
+                </select>
+                {!isOwner && actingRole === 'professional' ? (
+                  <p className="mt-1 text-xs text-slate-400">
+                    Solo podés asignar integrantes a tu consultorio.
+                  </p>
+                ) : null}
+              </div>
+              {manageModal.status === 'inactive' || manageModal.status === 'removed' ? (
+                <div className="sm:col-span-2">
+                  <label className="block text-xs font-medium uppercase tracking-wide text-slate-400">
+                    Motivo (obligatorio)
+                  </label>
+                  <textarea
+                    value={manageModal.reason}
+                    onChange={(event) =>
+                      setManageModal((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              reason: event.target.value,
+                              error: null,
+                            }
+                          : prev,
+                      )
+                    }
+                    rows={3}
+                    maxLength={500}
+                    required
+                    disabled={manageModal.submitting}
+                    className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900/60 px-4 py-2 text-sm text-white focus:border-cyan-400 focus:outline-none"
+                    placeholder="Detalle por qué inactivás o removés a la persona."
+                  />
+                  <p className="mt-1 text-xs text-slate-400">
+                    Este mensaje se mostrará al integrante cuando intente acceder.
+                  </p>
+                </div>
+              ) : manageModal.member.statusReason ? (
+                <div className="sm:col-span-2">
+                  <p className="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+                    Motivo registrado actualmente: “{manageModal.member.statusReason}”.
+                  </p>
+                </div>
+              ) : null}
+            </div>
+            {manageModal.error ? (
+              <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-100">
+                {manageModal.error}
+              </p>
+            ) : null}
+            <div className="flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={closeManageModal}
+                className="rounded-lg border border-white/10 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={manageModal.submitting}
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-semibold text-slate-900 transition hover:bg-cyan-400 disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={manageModal.submitting}
+              >
+                {manageModal.submitting ? 'Guardando…' : 'Guardar cambios'}
+              </button>
+            </div>
+          </form>
+        </div>
+      ) : null}
+    </>
   );
 }

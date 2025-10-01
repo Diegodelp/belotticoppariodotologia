@@ -27,7 +27,9 @@ export async function GET(request: NextRequest) {
     const clinicsEnabled =
       plan === 'pro' && (clinicLimit === null || clinicsRemaining === null || clinicsRemaining > 0);
 
-    const assistantsActive = data.staff.filter((member) => member.role === 'assistant').length;
+    const assistantsActive = data.staff.filter(
+      (member) => member.role === 'assistant' && member.status === 'active',
+    ).length;
     const assistantsPending = data.invitations.filter(
       (invitation) => invitation.role === 'assistant' && invitation.status === 'pending',
     ).length;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   findUserByDni,
+  StaffAccessError,
   toPublicUser,
   validateTwoFactorCode,
 } from '@/lib/db/supabase-repository';
@@ -17,7 +18,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const user = await findUserByDni(dni, type);
+    let user = null;
+    try {
+      user = await findUserByDni(dni, type);
+    } catch (error) {
+      if (error instanceof StaffAccessError) {
+        return NextResponse.json({ error: error.message }, { status: 403 });
+      }
+      throw error;
+    }
     if (!user) {
       return NextResponse.json(
         { error: 'No encontramos una cuenta asociada' },
