@@ -77,7 +77,16 @@ export class AuthService {
   }
 
   static async logout() {
-    if (typeof window !== 'undefined') {
+    if (typeof window === 'undefined') return;
+
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch (error) {
+      console.error('Error al cerrar sesión', error);
+    } finally {
       localStorage.removeItem('token');
       document.cookie = 'token=; path=/; max-age=0';
       window.location.href = '/login';

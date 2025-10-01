@@ -27,7 +27,7 @@ export default function Sidebar({ onNavigate, className = '', isMobile = false }
   const isOwnerProfessional = user?.type === 'profesional' && !user.ownerProfessionalId;
   const isTeamProfessional = user?.type === 'profesional' && !!user.ownerProfessionalId;
   const items = [...BASE_MENU_ITEMS];
-
+  
   if (isOwnerProfessional) {
     const billingItem = { href: '/billing', label: 'Suscripción', icon: '💼' };
     const marketingIndex = items.findIndex((item) => item.href === '/marketing');
@@ -38,9 +38,22 @@ export default function Sidebar({ onNavigate, className = '', isMobile = false }
     }
   }
 
-  const handleLogout = () => {
-    AuthService.logout();
+  const canViewTeam =
+    user?.type === 'profesional' && (!user.ownerProfessionalId || user.teamRole === 'professional');
+
+  if (canViewTeam) {
+    const teamItem = { href: '/team', label: 'Equipo', icon: '🤝' };
+    const settingsIndex = items.findIndex((item) => item.href === '/settings');
+    if (settingsIndex >= 0) {
+      items.splice(settingsIndex, 0, teamItem);
+    } else {
+      items.push(teamItem);
+    }
+  }
+
+  const handleLogout = async () => {
     onNavigate?.();
+    await AuthService.logout();
   };
 
   return (

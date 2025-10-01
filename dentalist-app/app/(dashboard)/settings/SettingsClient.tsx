@@ -6,7 +6,6 @@ import { GoogleCalendarService, GoogleCalendarStatus } from '@/services/google-c
 import { EncryptionService } from '@/services/encryption.service';
 import { ProfessionalService } from '@/services/professional.service';
 import { OrthodonticPlanService } from '@/services/orthodontic-plan.service';
-import { TeamManagement } from '@/components/settings/TeamManagement';
 import { useAuth } from '@/hooks/useAuth';
 import { OrthodonticPlan, ProfessionalKeyStatus, ProfessionalProfile } from '@/types';
 import { DEFAULT_TIME_ZONE, getSupportedTimeZones, normalizeTimeZone } from '@/lib/utils/timezone';
@@ -1265,8 +1264,6 @@ export function SettingsClient() {
           )}
         </div>
       </section>
-
-      <TeamManagement plan={user?.subscriptionPlan ?? 'starter'} currentUser={user} />
 
       <form
         onSubmit={handleNotificationsSubmit}
