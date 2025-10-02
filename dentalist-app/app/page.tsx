@@ -1,103 +1,229 @@
-import Image from "next/image";
+import Link from 'next/link';
+import { PLAN_DEFINITIONS, PLAN_ORDER, TRIAL_DURATION_DAYS } from '@/lib/utils/subscription';
+
+const features = [
+  {
+    title: 'Agenda inteligente',
+    description:
+      'Sincronizá tu calendario, confirmá asistencia con un clic y recibí recordatorios automáticos.',
+  },
+  {
+    title: 'Ficha clínica 360°',
+    description:
+      'Historial odontológico completo, tratamientos, pagos y archivos en un solo lugar.',
+  },
+  {
+    title: 'Indicadores en tiempo real',
+    description:
+      'Seguimiento de productividad, cobranzas y evolución de tu consultorio en dashboards interactivos.',
+  },
+];
 
 export default function Home() {
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="relative isolate flex min-h-screen flex-col overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_10%_20%,rgba(56,189,248,0.25),transparent_55%),radial-gradient(circle_at_90%_10%,rgba(14,165,233,0.3),transparent_50%)]" />
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      <header className="mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 pb-16 pt-24 sm:px-12">
+        <nav className="flex items-center justify-between text-sm text-slate-300">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-cyan-500/10 px-3 py-1 text-xs uppercase tracking-wide text-cyan-300">
+              Dentalist
+            </span>
+            <span className="hidden sm:block">Gestión inteligente para odontología</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/pricing"
+              className="rounded-full border border-white/10 px-4 py-2 font-medium text-slate-100 transition hover:border-cyan-400/60 hover:text-cyan-200"
+            >
+              Planes
+            </Link>
+            <Link
+              href="/login"
+              className="rounded-full border border-white/10 px-4 py-2 font-medium text-slate-100 transition hover:border-cyan-400/60 hover:text-cyan-200"
+            >
+              Ingresar
+            </Link>
+          </div>
+        </nav>
+
+        <div className="mt-16 grid gap-16 lg:grid-cols-2 lg:items-center">
+          <div className="space-y-8">
+            <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold uppercase tracking-widest text-cyan-300">
+              Plataforma APP - Dentalist
+            </span>
+            <h1 className="text-4xl font-semibold text-white sm:text-5xl lg:text-6xl">
+              Todo el consultorio en un solo flujo digital
+            </h1>
+            <p className="max-w-xl text-lg leading-relaxed text-slate-300">
+              Organizá pacientes, turnos, tratamientos y pagos desde una experiencia
+              diseñada para el equipo odontológico. Integrá recordatorios automatizados,
+              indicadores de negocio y colaborá en tiempo real con tu staff.
+            </p>
+            <p className="text-sm text-cyan-200/90">
+              {`Incluye ${TRIAL_DURATION_DAYS} días de prueba gratuita sin pedir tarjeta.`}
+            </p>
+            <div className="flex flex-wrap gap-4">
+              <Link
+                href="/register"
+                className="rounded-full bg-cyan-500 px-6 py-3 font-semibold text-slate-950 shadow-lg shadow-cyan-500/30 transition hover:bg-cyan-400"
+              >
+                Crear cuenta profesional
+              </Link>
+              <Link
+                href="/login"
+                className="rounded-full border border-white/20 px-6 py-3 font-semibold text-slate-100 transition hover:border-cyan-300 hover:text-cyan-200"
+              >
+                Probar demo interactiva
+              </Link>
+            </div>
+            <div className="flex flex-wrap gap-4 text-sm text-slate-400">
+              <span>✅ Recordatorios automáticos por WhatsApp y mail</span>
+              <span>✅ Alertas de cobranzas y saldos pendientes</span>
+              <span>✅ Seguimiento clínico multidisciplinario</span>
+            </div>
+          </div>
+
+          <div className="relative">
+            <div className="absolute inset-0 -z-10 rounded-3xl bg-gradient-to-br from-cyan-500/40 via-white/5 to-transparent blur-3xl" />
+            <div className="rounded-3xl border border-white/10 bg-slate-900/70 p-6 shadow-2xl shadow-cyan-500/10 backdrop-blur">
+              <div className="flex items-center justify-between text-xs text-cyan-200">
+                <span>Tablero Dentalist</span>
+                <span>{new Date().toLocaleDateString('es-AR', { month: 'long', year: 'numeric' })}</span>
+              </div>
+              <div className="mt-6 grid gap-4 sm:grid-cols-2">
+                <div className="rounded-2xl bg-slate-950/60 p-4 ring-1 ring-white/10">
+                  <p className="text-sm text-slate-400">Pacientes activos</p>
+                  <p className="mt-2 text-3xl font-semibold text-white">128</p>
+                  <p className="mt-1 text-xs text-emerald-400">+12% vs. mes anterior</p>
+                </div>
+                <div className="rounded-2xl bg-slate-950/60 p-4 ring-1 ring-white/10">
+                  <p className="text-sm text-slate-400">Turnos confirmados</p>
+                  <p className="mt-2 text-3xl font-semibold text-white">32</p>
+                  <p className="mt-1 text-xs text-cyan-300">Próximas 48 hs</p>
+                </div>
+                <div className="rounded-2xl bg-slate-950/60 p-4 ring-1 ring-white/10">
+                  <p className="text-sm text-slate-400">Facturación del mes</p>
+                  <p className="mt-2 text-3xl font-semibold text-white">$2,4M</p>
+                  <p className="mt-1 text-xs text-emerald-400">Cobrado 78%</p>
+                </div>
+                <div className="rounded-2xl bg-slate-950/60 p-4 ring-1 ring-white/10">
+                  <p className="text-sm text-slate-400">Alertas críticas</p>
+                  <p className="mt-2 text-3xl font-semibold text-white">3</p>
+                  <p className="mt-1 text-xs text-amber-300">Seguimientos pendientes</p>
+                </div>
+              </div>
+              <div className="mt-6 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 p-4 text-sm text-cyan-100">
+                Dentalist aplica IA para sugerirte disponibilidad óptima, alertar faltas de stock y anticipar atrasos en cobranzas.
+              </div>
+            </div>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
+      </header>
+
+      <section className="border-t border-white/5 bg-slate-950/70 py-16 backdrop-blur">
+        <div className="mx-auto grid max-w-5xl gap-10 px-6 sm:px-12 md:grid-cols-3">
+          {features.map((feature) => (
+            <div
+              key={feature.title}
+              className="flex flex-col gap-4 rounded-3xl border border-white/10 bg-white/5 p-6 text-slate-200 shadow-lg shadow-cyan-500/10"
+            >
+              <h3 className="text-lg font-semibold text-white">{feature.title}</h3>
+              <p className="text-sm text-slate-300 leading-relaxed">{feature.description}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section id="planes" className="border-t border-white/5 bg-slate-950/60 py-20 backdrop-blur">
+        <div className="mx-auto max-w-6xl space-y-12 px-6 sm:px-12">
+          <div className="space-y-4 text-center">
+            <p className="text-xs uppercase tracking-[0.35em] text-cyan-300">Planes y precios</p>
+            <h2 className="text-3xl font-semibold text-white sm:text-4xl">Elegí el plan que acompaña tu crecimiento</h2>
+            <p className="text-sm text-slate-300">
+              Comenzá con una demo completa de {TRIAL_DURATION_DAYS} días y activá el plan que mejor se adapte a tu consultorio cuando estés listo.
+            </p>
+          </div>
+          <div className="grid gap-8 md:grid-cols-2">
+            {PLAN_ORDER.map((planId) => {
+              const plan = PLAN_DEFINITIONS[planId];
+              const isPro = plan.id === 'pro';
+              return (
+                <div
+                  key={plan.id}
+                  className={`flex h-full flex-col gap-5 rounded-3xl border p-8 shadow-lg transition ${
+                    isPro
+                      ? 'border-cyan-400/40 bg-cyan-500/10 shadow-cyan-500/20'
+                      : 'border-white/10 bg-white/5 shadow-cyan-500/10'
+                  }`}
+                >
+                  <div className="space-y-3">
+                    <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-widest ${
+                      isPro ? 'bg-cyan-500/20 text-cyan-100' : 'bg-white/10 text-slate-200'
+                    }`}>
+                      {plan.name}
+                    </span>
+                    <h3 className="text-2xl font-semibold text-white">{plan.headline}</h3>
+                    <p className="text-sm text-slate-300">{plan.description}</p>
+                    <p className="text-sm font-semibold text-cyan-100">{plan.priceLabel}</p>
+                    <p className="text-xs text-cyan-200/80">{plan.highlight}</p>
+                  </div>
+                  <ul className="flex flex-1 flex-col gap-2 text-sm text-slate-200">
+                    {plan.features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-2">
+                        <span className="mt-0.5 text-cyan-300">{isPro || feature.includes('ilimitad') ? '✨' : '✅'}</span>
+                        <span>{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="flex flex-col gap-3">
+                    <Link
+                      href={isPro ? '/pricing' : '/register'}
+                      className={`inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition ${
+                        isPro
+                          ? 'bg-white text-slate-900 hover:bg-slate-100'
+                          : 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
+                      }`}
+                    >
+                      {isPro ? 'Hablar con nuestro equipo' : 'Comenzar prueba gratuita'}
+                    </Link>
+                    {isPro ? (
+                      <p className="text-xs text-slate-300">
+                        Incluye onboarding personalizado y soporte prioritario 24/7.
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-400">
+                        Acceso completo durante {TRIAL_DURATION_DAYS} días. Cancelás cuando quieras.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <footer className="border-t border-white/10 bg-slate-950/80 py-10 text-sm text-slate-400 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-4 px-6 text-center sm:flex-row sm:text-left">
+          <p>© {new Date().getFullYear()} Dentalist. Transformamos la gestión odontológica.</p>
+          <div className="flex gap-6">
+            <Link href="/login" className="hover:text-cyan-200">
+              Acceder
+            </Link>
+            <Link href="/register" className="hover:text-cyan-200">
+              Crear cuenta
+            </Link>
+            <Link href="/politicas-de-privacidad" className="hover:text-cyan-200">
+              Políticas de Privacidad
+            </Link>
+            <a href="mailto:hola@dentalist.com" className="hover:text-cyan-200">
+              Contacto comercial
+            </a>
+          </div>
+        </div>
       </footer>
-    </div>
+    </main>
   );
 }
