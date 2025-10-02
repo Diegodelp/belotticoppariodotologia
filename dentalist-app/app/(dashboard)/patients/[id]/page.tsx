@@ -194,6 +194,10 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
   const [budgetPaymentMethod, setBudgetPaymentMethod] = useState<'cash' | 'card' | 'transfer'>('cash');
   const [budgetPaymentSaving, setBudgetPaymentSaving] = useState(false);
   const [budgetPaymentError, setBudgetPaymentError] = useState<string | null>(null);
+  const [budgetPaymentConsentName, setBudgetPaymentConsentName] = useState('');
+  const [budgetPaymentConsentFile, setBudgetPaymentConsentFile] = useState<File | null>(null);
+  const [budgetPaymentConsentFileName, setBudgetPaymentConsentFileName] = useState('');
+  const [budgetPaymentConsentSignature, setBudgetPaymentConsentSignature] = useState<string | null>(null);
   const [isPrescriptionModalOpen, setIsPrescriptionModalOpen] = useState(false);
   const [clinicOptions, setClinicOptions] = useState<Clinic[]>([]);
   const [clinicOptionsLoading, setClinicOptionsLoading] = useState(false);
@@ -299,8 +303,15 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     if (budgetPaymentContext) {
       setBudgetPaymentMethod('cash');
       setBudgetPaymentError(null);
+      const defaultConsentName = data?.patient
+        ? `${data.patient.name ?? ''} ${data.patient.lastName ?? ''}`.trim()
+        : '';
+      setBudgetPaymentConsentName(defaultConsentName);
+      setBudgetPaymentConsentFile(null);
+      setBudgetPaymentConsentFileName('');
+      setBudgetPaymentConsentSignature(null);
     }
-  }, [budgetPaymentContext]);
+  }, [budgetPaymentContext, data?.patient]);
 
   useEffect(() => {
     let active = true;
@@ -441,6 +452,19 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
       consentSignatureDataUrl: dataUrl,
       consentSignatureEdited: dataUrl !== null,
     }));
+  };
+
+  const handleBudgetPaymentConsentFileChange = (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0] ?? null;
+    setBudgetPaymentConsentFile(file);
+    setBudgetPaymentConsentFileName(file?.name ?? '');
+    event.target.value = '';
+  };
+
+  const handleBudgetPaymentSignatureChange = (dataUrl: string | null) => {
+    setBudgetPaymentConsentSignature(dataUrl);
   };
 
   const handleTreatmentCancel = () => {
@@ -606,6 +630,10 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
     setBudgetPaymentContext(null);
     setBudgetPaymentError(null);
     setBudgetPaymentSaving(false);
+    setBudgetPaymentConsentName('');
+    setBudgetPaymentConsentFile(null);
+    setBudgetPaymentConsentFileName('');
+    setBudgetPaymentConsentSignature(null);
   };
 
   const handleBudgetEdit = (budget: Budget) => {
@@ -841,9 +869,29 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
       : `Pago del presupuesto ${budgetPaymentTarget.budget.title}`;
 
     try {
-      setBudgetPaymentSaving(true);
       setBudgetPaymentError(null);
       const itemDescription = budgetPaymentTarget.item.description?.trim() ?? '';
+
+      const resolvedConsentName = budgetPaymentConsentName.trim().length
+        ? budgetPaymentConsentName.trim()
+        : `${data.patient.name ?? ''} ${data.patient.lastName ?? ''}`.trim();
+
+      if (!resolvedConsentName) {
+        setBudgetPaymentError('Indicá el nombre y la aclaración del paciente para el consentimiento.');
+        return;
+      }
+
+      if (!budgetPaymentConsentFile) {
+        setBudgetPaymentError('Adjuntá el consentimiento informado en formato PDF.');
+        return;
+      }
+
+      if (!budgetPaymentConsentSignature) {
+        setBudgetPaymentError('Registrá la firma digital del paciente para el consentimiento informado.');
+        return;
+      }
+
+      setBudgetPaymentSaving(true);
 
       const [paymentResponse, treatmentResponse] = await Promise.all([
         PaymentService.create({
@@ -860,6 +908,11 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
           description: itemDescription.length > 0 ? itemDescription : descriptionFallback,
           cost: budgetPaymentTarget.item.amount,
           date: now.toISOString(),
+          consent: {
+            patientName: resolvedConsentName,
+            file: budgetPaymentConsentFile,
+            signatureDataUrl: budgetPaymentConsentSignature,
+          },
         }),
       ]);
 
@@ -2475,6 +2528,65 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
                   <option value="transfer">Transferencia</option>
                 </select>
               </label>
+
+              <div className="space-y-3 rounded-2xl border border-white/10 bg-slate-950/40 p-4">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                    Consentimiento informado
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Adjuntá el consentimiento en PDF y registrá la firma digital del paciente para vincularla al
+                    tratamiento creado a partir de este pago.
+                  </p>
+                </div>
+
+                <label className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                  Nombre y aclaración del paciente
+                  <input
+                    value={budgetPaymentConsentName}
+                    onChange={(event) => setBudgetPaymentConsentName(event.target.value)}
+                    placeholder="Ej: Juan Pérez — DNI 12.345.678"
+                    className="mt-1 w-full rounded-2xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-white focus:border-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300/30"
+                  />
+                </label>
+
+                <div className="text-xs font-semibold uppercase tracking-widest text-slate-300">
+                  Documento PDF
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] font-normal normal-case text-slate-300">
+                    <label className="inline-flex cursor-pointer items-center justify-center rounded-full border border-white/15 px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-cyan-300 hover:text-cyan-100">
+                      <input
+                        type="file"
+                        accept="application/pdf"
+                        onChange={handleBudgetPaymentConsentFileChange}
+                        className="hidden"
+                      />
+                      <span>Seleccionar archivo</span>
+                    </label>
+                    {budgetPaymentConsentFileName && (
+                      <span className="max-w-[12rem] truncate">{budgetPaymentConsentFileName}</span>
+                    )}
+                    {budgetPaymentConsentFile && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setBudgetPaymentConsentFile(null);
+                          setBudgetPaymentConsentFileName('');
+                        }}
+                        className="inline-flex items-center justify-center rounded-full border border-white/10 px-3 py-1 text-[11px] font-semibold text-slate-200 transition hover:border-rose-300 hover:text-rose-200"
+                      >
+                        Quitar
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-slate-300">Firma del paciente</p>
+                  <div className="mt-2 rounded-2xl border border-white/10 bg-white/5 p-3">
+                    <SignaturePad value={budgetPaymentConsentSignature} onChange={handleBudgetPaymentSignatureChange} />
+                  </div>
+                </div>
+              </div>
 
               {budgetPaymentError && (
                 <p className="rounded-2xl border border-rose-400/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-100">
