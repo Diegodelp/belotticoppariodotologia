@@ -25,6 +25,7 @@ export const config = {
     '/treatments/:path*',
     '/payments/:path*',
     '/settings/:path*',
+    '/team/:path*',
     '/login',
     '/register'
   ]
