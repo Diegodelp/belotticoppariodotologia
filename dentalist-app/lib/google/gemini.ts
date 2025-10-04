@@ -3,8 +3,11 @@ import { Credentials } from 'google-auth-library';
 
 import type { OAuthTokenSet } from '@/lib/google/calendar';
 
+// Google currently rejects the generative-language scope for regular OAuth clients, returning a
+// 400 `invalid_scope` error. The cloud-platform scope still grants access to the Generative
+// Language API when it is enabled on the project, so we rely on it alongside the standard profile
+// scopes.
 const GEMINI_SCOPES = [
-  'https://www.googleapis.com/auth/generative-language',
   'https://www.googleapis.com/auth/cloud-platform',
   'openid',
   'email',
