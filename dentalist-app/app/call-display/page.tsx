@@ -1,5 +1,11 @@
+import { Suspense } from 'react';
+
 import { CallDisplayClient } from './CallDisplayClient';
 
 export default function CallDisplayPage() {
-  return <CallDisplayClient />;
+  return (
+    <Suspense fallback={null}>
+      <CallDisplayClient />
+    </Suspense>
+  );
 }
