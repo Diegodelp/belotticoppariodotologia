@@ -10,7 +10,7 @@ import {
   upsertProfessionalGoogleCredentials,
 } from '@/lib/db/supabase-repository';
 import { createCalendar, isCalendarReady, OAuthTokenSet } from '@/lib/google/calendar';
-import { getClinicLimit } from '@/lib/utils/subscription';
+import { getClinicLimit, isProPlan } from '@/lib/utils/subscription';
 import { DEFAULT_TIME_ZONE, normalizeTimeZone } from '@/lib/utils/timezone';
 
 export async function POST(request: NextRequest) {
@@ -34,10 +34,11 @@ export async function POST(request: NextRequest) {
     getClinicCountForProfessional(ownerProfessionalId),
   ]);
 
-  if (subscription.plan !== 'pro') {
+  if (!isProPlan(subscription.plan)) {
     return NextResponse.json(
       {
-        error: 'La gestión de consultorios múltiples es parte del plan Pro. Actualizá tu suscripción para habilitarla.',
+        error:
+          'La gestión de consultorios múltiples está disponible en los planes Pro y Enterprise. Actualizá tu suscripción para habilitarla.',
       },
       { status: 403 },
     );

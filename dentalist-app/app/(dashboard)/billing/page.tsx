@@ -7,6 +7,7 @@ import {
   describeTrialStatus,
   getPlanDefinition,
   getTrialCountdown,
+  isProPlan,
   PLAN_DEFINITIONS,
   PLAN_ORDER,
   TRIAL_DURATION_DAYS,
@@ -49,9 +50,9 @@ export default function BillingPage() {
   const proPlan = PLAN_DEFINITIONS.pro;
   const { daysLeft } = getTrialCountdown(user?.trialEndsAt ?? null);
   const trialStatus = describeTrialStatus(user?.trialEndsAt ?? null, user?.subscriptionStatus ?? null);
-  const isProPlan = currentPlan.id === 'pro';
-  const showUpgradeContent = !isProPlan;
-  const showComparison = !isProPlan;
+  const hasProPlan = isProPlan(user?.subscriptionPlan ?? null);
+  const showUpgradeContent = !hasProPlan;
+  const showComparison = !hasProPlan;
   const renewalInfo = useMemo(() => {
     if (!user || user.type !== 'profesional') {
       return null;

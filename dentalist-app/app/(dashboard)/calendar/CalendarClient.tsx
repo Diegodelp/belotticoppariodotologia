@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { AppointmentService } from '@/services/appointment.service';
 import { ClinicService } from '@/services/clinic.service';
 import { PatientService } from '@/services/patient.service';
+import { isProPlan } from '@/lib/utils/subscription';
 import { Appointment, Clinic, Patient } from '@/types';
 
 interface AppointmentWithPatient extends Appointment {
@@ -27,6 +28,7 @@ export function CalendarClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user } = useAuth();
+  const hasAttendanceFeature = isProPlan(user?.subscriptionPlan ?? null);
   const [appointments, setAppointments] = useState<AppointmentWithPatient[]>([]);
   const [allPatients, setAllPatients] = useState<Patient[]>([]);
   const [clinics, setClinics] = useState<Clinic[]>([]);
@@ -48,8 +50,8 @@ export function CalendarClient() {
   const isAssistant = Boolean(user?.ownerProfessionalId && user.teamRole === 'assistant');
   const isTeamProfessional = Boolean(user?.ownerProfessionalId && user.teamRole === 'professional');
   const isTeamAdmin = Boolean(user?.ownerProfessionalId && user.teamRole === 'admin');
-  const canCheckIn = Boolean(isOwnerProfessional || isAssistant || isTeamAdmin);
-  const canCall = Boolean(isOwnerProfessional || isTeamProfessional || isTeamAdmin);
+  const canCheckIn = hasAttendanceFeature && Boolean(isOwnerProfessional || isAssistant || isTeamAdmin);
+  const canCall = hasAttendanceFeature && Boolean(isOwnerProfessional || isTeamProfessional || isTeamAdmin);
 
   const filteredPatients = useMemo(() => {
     if (!user) {
@@ -182,6 +184,12 @@ export function CalendarClient() {
     if (typeof window === 'undefined') {
       return;
     }
+    if (!hasAttendanceFeature) {
+      setActionError(
+        'La pantalla de llamados está disponible para los planes Pro y Enterprise. Actualizá tu suscripción para habilitarla.',
+      );
+      return;
+    }
     const params = new URLSearchParams();
     if (isAdminProfessional && clinicFilter !== 'all') {
       params.set('clinicId', clinicFilter);
@@ -194,6 +202,12 @@ export function CalendarClient() {
 
   const handleCheckIn = async (appointmentId: string) => {
     clearMessages();
+    if (!hasAttendanceFeature) {
+      setActionError(
+        'El registro de asistencia está disponible para los planes Pro y Enterprise. Actualizá tu plan para usarlo.',
+      );
+      return;
+    }
     setCheckInLoadingId(appointmentId);
     try {
       const response = await AppointmentService.checkIn(appointmentId);
@@ -228,6 +242,12 @@ export function CalendarClient() {
 
   const handleCallPatient = async (appointment: AppointmentWithPatient) => {
     clearMessages();
+    if (!hasAttendanceFeature) {
+      setActionError(
+        'El llamado en pantalla está disponible para los planes Pro y Enterprise. Actualizá tu plan para usarlo.',
+      );
+      return;
+    }
     if (typeof window === 'undefined') {
       return;
     }

@@ -4,9 +4,11 @@ import { getUserFromRequest } from '@/lib/auth/get-user';
 import {
   getAppointmentById,
   getProfessionalProfile,
+  getProfessionalSubscriptionSummary,
   markAppointmentCheckedIn,
 } from '@/lib/db/supabase-repository';
 import { resolvePatientAccess } from '@/lib/patients/patient-access';
+import { isProPlan } from '@/lib/utils/subscription';
 import { DEFAULT_TIME_ZONE, formatAppointmentForTimeZone, normalizeTimeZone } from '@/lib/utils/timezone';
 
 export async function POST(
@@ -26,6 +28,18 @@ export async function POST(
 
   if (!canCheckIn) {
     return NextResponse.json({ error: 'No tenés permisos para registrar asistencia.' }, { status: 403 });
+  }
+
+  const subscription = await getProfessionalSubscriptionSummary(ownerProfessionalId);
+
+  if (!isProPlan(subscription.plan)) {
+    return NextResponse.json(
+      {
+        error:
+          'El registro de asistencia y llamado en pantalla está disponible para los planes Pro y Enterprise.',
+      },
+      { status: 403 },
+    );
   }
 
   const appointment = await getAppointmentById(ownerProfessionalId, params.id);

@@ -145,23 +145,46 @@ export default function Home() {
               Comenzá con una demo completa de {TRIAL_DURATION_DAYS} días y activá el plan que mejor se adapte a tu consultorio cuando estés listo.
             </p>
           </div>
-          <div className="grid gap-8 md:grid-cols-2">
+          <div className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
             {PLAN_ORDER.map((planId) => {
               const plan = PLAN_DEFINITIONS[planId];
+              const isStarter = plan.id === 'starter';
               const isPro = plan.id === 'pro';
+              const isEnterprise = plan.id === 'enterprise';
+              const isPremium = !isStarter;
+              const cardStyle = isEnterprise
+                ? 'border-amber-400/40 bg-amber-500/10 shadow-amber-500/20'
+                : isPro
+                ? 'border-cyan-400/40 bg-cyan-500/10 shadow-cyan-500/20'
+                : 'border-white/10 bg-white/5 shadow-cyan-500/10';
+              const badgeStyle = isEnterprise
+                ? 'bg-amber-500/20 text-amber-100'
+                : isPro
+                ? 'bg-cyan-500/20 text-cyan-100'
+                : 'bg-white/10 text-slate-200';
+              const ctaLabel = isStarter
+                ? 'Comenzar prueba gratuita'
+                : isEnterprise
+                ? 'Contactar ventas'
+                : 'Hablar con nuestro equipo';
+              const ctaHref = isStarter ? '/register' : '/pricing';
+              const ctaStyle = isStarter
+                ? 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
+                : 'bg-white text-slate-900 hover:bg-slate-100';
+              const footerCopy = isStarter
+                ? `Acceso completo durante ${TRIAL_DURATION_DAYS} días. Cancelás cuando quieras.`
+                : isEnterprise
+                ? 'Incluye acompañamiento dedicado, acuerdos de nivel de servicio y personalizaciones a medida.'
+                : 'Incluye onboarding personalizado y soporte prioritario 24/7.';
               return (
                 <div
                   key={plan.id}
-                  className={`flex h-full flex-col gap-5 rounded-3xl border p-8 shadow-lg transition ${
-                    isPro
-                      ? 'border-cyan-400/40 bg-cyan-500/10 shadow-cyan-500/20'
-                      : 'border-white/10 bg-white/5 shadow-cyan-500/10'
-                  }`}
+                  className={`flex h-full flex-col gap-5 rounded-3xl border p-8 shadow-lg transition ${cardStyle}`}
                 >
                   <div className="space-y-3">
-                    <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-widest ${
-                      isPro ? 'bg-cyan-500/20 text-cyan-100' : 'bg-white/10 text-slate-200'
-                    }`}>
+                    <span
+                      className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-widest ${badgeStyle}`}
+                    >
                       {plan.name}
                     </span>
                     <h3 className="text-2xl font-semibold text-white">{plan.headline}</h3>
@@ -172,31 +195,19 @@ export default function Home() {
                   <ul className="flex flex-1 flex-col gap-2 text-sm text-slate-200">
                     {plan.features.map((feature) => (
                       <li key={feature} className="flex items-start gap-2">
-                        <span className="mt-0.5 text-cyan-300">{isPro || feature.includes('ilimitad') ? '✨' : '✅'}</span>
+                        <span className="mt-0.5 text-cyan-300">{isPremium || feature.includes('ilimitad') ? '✨' : '✅'}</span>
                         <span>{feature}</span>
                       </li>
                     ))}
                   </ul>
                   <div className="flex flex-col gap-3">
                     <Link
-                      href={isPro ? '/pricing' : '/register'}
-                      className={`inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition ${
-                        isPro
-                          ? 'bg-white text-slate-900 hover:bg-slate-100'
-                          : 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
-                      }`}
+                      href={ctaHref}
+                      className={`inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition ${ctaStyle}`}
                     >
-                      {isPro ? 'Hablar con nuestro equipo' : 'Comenzar prueba gratuita'}
+                      {ctaLabel}
                     </Link>
-                    {isPro ? (
-                      <p className="text-xs text-slate-300">
-                        Incluye onboarding personalizado y soporte prioritario 24/7.
-                      </p>
-                    ) : (
-                      <p className="text-xs text-slate-400">
-                        Acceso completo durante {TRIAL_DURATION_DAYS} días. Cancelás cuando quieras.
-                      </p>
-                    )}
+                    <p className={`text-xs ${isPremium ? 'text-slate-300' : 'text-slate-400'}`}>{footerCopy}</p>
                   </div>
                 </div>
               );

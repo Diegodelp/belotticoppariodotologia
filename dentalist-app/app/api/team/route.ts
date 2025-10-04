@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 import { getUserFromRequest } from '@/lib/auth/get-user';
 import { getProfessionalSubscriptionSummary, listClinicsAndTeam } from '@/lib/db/supabase-repository';
-import { getClinicLimit, getStaffSeatLimit } from '@/lib/utils/subscription';
+import { getClinicLimit, getStaffSeatLimit, isProPlan } from '@/lib/utils/subscription';
 
 export async function GET(request: NextRequest) {
   const user = getUserFromRequest(request);
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
     const clinicsActive = data.clinics.length;
     const clinicsRemaining = clinicLimit === null ? null : Math.max(clinicLimit - clinicsActive, 0);
     const clinicsEnabled =
-      plan === 'pro' && (clinicLimit === null || clinicsRemaining === null || clinicsRemaining > 0);
+      isProPlan(plan) && (clinicLimit === null || clinicsRemaining === null || clinicsRemaining > 0);
 
     const assistantsActive = data.staff.filter(
       (member) => member.role === 'assistant' && member.status === 'active',

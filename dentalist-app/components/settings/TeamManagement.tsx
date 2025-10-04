@@ -4,6 +4,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 
 import { TeamOverview, TeamService } from '@/services/team.service';
 import { Clinic, StaffInvitation, StaffMember, StaffRole, StaffStatus, SubscriptionPlan, User } from '@/types';
+import { isProPlan } from '@/lib/utils/subscription';
 
 interface TeamManagementProps {
   plan: SubscriptionPlan | null | undefined;
@@ -35,7 +36,7 @@ const STATUS_STYLES: Record<StaffStatus, string> = {
 };
 
 function getDefaultRole(plan: SubscriptionPlan | null | undefined): StaffRole {
-  if (plan === 'pro') {
+  if (isProPlan(plan)) {
     return 'professional';
   }
   return STARTER_ROLE;
@@ -75,7 +76,7 @@ export function TeamManagement({ plan, currentUser }: TeamManagementProps) {
 
   const resolvedPlan: SubscriptionPlan | null | undefined =
     (overview?.stats.plan as SubscriptionPlan | null | undefined) ?? plan ?? null;
-  const isPro = resolvedPlan === 'pro';
+  const isPro = isProPlan(resolvedPlan ?? null);
   const isOwner = !currentUser?.ownerProfessionalId;
   const actingRole = currentUser?.teamRole ?? (isOwner ? 'admin' : null);
   const actingClinicId = currentUser?.teamClinicId ?? null;

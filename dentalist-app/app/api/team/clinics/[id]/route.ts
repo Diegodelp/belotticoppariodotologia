@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getUserFromRequest } from '@/lib/auth/get-user';
+import { isProPlan } from '@/lib/utils/subscription';
 import { removeClinic, updateClinic } from '@/lib/db/supabase-repository';
 
 export async function PUT(
@@ -20,10 +21,11 @@ export async function PUT(
     );
   }
 
-  if (user.subscriptionPlan !== 'pro') {
+  if (!isProPlan(user.subscriptionPlan)) {
     return NextResponse.json(
       {
-        error: 'Solo los profesionales con plan Pro pueden administrar múltiples consultorios.',
+        error:
+          'Solo los profesionales con planes Pro o Enterprise pueden administrar múltiples consultorios.',
       },
       { status: 403 },
     );
@@ -80,10 +82,10 @@ export async function DELETE(
     );
   }
 
-  if (user.subscriptionPlan !== 'pro') {
+  if (!isProPlan(user.subscriptionPlan)) {
     return NextResponse.json(
       {
-        error: 'Solo los profesionales con plan Pro pueden eliminar consultorios.',
+        error: 'Solo los profesionales con planes Pro o Enterprise pueden eliminar consultorios.',
       },
       { status: 403 },
     );

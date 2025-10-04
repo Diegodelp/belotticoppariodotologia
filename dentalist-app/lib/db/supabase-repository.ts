@@ -207,6 +207,9 @@ function normalizeSubscriptionPlan(value: unknown): SubscriptionPlan {
     if (normalized === 'pro') {
       return 'pro';
     }
+    if (normalized === 'enterprise') {
+      return 'enterprise';
+    }
   }
   return 'starter';
 }

@@ -33,22 +33,48 @@ export default function PricingPage() {
           </div>
         </header>
 
-        <section className="grid gap-8 md:grid-cols-2">
+        <section className="grid gap-8 md:grid-cols-2 xl:grid-cols-3">
           {plans.map((plan) => {
+            const isStarter = plan.id === 'starter';
             const isPro = plan.id === 'pro';
+            const isEnterprise = plan.id === 'enterprise';
+            const cardStyle = isEnterprise
+              ? 'border-amber-400/50 bg-amber-500/10 shadow-amber-500/30'
+              : isPro
+              ? 'border-cyan-400/50 bg-cyan-500/10 shadow-cyan-500/30'
+              : 'border-white/10 bg-white/5 shadow-cyan-500/10';
+            const badgeStyle = isEnterprise
+              ? 'bg-amber-500/20 text-amber-100'
+              : isPro
+              ? 'bg-cyan-500/20 text-cyan-100'
+              : 'bg-white/10 text-slate-200';
+            const ctaHref = isStarter
+              ? '/register'
+              : isEnterprise
+              ? 'mailto:hola@dentalist.com?subject=Quiero%20Dentalist%20Enterprise'
+              : 'https://wa.me/5491156754321?text=Quiero%20Dentalist%20Pro';
+            const ctaLabel = isStarter
+              ? 'Crear cuenta y comenzar ahora'
+              : isEnterprise
+              ? 'Hablar con un especialista'
+              : 'Agendar una demo personalizada';
+            const ctaStyle = isStarter
+              ? 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
+              : 'bg-white text-slate-950 hover:bg-slate-100';
+            const footerCopy = isStarter
+              ? `Prueba completa de ${TRIAL_DURATION_DAYS} días. No se requiere tarjeta de crédito para empezar.`
+              : isEnterprise
+              ? 'Incluye consultoría estratégica, personalizaciones y acuerdos de nivel de servicio.'
+              : 'Incluye onboarding guiado, integraciones avanzadas y soporte prioritario 24/7.';
             return (
               <article
                 key={plan.id}
-                className={`flex h-full flex-col gap-6 rounded-3xl border p-8 shadow-xl transition ${
-                  isPro
-                    ? 'border-cyan-400/50 bg-cyan-500/10 shadow-cyan-500/30'
-                    : 'border-white/10 bg-white/5 shadow-cyan-500/10'
-                }`}
+                className={`flex h-full flex-col gap-6 rounded-3xl border p-8 shadow-xl transition ${cardStyle}`}
               >
                 <div className="space-y-3">
-                  <span className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-widest ${
-                    isPro ? 'bg-cyan-500/20 text-cyan-100' : 'bg-white/10 text-slate-200'
-                  }`}>
+                  <span
+                    className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-widest ${badgeStyle}`}
+                  >
                     {plan.name}
                   </span>
                   <h2 className="text-2xl font-semibold text-white">{plan.headline}</h2>
@@ -59,29 +85,19 @@ export default function PricingPage() {
                 <ul className="flex flex-1 flex-col gap-3 text-sm text-slate-200">
                   {plan.features.map((feature) => (
                     <li key={feature} className="flex items-start gap-2">
-                      <span className="mt-0.5 text-cyan-300">{isPro || feature.includes('ilimitad') ? '✨' : '✅'}</span>
+                      <span className="mt-0.5 text-cyan-300">{(!isStarter || feature.includes('ilimitad')) ? '✨' : '✅'}</span>
                       <span>{feature}</span>
                     </li>
                   ))}
                 </ul>
                 <div className="flex flex-col gap-3">
                   <Link
-                    href={isPro ? 'https://wa.me/5491156754321?text=Quiero%20Dentalist%20Pro' : '/register'}
-                    className={`inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition ${
-                      isPro ? 'bg-white text-slate-950 hover:bg-slate-100' : 'bg-cyan-500 text-slate-950 hover:bg-cyan-400'
-                    }`}
+                    href={ctaHref}
+                    className={`inline-flex items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition ${ctaStyle}`}
                   >
-                    {isPro ? 'Agendar una demo personalizada' : 'Crear cuenta y comenzar ahora'}
+                    {ctaLabel}
                   </Link>
-                  {isPro ? (
-                    <p className="text-xs text-slate-300">
-                      Incluye onboarding guiado, integraciones avanzadas y soporte prioritario 24/7.
-                    </p>
-                  ) : (
-                    <p className="text-xs text-slate-400">
-                      Prueba completa de {TRIAL_DURATION_DAYS} días. No se requiere tarjeta de crédito para empezar.
-                    </p>
-                  )}
+                  <p className={`text-xs ${isStarter ? 'text-slate-400' : 'text-slate-300'}`}>{footerCopy}</p>
                 </div>
               </article>
             );

@@ -86,9 +86,35 @@ export const PLAN_DEFINITIONS: Record<SubscriptionPlan, PlanDefinition> = {
       whatsappInbox: true,
     },
   },
+  enterprise: {
+    id: 'enterprise',
+    name: 'Enterprise',
+    headline: 'Operá redes y cadenas de clínicas',
+    priceLabel: '$89.900 ARS / mes',
+    priceValue: 89900,
+    description:
+      'Pensado para grupos odontológicos con múltiples consultorios, necesidades avanzadas de seguridad y soporte dedicado.',
+    highlight: 'Incluye onboarding in situ, SLA prioritario y automatizaciones personalizadas.',
+    features: [
+      'Clínicas, profesionales y asistentes ilimitados',
+      'Soporte dedicado con acuerdos de nivel de servicio',
+      'Integraciones personalizadas con tu infraestructura',
+      'Gobernanza avanzada con cifrado granular y rotación automática de llaves',
+      'Consultorios con calendarios independientes y tableros consolidados',
+    ],
+    capabilities: {
+      patientLimit: null,
+      staffSeats: null,
+      clinicLimit: null,
+      storageGb: 1024,
+      aiInsights: true,
+      marketingAutomation: true,
+      whatsappInbox: true,
+    },
+  },
 };
 
-export const PLAN_ORDER: SubscriptionPlan[] = ['starter', 'pro'];
+export const PLAN_ORDER: SubscriptionPlan[] = ['starter', 'pro', 'enterprise'];
 
 export function getPlanDefinition(plan: SubscriptionPlan | null | undefined): PlanDefinition {
   const fallback: SubscriptionPlan = plan && PLAN_DEFINITIONS[plan] ? plan : 'starter';
@@ -117,6 +143,18 @@ export function getPlanHeadline(plan: SubscriptionPlan | null | undefined): stri
 
 export function getPlanPriceLabel(plan: SubscriptionPlan | null | undefined): string {
   return getPlanDefinition(plan).priceLabel;
+}
+
+export function isProPlan(plan: SubscriptionPlan | null | undefined): boolean {
+  return plan === 'pro';
+}
+
+export function isEnterprisePlan(plan: SubscriptionPlan | null | undefined): boolean {
+  return plan === 'enterprise';
+}
+
+export function isPremiumPlan(plan: SubscriptionPlan | null | undefined): boolean {
+  return plan === 'pro' || plan === 'enterprise';
 }
 
 export function planSupportsCapability(

@@ -6,6 +6,7 @@ import { Clinic, Patient } from '@/types';
 import { PatientService } from '@/services/patient.service';
 import { TeamService } from '@/services/team.service';
 import { useAuth } from '@/hooks/useAuth';
+import { isProPlan } from '@/lib/utils/subscription';
 
 export default function PatientsPage() {
   const { user } = useAuth();
@@ -52,7 +53,7 @@ export default function PatientsPage() {
     if (
       !user ||
       user.type !== 'profesional' ||
-      user.subscriptionPlan !== 'pro' ||
+      !isProPlan(user.subscriptionPlan ?? null) ||
       !isAdminProfessional
     ) {
       setClinics([]);
@@ -97,7 +98,7 @@ export default function PatientsPage() {
   }, [clinicFilter, clinics]);
 
   const enableClinicFilter =
-    isAdminProfessional && user?.subscriptionPlan === 'pro' && clinics.length > 1;
+    isAdminProfessional && isProPlan(user?.subscriptionPlan ?? null) && clinics.length > 1;
   const hasUnassignedPatients = useMemo(
     () => isAdminProfessional && patients.some((patient) => !patient.clinicId),
     [isAdminProfessional, patients],

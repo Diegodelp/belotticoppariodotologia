@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { AppointmentService } from '@/services/appointment.service';
 import { ClinicService } from '@/services/clinic.service';
+import { isProPlan } from '@/lib/utils/subscription';
 import { Appointment, Clinic } from '@/types';
 
 interface CallDisplayData {
@@ -24,6 +25,7 @@ export function CallDisplayClient() {
   const { user } = useAuth();
   const searchParams = useSearchParams();
   const initialClinicParam = searchParams.get('clinicId');
+  const hasAttendanceFeature = isProPlan(user?.subscriptionPlan ?? null);
   const [selectedClinic, setSelectedClinic] = useState<string>(initialClinicParam ?? 'all');
   const [clinics, setClinics] = useState<Clinic[]>([]);
   const [data, setData] = useState<CallDisplayData>({ appointment: null });
@@ -41,20 +43,20 @@ export function CallDisplayClient() {
   );
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !hasAttendanceFeature) {
       return;
     }
 
     if (isTeamRestricted) {
       setSelectedClinic(user.teamClinicId ?? 'all');
     }
-  }, [isTeamRestricted, user]);
+  }, [hasAttendanceFeature, isTeamRestricted, user]);
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchClinics = async () => {
-      if (!isAdminProfessional) {
+      if (!isAdminProfessional || !hasAttendanceFeature) {
         return;
       }
       try {
@@ -74,13 +76,18 @@ export function CallDisplayClient() {
     return () => {
       cancelled = true;
     };
-  }, [isAdminProfessional]);
+  }, [hasAttendanceFeature, isAdminProfessional]);
 
   useEffect(() => {
     let cancelled = false;
 
     const fetchData = async () => {
       try {
+        if (!hasAttendanceFeature) {
+          setLoading(false);
+          setError('La pantalla de llamados está disponible para los planes Pro y Enterprise.');
+          return;
+        }
         setLoading(true);
         setError(null);
         const params: Record<string, string | undefined> = {};
@@ -103,6 +110,13 @@ export function CallDisplayClient() {
       }
     };
 
+    if (!hasAttendanceFeature) {
+      setLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     fetchData();
     const interval = setInterval(fetchData, 5000);
 
@@ -110,7 +124,7 @@ export function CallDisplayClient() {
       cancelled = true;
       clearInterval(interval);
     };
-  }, [selectedClinic]);
+  }, [hasAttendanceFeature, selectedClinic]);
 
   const activeClinicName = useMemo(() => {
     if (selectedClinic === 'all') {
@@ -137,6 +151,33 @@ export function CallDisplayClient() {
       minute: '2-digit',
     });
   }, [data.appointment?.calledAt]);
+
+  if (!hasAttendanceFeature) {
+    return (
+      <section className="flex min-h-screen items-center justify-center bg-slate-950 px-6 py-12 text-center text-slate-200">
+        <div className="max-w-xl space-y-4 rounded-3xl border border-white/10 bg-white/5 p-8 shadow-xl shadow-cyan-500/10">
+          <h1 className="text-2xl font-semibold text-white">Función disponible en planes Pro y Enterprise</h1>
+          <p className="text-sm text-slate-300">
+            Activá un plan superior para proyectar la pantalla de llamados, registrar asistencia y anunciar pacientes en vivo.
+          </p>
+          <div className="flex flex-wrap justify-center gap-3 text-sm">
+            <a
+              className="rounded-full bg-cyan-500 px-5 py-2 font-semibold text-slate-950 hover:bg-cyan-400"
+              href="/billing"
+            >
+              Ver planes disponibles
+            </a>
+            <a
+              className="rounded-full border border-white/20 px-5 py-2 font-semibold text-white hover:border-white/40"
+              href="/pricing"
+            >
+              Conocer más sobre Dentalist Pro
+            </a>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="flex min-h-screen flex-col bg-slate-950 px-6 py-10 text-white">

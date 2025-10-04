@@ -4,8 +4,10 @@ import { getUserFromRequest } from '@/lib/auth/get-user';
 import {
   getLatestCalledAppointment,
   getProfessionalProfile,
+  getProfessionalSubscriptionSummary,
 } from '@/lib/db/supabase-repository';
 import { resolvePatientAccess } from '@/lib/patients/patient-access';
+import { isProPlan } from '@/lib/utils/subscription';
 import { DEFAULT_TIME_ZONE, formatAppointmentForTimeZone, normalizeTimeZone } from '@/lib/utils/timezone';
 
 export async function GET(request: NextRequest) {
@@ -15,6 +17,18 @@ export async function GET(request: NextRequest) {
   }
 
   const ownerProfessionalId = user.ownerProfessionalId ?? user.id;
+  const subscription = await getProfessionalSubscriptionSummary(ownerProfessionalId);
+
+  if (!isProPlan(subscription.plan)) {
+    return NextResponse.json(
+      {
+        error:
+          'La pantalla de llamados está disponible para los planes Pro y Enterprise. Actualizá tu plan para utilizarla.',
+      },
+      { status: 403 },
+    );
+  }
+
   const teamRestricted = Boolean(user.ownerProfessionalId && user.teamRole !== 'admin');
 
   const { searchParams } = new URL(request.url);

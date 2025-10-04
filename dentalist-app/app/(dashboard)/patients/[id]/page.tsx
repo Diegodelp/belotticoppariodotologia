@@ -14,6 +14,7 @@ import { TreatmentService } from '@/services/treatment.service';
 import { OrthodonticPlanService } from '@/services/orthodontic-plan.service';
 import { TeamService } from '@/services/team.service';
 import { useAuth } from '@/hooks/useAuth';
+import { isProPlan } from '@/lib/utils/subscription';
 import {
   Appointment,
   Budget,
@@ -412,8 +413,8 @@ export default function PatientDetailPage({ params: routeParams }: { params: { i
   const isTeamMember = Boolean(user?.ownerProfessionalId);
   const isTeamAdmin = isTeamMember && user?.teamRole === 'admin';
   const isOwnerProfessional = isProfessional && !isTeamMember;
-  const isProPlan = user?.subscriptionPlan === 'pro';
-  const canEditClinicAssignment = Boolean(isProfessional && isProPlan && (isOwnerProfessional || isTeamAdmin));
+  const hasProPlan = isProPlan(user?.subscriptionPlan ?? null);
+  const canEditClinicAssignment = Boolean(isProfessional && hasProPlan && (isOwnerProfessional || isTeamAdmin));
 
   useEffect(() => {
     if (!canEditClinicAssignment || !isEditing) {

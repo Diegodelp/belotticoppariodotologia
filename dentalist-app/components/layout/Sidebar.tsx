@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { AuthService } from '@/services/auth.service';
 import { useAuth } from '@/hooks/useAuth';
-import { describeTrialStatus, getPlanName } from '@/lib/utils/subscription';
+import { describeTrialStatus, getPlanName, isProPlan } from '@/lib/utils/subscription';
 
 const BASE_MENU_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
@@ -27,7 +27,9 @@ export default function Sidebar({ onNavigate, className = '', isMobile = false }
   const isOwnerProfessional = user?.type === 'profesional' && !user.ownerProfessionalId;
   const isTeamProfessional = user?.type === 'profesional' && !!user.ownerProfessionalId;
   const canAccessMarketing =
-    user?.type === 'profesional' && !user?.ownerProfessionalId && user?.subscriptionPlan === 'pro';
+    user?.type === 'profesional' &&
+    !user?.ownerProfessionalId &&
+    isProPlan(user?.subscriptionPlan ?? null);
   const items = BASE_MENU_ITEMS.filter((item) => item.href !== '/marketing' || canAccessMarketing);
 
   // Create a mutable copy for subsequent insertions

@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getUserFromRequest } from '@/lib/auth/get-user';
 import { createStaffInvitation, listClinicsAndTeam } from '@/lib/db/supabase-repository';
 import { sendStaffInvitationEmail } from '@/lib/email/mailer';
-import { getStaffSeatLimit } from '@/lib/utils/subscription';
+import { getStaffSeatLimit, isProPlan } from '@/lib/utils/subscription';
 import { StaffRole } from '@/types';
 
 export async function POST(request: NextRequest) {
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (plan !== 'pro') {
+    if (!isProPlan(plan)) {
       if (role !== 'assistant') {
         return NextResponse.json(
           { error: 'En el plan Starter solo podés invitar asistentes.' },

@@ -1,4 +1,4 @@
-export type SubscriptionPlan = 'starter' | 'pro';
+export type SubscriptionPlan = 'starter' | 'pro' | 'enterprise';
 
 export type SubscriptionStatus = 'trialing' | 'active' | 'past_due' | 'trial_expired' | 'cancelled';
 

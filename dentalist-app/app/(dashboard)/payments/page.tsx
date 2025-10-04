@@ -5,6 +5,7 @@ import { PaymentService } from '@/services/payment.service';
 import { Clinic, Payment, Patient } from '@/types';
 import { TeamService } from '@/services/team.service';
 import { useAuth } from '@/hooks/useAuth';
+import { isProPlan } from '@/lib/utils/subscription';
 
 interface PaymentWithPatient extends Payment {
   patient?: Patient;
@@ -102,7 +103,7 @@ export default function PaymentsPage() {
   useEffect(() => {
     let active = true;
 
-    if (!user || user.type !== 'profesional' || user.subscriptionPlan !== 'pro' || !isAdminProfessional) {
+    if (!user || user.type !== 'profesional' || !isProPlan(user.subscriptionPlan ?? null) || !isAdminProfessional) {
       setClinics([]);
       setClinicFilter('all');
       return () => {
@@ -150,7 +151,7 @@ export default function PaymentsPage() {
   );
 
   const enableClinicFilter =
-    isAdminProfessional && user?.subscriptionPlan === 'pro' && clinics.length > 1;
+    isAdminProfessional && isProPlan(user?.subscriptionPlan ?? null) && clinics.length > 1;
   const hasUnassignedPatients = useMemo(
     () => isAdminProfessional && patients.some((patient) => !patient.clinicId),
     [isAdminProfessional, patients],
